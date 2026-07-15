@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Warm editorial palette — cream paper, ink, ember accent */
+  --color-paper: #faf5ec;
+  --color-paper-deep: #f1e9d9;
+  --color-cream: #fffdf8;
+  --color-ink: #2a2018;
+  --color-ink-soft: #6e5f4e;
+  --color-ink-faint: #a2937f;
+  --color-ember: #c05b33;
+  --color-ember-deep: #9e4626;
+  --color-ember-soft: #f4e3d9;
+  --color-sage: #5f7a5a;
+  --color-sage-soft: #e4ecdf;
+  --color-line: #e5dac7;
+
+  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+html {
+  /* One consistent warm light theme — no dark mode; senior-facing screens
+     depend on stable high contrast. */
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-ember-soft);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-ember);
+  outline-offset: 2px;
+}
