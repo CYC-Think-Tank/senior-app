@@ -37,6 +37,7 @@ export default function TranscriptEditor({
 }: Props) {
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const durationPrimedRef = useRef(false);
   const [turns, setTurns] = useState(initialTurns);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -69,9 +70,27 @@ export default function TranscriptEditor({
     });
   }
 
+  // Streamed WebM from MediaRecorder has no Duration element in its header, so
+  // the native <audio> reports duration=Infinity until the whole file buffers
+  // and renders a broken, non-linear scrubber. Seeking to the end forces the
+  // browser to buffer through and discover the real duration; we then snap back
+  // to the start. (Safari's .m4a already carries a duration, so this no-ops.)
+  function primeDuration(el: HTMLAudioElement) {
+    if (el.duration !== Infinity && !Number.isNaN(el.duration)) return;
+    const onTimeUpdate = () => {
+      el.removeEventListener("timeupdate", onTimeUpdate);
+      if (durationPrimedRef.current) return; // user already seeked — leave them there
+      durationPrimedRef.current = true;
+      el.currentTime = 0;
+    };
+    el.addEventListener("timeupdate", onTimeUpdate);
+    el.currentTime = 1e101;
+  }
+
   function seekTo(ms: number) {
     const el = audioRef.current;
     if (!el) return;
+    durationPrimedRef.current = true; // cancel any pending priming reset
     el.currentTime = ms / 1000;
     void el.play();
   }
@@ -154,7 +173,14 @@ export default function TranscriptEditor({
 
       {audioUrl ? (
         <Card className="sticky top-4 z-10 p-4">
-          <audio ref={audioRef} controls src={audioUrl} className="w-full" />
+          <audio
+            ref={audioRef}
+            controls
+            preload="auto"
+            src={audioUrl}
+            onLoadedMetadata={(e) => primeDuration(e.currentTarget)}
+            className="w-full"
+          />
         </Card>
       ) : (
         <Card className="p-4 text-sm text-ink-soft">
