@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Mic, PhoneOff, Sparkles } from "lucide-react";
 import {
@@ -163,15 +163,7 @@ export default function InterviewRoom({
               {aiSpeaking ? t("interviewAiSpeaking") : t("interviewListening")}
             </p>
 
-            <div className="mx-auto mt-6 min-h-24 max-w-2xl">
-              {captionText && (
-                <p className={theme.caption}>
-                  {captionText.length > 220
-                    ? `…${captionText.slice(-220)}`
-                    : captionText}
-                </p>
-              )}
-            </div>
+            <RotatingCaption text={captionText} speaking={aiSpeaking} />
 
             <div className={theme.actions}>
               <button
@@ -300,6 +292,135 @@ function GreetingText({ guestName }: { guestName: string }) {
         ))}
       </span>
     </h1>
+  );
+}
+
+// The AI's transcript streams over the data channel far ahead of her voice, so
+// the caption paces itself: text is wrapped to the lines that actually fit the
+// container, and a window of them rotates forward with the estimated spoken
+// position instead of dumping the whole reply at once.
+const CAPTION_LINES = 3;
+const CAPTION_CHARS_PER_SECOND = 15.5; // ~150 wpm TTS incl. spaces; tune by ear
+const CAPTION_TICK_MS = 250;
+const CAPTION_HEIGHT_REM = CAPTION_LINES * 1 * 1.65;
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+/** Greedy word-wrap using real text metrics for the container's font. */
+function wrapToLines(text: string, maxWidth: number, font: string): string[] {
+  if (!text || maxWidth <= 0) return [];
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return [text];
+  measureCtx.font = font;
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/)) {
+    if (!word) continue;
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && measureCtx.measureText(candidate).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function RotatingCaption({
+  text,
+  speaking,
+}: {
+  text: string;
+  speaking: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [metrics, setMetrics] = useState<{
+    width: number;
+    font: string;
+  } | null>(null);
+  const [bottomLine, setBottomLine] = useState(0);
+  const linesRef = useRef<string[]>([]);
+  const prevLenRef = useRef(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const style = getComputedStyle(el);
+      setMetrics({
+        width: el.clientWidth,
+        font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
+      });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const lines = useMemo(
+    () => (metrics ? wrapToLines(text, metrics.width, metrics.font) : []),
+    [text, metrics]
+  );
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
+
+  // The text was cleared or replaced (new response) — rewind to its start.
+  useEffect(() => {
+    if (text.length < prevLenRef.current) setBottomLine(0);
+    prevLenRef.current = text.length;
+  }, [text]);
+
+  useEffect(() => {
+    if (!speaking) return;
+    const startedAt = performance.now();
+    const tick = () => {
+      const spokenChars =
+        ((performance.now() - startedAt) / 1000) * CAPTION_CHARS_PER_SECOND;
+      const wrapped = linesRef.current;
+      let consumed = 0;
+      let idx = 0;
+      while (
+        idx < wrapped.length - 1 &&
+        consumed + wrapped[idx].length + 1 <= spokenChars
+      ) {
+        consumed += wrapped[idx].length + 1;
+        idx++;
+      }
+      // Only ever advance, so the window never jumps backward.
+      setBottomLine((prev) => Math.max(prev, idx));
+    };
+    tick();
+    const id = setInterval(tick, CAPTION_TICK_MS);
+    return () => clearInterval(id);
+  }, [speaking]);
+
+  const bottom = speaking
+    ? Math.min(bottomLine, Math.max(0, lines.length - 1))
+    : Math.max(0, lines.length - 1);
+  const start = Math.max(0, bottom - CAPTION_LINES + 1);
+  const visible = lines.slice(start, bottom + 1);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`${theme.caption} mx-auto mt-6 max-w-2xl overflow-hidden`}
+      style={{ height: `${CAPTION_HEIGHT_REM}rem` }}
+    >
+      {visible.map((line, i) => (
+        <motion.p
+          key={start + i}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          {line}
+        </motion.p>
+      ))}
+    </div>
   );
 }
 
