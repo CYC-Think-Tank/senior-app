@@ -246,7 +246,7 @@ function Screen({ children }: { children: React.ReactNode }) {
 // container, and a window of them rotates forward with the estimated spoken
 // position instead of dumping the whole reply at once.
 const CAPTION_LINES = 3;
-const CAPTION_CHARS_PER_SECOND = 16; // ~150 wpm TTS incl. spaces; tune by ear
+const CAPTION_CHARS_PER_SECOND = 15.5; // ~150 wpm TTS incl. spaces; tune by ear
 const CAPTION_TICK_MS = 250;
 // text-xl leading-relaxed: 1.25rem font × 1.625 line-height per line.
 const CAPTION_HEIGHT_REM = CAPTION_LINES * 1.25 * 1.625;
