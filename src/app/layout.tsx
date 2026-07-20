@@ -6,6 +6,7 @@ import {
 } from "next/font/google";
 import { APP_NAME, TAGLINE } from "@/lib/constants";
 import { I18nProvider } from "@/components/i18n-provider";
+import { InterviewAtmosphere } from "@/components/interview-atmosphere";
 import {
   localeCookieName,
   normalizeLocale,
@@ -79,6 +80,7 @@ export default async function RootLayout({
       className={`${playfair.variable} ${geistSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <InterviewAtmosphere />
         <I18nProvider locale={locale}>{children}</I18nProvider>
       </body>
     </html>
