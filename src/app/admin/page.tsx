@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Mic, Plus, Users } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { Badge, Card, Monogram, formatDuration } from "@/components/ui";
+import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import type { Episode, Guest, InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -13,19 +15,21 @@ const episodeTone = (status: string) =>
       ? "ember"
       : "neutral";
 
-const statusLabel: Record<string, string> = {
-  draft: "Draft",
-  pending_approval: "Awaiting approval",
-  changes_requested: "Changes requested",
-  approved: "Approved",
-  published: "Published",
-  pending: "Not recorded yet",
-  recording: "In progress",
-  ready: "Ready to edit",
-};
-
 export default async function AdminDashboard() {
   const { supabase } = await requireAdmin();
+  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const t = (key: Parameters<typeof translate>[1], values = {}) =>
+    translate(locale, key, values);
+  const statusLabel: Record<string, string> = {
+    draft: t("statusDraft"),
+    pending_approval: t("statusPendingApproval"),
+    changes_requested: t("statusChangesRequested"),
+    approved: t("statusApproved"),
+    published: t("statusPublished"),
+    pending: t("statusPending"),
+    recording: t("statusRecording"),
+    ready: t("statusReady"),
+  };
 
   const [{ data: guests }, { data: sessions }, { data: episodes }] =
     await Promise.all([
@@ -50,28 +54,27 @@ export default async function AdminDashboard() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="font-serif text-3xl font-semibold">Dashboard</h1>
-        <p className="mt-1 text-ink-soft">
-          Guests, recordings, and the episode pipeline.
-        </p>
+        <h1 className="font-serif text-3xl font-semibold">
+          {t("commonDashboard")}
+        </h1>
+        <p className="mt-1 text-ink-soft">{t("adminIntro")}</p>
       </div>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-serif text-xl font-semibold">
-            <Users className="h-5 w-5 text-ember" /> Guests
+            <Users className="h-5 w-5 text-ember" /> {t("commonGuests")}
           </h2>
           <Link
             href="/admin/guests/new"
             className="inline-flex items-center gap-1.5 rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-cream hover:bg-ember-deep"
           >
-            <Plus className="h-4 w-4" /> New guest
+            <Plus className="h-4 w-4" /> {t("commonNewGuest")}
           </Link>
         </div>
         {!guests?.length ? (
           <Card className="p-8 text-center text-ink-soft">
-            No guests yet. Add your first storyteller to create an interview
-            link.
+            {t("adminNoGuests")}
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -96,11 +99,11 @@ export default async function AdminDashboard() {
 
       <section>
         <h2 className="mb-3 flex items-center gap-2 font-serif text-xl font-semibold">
-          <Mic className="h-5 w-5 text-ember" /> Recent sessions
+          <Mic className="h-5 w-5 text-ember" /> {t("commonRecentSessions")}
         </h2>
         {!sessions?.length ? (
           <Card className="p-8 text-center text-ink-soft">
-            No interviews recorded yet.
+            {t("adminNoSessions")}
           </Card>
         ) : (
           <Card className="divide-y divide-line">
@@ -130,7 +133,9 @@ export default async function AdminDashboard() {
                       href={`/admin/sessions/${s.id}`}
                       className="text-sm font-medium text-ember hover:text-ember-deep"
                     >
-                      {s.episodes ? "Open transcript" : "Edit transcript →"}
+                      {s.episodes
+                        ? t("adminOpenTranscript")
+                        : t("adminEditTranscript")}
                     </Link>
                   )}
                 </div>
@@ -141,11 +146,12 @@ export default async function AdminDashboard() {
       </section>
 
       <section>
-        <h2 className="mb-3 font-serif text-xl font-semibold">Episodes</h2>
+        <h2 className="mb-3 font-serif text-xl font-semibold">
+          {t("commonEpisodes")}
+        </h2>
         {!episodes?.length ? (
           <Card className="p-8 text-center text-ink-soft">
-            No episodes yet — edit a finished session&apos;s transcript, then
-            generate its episode.
+            {t("adminNoEpisodes")}
           </Card>
         ) : (
           <Card className="divide-y divide-line">
@@ -162,7 +168,9 @@ export default async function AdminDashboard() {
                   <p className="text-sm text-ink-faint">
                     {e.guests.name} · {formatDuration(e.duration_ms)}
                     {e.publish_at
-                      ? ` · releases ${new Date(e.publish_at).toLocaleDateString()}`
+                      ? ` · ${t("adminReleases")} ${new Date(
+                          e.publish_at
+                        ).toLocaleDateString(locale)}`
                       : ""}
                   </p>
                 </div>

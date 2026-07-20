@@ -7,9 +7,10 @@ import {
   InterviewClient,
   type InterviewPhase,
 } from "@/lib/realtime/interview-client";
-import { HOST_NAME } from "@/lib/realtime/interviewer-prompt";
 import type { TurnDraft } from "@/lib/types";
 import { formatTimestamp } from "@/components/ui";
+import { InterviewShell } from "@/components/interview-shell";
+import { useI18n } from "@/components/i18n-provider";
 
 type Props = {
   token: string;
@@ -24,6 +25,7 @@ export default function InterviewRoom({
   topic,
   alreadyRecorded,
 }: Props) {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<InterviewPhase>("idle");
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [turns, setTurns] = useState<TurnDraft[]>([]);
@@ -69,45 +71,47 @@ export default function InterviewRoom({
 
   if (alreadyRecorded && phase === "idle") {
     return (
-      <Shell>
+      <InterviewShell>
         <Sparkles className="mx-auto mb-6 h-12 w-12 text-ember" />
         <h1 className="font-serif text-4xl font-semibold sm:text-5xl">
-          This chat is already saved
+          {t("interviewAlreadyTitle")}
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-2xl leading-relaxed text-ink-soft">
-          Thank you, {guestName}. Your stories from this conversation are safe
-          with us.
+          {t("interviewAlreadyBody", { guestName })}
         </p>
-      </Shell>
+      </InterviewShell>
     );
   }
 
   return (
-    <Shell>
+    <InterviewShell>
       <AnimatePresence mode="wait">
         {phase === "idle" && (
           <Screen key="idle">
-            <p className="text-2xl text-ink-soft">Hello, {guestName}.</p>
+            <p className="text-2xl text-ink-soft">
+              {t("interviewHello", { guestName })}
+            </p>
             <h1 className="mt-3 font-serif text-4xl font-semibold leading-tight sm:text-6xl">
-              Ready to share
+              {t("interviewReady")}
               <br />
-              some stories?
+              {t("interviewSomeStories")}
             </h1>
             {topic && (
               <p className="mx-auto mt-6 inline-block rounded-full bg-ember-soft px-6 py-2 text-xl text-ember-deep">
-                Today we&apos;ll talk about {topic}
+                {t("interviewTopic", { topic })}
               </p>
             )}
             <p className="mx-auto mt-6 max-w-xl text-xl leading-relaxed text-ink-soft">
-              {HOST_NAME}, your host, will ask the questions. Just speak
-              naturally — there&apos;s nothing to read and nothing to type.
+              {t("interviewIntro")}
             </p>
             <button
               onClick={begin}
               className="mx-auto mt-10 flex h-40 w-40 flex-col items-center justify-center gap-2 rounded-full bg-ember text-cream shadow-lg shadow-ember/30 transition-transform hover:scale-105 hover:bg-ember-deep sm:h-48 sm:w-48"
             >
               <Mic className="h-12 w-12" />
-              <span className="text-xl font-semibold">Begin</span>
+              <span className="text-xl font-semibold">
+                {t("interviewBegin")}
+              </span>
             </button>
           </Screen>
         )}
@@ -117,10 +121,12 @@ export default function InterviewRoom({
             <BreathingCircle levelRef={levelRef} aiSpeaking={false} idlePulse />
             <h1 className="mt-10 font-serif text-3xl font-semibold sm:text-4xl">
               {phase === "mic"
-                ? "Please allow the microphone…"
-                : `Finding ${HOST_NAME}…`}
+                ? t("interviewAllowMic")
+                : t("interviewFinding")}
             </h1>
-            <p className="mt-3 text-xl text-ink-soft">Just a moment.</p>
+            <p className="mt-3 text-xl text-ink-soft">
+              {t("interviewMoment")}
+            </p>
           </Screen>
         )}
 
@@ -128,7 +134,7 @@ export default function InterviewRoom({
           <Screen key="live">
             <div className="flex items-center justify-center gap-3 text-lg text-ink-soft">
               <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-ember" />
-              Recording · {formatTimestamp(elapsedMs)}
+              {t("interviewRecording")} · {formatTimestamp(elapsedMs)}
             </div>
 
             <div className="my-10">
@@ -136,7 +142,7 @@ export default function InterviewRoom({
             </div>
 
             <p className="text-2xl font-medium text-ink">
-              {aiSpeaking ? `${HOST_NAME} is speaking…` : "We're listening."}
+              {aiSpeaking ? t("interviewAiSpeaking") : t("interviewListening")}
             </p>
 
             <div className="mx-auto mt-6 min-h-24 max-w-2xl">
@@ -159,14 +165,14 @@ export default function InterviewRoom({
                 className="inline-flex items-center gap-3 rounded-2xl border-2 border-line bg-cream px-8 py-4 text-xl font-semibold text-ink transition-colors hover:bg-paper-deep disabled:opacity-50"
               >
                 <Sparkles className="h-6 w-6 text-ember" />
-                {wrappingUp ? `${HOST_NAME} is wrapping up…` : "Time to finish"}
+                {wrappingUp ? t("interviewWrapBusy") : t("interviewWrap")}
               </button>
               <button
                 onClick={() => void clientRef.current?.stop()}
                 className="inline-flex items-center gap-3 rounded-2xl bg-ink px-8 py-4 text-xl font-semibold text-cream transition-colors hover:bg-ink/80"
               >
                 <PhoneOff className="h-6 w-6" />
-                End &amp; save
+                {t("interviewEndSave")}
               </button>
             </div>
           </Screen>
@@ -180,10 +186,10 @@ export default function InterviewRoom({
               transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
             />
             <h1 className="mt-8 font-serif text-3xl font-semibold sm:text-4xl">
-              Saving your stories…
+              {t("interviewSaving")}
             </h1>
             <p className="mt-3 text-xl text-ink-soft">
-              Please keep this page open.
+              {t("interviewKeepOpen")}
             </p>
           </Screen>
         )}
@@ -194,11 +200,10 @@ export default function InterviewRoom({
               <Check className="h-12 w-12 text-sage" />
             </div>
             <h1 className="mt-8 font-serif text-4xl font-semibold sm:text-5xl">
-              Thank you, {guestName}.
+              {t("interviewThanks", { guestName })}
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-2xl leading-relaxed text-ink-soft">
-              Your stories are saved. Your family is going to love this. You
-              can close this page now.
+              {t("interviewDone")}
             </p>
           </Screen>
         )}
@@ -206,10 +211,10 @@ export default function InterviewRoom({
         {phase === "error" && (
           <Screen key="error">
             <h1 className="font-serif text-3xl font-semibold sm:text-4xl">
-              Something went wrong
+              {t("interviewErrorTitle")}
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-xl leading-relaxed text-ink-soft">
-              {errorDetail ?? "We couldn't connect. It's not your fault."}
+              {errorDetail ?? t("interviewErrorBody")}
             </p>
             <button
               onClick={() => {
@@ -219,20 +224,12 @@ export default function InterviewRoom({
               }}
               className="mx-auto mt-8 rounded-2xl bg-ember px-8 py-4 text-xl font-semibold text-cream hover:bg-ember-deep"
             >
-              Try again
+              {t("commonTryAgain")}
             </button>
           </Screen>
         )}
       </AnimatePresence>
-    </Shell>
-  );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-3xl text-center">{children}</div>
-    </main>
+    </InterviewShell>
   );
 }
 

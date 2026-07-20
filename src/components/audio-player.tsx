@@ -3,10 +3,12 @@
 import { useRef, useState } from "react";
 import { Pause, Play, RotateCcw, RotateCw } from "lucide-react";
 import { formatTimestamp } from "@/components/ui";
+import { useI18n } from "@/components/i18n-provider";
 
 const SPEEDS = [1, 1.25, 1.5, 2];
 
 export function AudioPlayer({ src }: { src: string }) {
+  const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -50,7 +52,7 @@ export function AudioPlayer({ src }: { src: string }) {
         <button
           onClick={() => skip(-15)}
           className="rounded-full p-2 text-ink-soft hover:bg-paper-deep"
-          title="Back 15 seconds"
+          title={t("commonBack15")}
         >
           <RotateCcw className="h-5 w-5" />
         </button>
@@ -67,7 +69,7 @@ export function AudioPlayer({ src }: { src: string }) {
         <button
           onClick={() => skip(15)}
           className="rounded-full p-2 text-ink-soft hover:bg-paper-deep"
-          title="Forward 15 seconds"
+          title={t("commonForward15")}
         >
           <RotateCw className="h-5 w-5" />
         </button>
