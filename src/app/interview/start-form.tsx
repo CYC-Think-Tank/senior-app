@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import {
   startConversation,
@@ -12,6 +12,12 @@ const initialState: StartConversationState = {
   error: null,
 };
 
+function capitalizeName(value: string) {
+  return value.replace(/(^|\s)(\p{L})/gu, (_, space, letter) =>
+    `${space}${letter.toLocaleUpperCase()}`,
+  );
+}
+
 export function StartForm() {
   const [name, setName] = useState("");
   const [focused, setFocused] = useState(true);
@@ -20,17 +26,26 @@ export function StartForm() {
     initialState,
   );
 
+  useEffect(() => {
+    if (state.error) {
+      document.documentElement.removeAttribute("data-page-elements-leaving");
+    }
+  }, [state.error]);
+
   return (
-    <form action={formAction} className={theme.form}>
-      <label
-        htmlFor="name"
-        className={theme.visuallyHidden}
-      >
+    <form
+      action={formAction}
+      className={theme.form}
+      onSubmit={(event) => {
+        if (event.currentTarget.checkValidity()) {
+          document.documentElement.dataset.pageElementsLeaving = "true";
+        }
+      }}
+    >
+      <label htmlFor="name" className={theme.visuallyHidden}>
         Your name
       </label>
-      <div
-        className={`${theme.formRow} ${!name ? theme.empty : ""}`}
-      >
+      <div className={`${theme.formRow} ${!name ? theme.empty : ""}`}>
         <input
           id="name"
           name="name"
@@ -40,7 +55,8 @@ export function StartForm() {
           autoComplete="name"
           maxLength={80}
           className={theme.input}
-          onChange={(event) => setName(event.target.value)}
+          value={name}
+          onChange={(event) => setName(capitalizeName(event.target.value))}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
@@ -64,7 +80,6 @@ export function StartForm() {
           {state.error}
         </p>
       )}
-
     </form>
   );
 }

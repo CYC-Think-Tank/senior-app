@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import { HeroSky } from "@/components/hero-sky";
+import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import styles from "./page.module.css";
 
@@ -26,9 +27,9 @@ export default function LandingPage() {
             <Link href="/login" className={styles.navGhost}>
               Log in
             </Link>
-            <Link href="/interview" className={styles.navPrimary}>
+            <PageTransitionLink href="/interview" className={styles.navPrimary}>
               Get started
-            </Link>
+            </PageTransitionLink>
           </nav>
         </div>
 
@@ -43,14 +44,14 @@ export default function LandingPage() {
               </span>
             </h1>
             <div className={styles.heroCtas}>
-              <Link
+              <PageTransitionLink
                 href="/interview"
                 className={styles.btnPrimary}
                 aria-label="Start a conversation with the AI"
               >
                 Start a conversation
                 <ArrowRight className={styles.btnIcon} aria-hidden="true" />
-              </Link>
+              </PageTransitionLink>
             </div>
           </div>
         </div>
@@ -209,10 +210,10 @@ export default function LandingPage() {
             The kettle&rsquo;s on and someone is ready to listen. Start the
             first conversation tonight.
           </p>
-          <Link href="/interview" className={styles.btnLight}>
-            Start a conversation
-            <ArrowRight className={styles.btnIcon} aria-hidden="true" />
-          </Link>
+        <PageTransitionLink href="/interview" className={styles.btnLight}>
+          Start a conversation
+          <ArrowRight className={styles.btnIcon} aria-hidden="true" />
+        </PageTransitionLink>
         </ScrollReveal>
       </section>
 

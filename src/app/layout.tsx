@@ -3,7 +3,6 @@ import { cookies, headers } from "next/headers";
 import {
   Geist,
   Playfair_Display,
-  Space_Grotesk,
 } from "next/font/google";
 import { APP_NAME, TAGLINE } from "@/lib/constants";
 import { I18nProvider } from "@/components/i18n-provider";
@@ -13,11 +12,6 @@ import {
   translate,
 } from "@/lib/i18n";
 import "./globals.css";
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-});
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -82,7 +76,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      className={`${spaceGrotesk.variable} ${playfair.variable} ${geistSans.variable} h-full antialiased`}
+      className={`${playfair.variable} ${geistSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider locale={locale}>{children}</I18nProvider>

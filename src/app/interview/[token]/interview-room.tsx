@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, Mic, PhoneOff, Sparkles } from "lucide-react";
 import {
   InterviewClient,
@@ -28,6 +28,7 @@ export default function InterviewRoom({
 }: Props) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<InterviewPhase>("idle");
+  const [showWelcome, setShowWelcome] = useState(true);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [turns, setTurns] = useState<TurnDraft[]>([]);
   const [liveAiText, setLiveAiText] = useState("");
@@ -62,6 +63,18 @@ export default function InterviewRoom({
     };
   }, []);
 
+  useEffect(() => {
+    if (alreadyRecorded) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowWelcome(false);
+    }, 2200);
+
+    return () => window.clearTimeout(timeout);
+  }, [alreadyRecorded]);
+
   const lastGuestTurn = [...turns].reverse().find((t) => t.speaker === "guest");
   const lastAiTurn = [...turns].reverse().find((t) => t.speaker === "ai");
   const captionText =
@@ -87,31 +100,39 @@ export default function InterviewRoom({
   return (
     <InterviewShell>
       <>
-        {phase === "idle" && (
-          <Screen key="idle">
-            <p className={theme.eyebrow}>
-              {t("interviewHello", { guestName })}
-            </p>
-            <h1 className={`${theme.heading} mt-3 text-4xl sm:text-6xl`}>
-              {t("interviewReady")} {t("interviewSomeStories")}
-            </h1>
-            {topic && (
-              <p className={theme.topic}>
-                {t("interviewTopic", { topic })}
+        <AnimatePresence mode="wait">
+          {showWelcome && (
+            <IntroScreen key="welcome">
+              <GreetingText guestName={guestName} />
+            </IntroScreen>
+          )}
+
+          {!showWelcome && phase === "idle" && (
+            <IntroScreen key="idle">
+              <p className={theme.eyebrow}>
+                {t("interviewHello", { guestName })}
               </p>
-            )}
-            <p className={`${theme.body} mx-auto mt-6 max-w-xl text-lg leading-relaxed`}>
-              {t("interviewIntro")}
-            </p>
-            <button
-              onClick={begin}
-              className={theme.beginButton}
-            >
-              <Mic />
-              <span>{t("interviewBegin")}</span>
-            </button>
-          </Screen>
-        )}
+              <h1 className={`${theme.heading} mt-3 text-4xl sm:text-6xl`}>
+                {t("interviewReady")} {t("interviewSomeStories")}
+              </h1>
+              {topic && (
+                <p className={theme.topic}>
+                  {t("interviewTopic", { topic })}
+                </p>
+              )}
+              <p className={`${theme.body} mx-auto mt-6 max-w-xl text-lg leading-relaxed`}>
+                {t("interviewIntro")}
+              </p>
+              <button
+                onClick={begin}
+                className={theme.beginButton}
+              >
+                <Mic />
+                <span>{t("interviewBegin")}</span>
+              </button>
+            </IntroScreen>
+          )}
+        </AnimatePresence>
 
         {(phase === "mic" || phase === "connecting") && (
           <Screen key="connecting">
@@ -215,6 +236,7 @@ export default function InterviewRoom({
             </p>
             <button
               onClick={() => {
+                setShowWelcome(false);
                 setPhase("idle");
                 setTurns([]);
                 setWrappingUp(false);
@@ -232,6 +254,53 @@ export default function InterviewRoom({
 
 function Screen({ children }: { children: React.ReactNode }) {
   return <div className={theme.screen}>{children}</div>;
+}
+
+function IntroScreen({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      className={theme.introScreen}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.85, ease: [0.45, 0, 0.55, 1] }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+function GreetingText({ guestName }: { guestName: string }) {
+  const text = `Hi ${guestName}!`;
+
+  return (
+    <h1
+      className={`${theme.heading} text-4xl sm:text-6xl`}
+      aria-label={text}
+    >
+      <span aria-hidden="true">
+        {Array.from(text).map((character, index) => (
+          <motion.span
+            key={`${character}-${index}`}
+            className={theme.greetingCharacter}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.42,
+              delay: index * 0.055,
+              ease: [0.45, 0, 0.55, 1],
+            }}
+          >
+            {character === " " ? "\u00a0" : character}
+          </motion.span>
+        ))}
+      </span>
+    </h1>
+  );
 }
 
 /**

@@ -10,11 +10,17 @@ export type StartConversationState = {
 };
 
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
-const RATE_LIMIT_MAX_ATTEMPTS = 8;
+const RATE_LIMIT_MAX_ATTEMPTS = 30;
 const attemptsByAddress = new Map<
   string,
   { count: number; resetAt: number }
 >();
+
+function capitalizeName(value: string) {
+  return value.replace(/(^|\s)(\p{L})/gu, (_, space, letter) =>
+    `${space}${letter.toLocaleUpperCase()}`,
+  );
+}
 
 async function isRateLimited() {
   const headerStore = await headers();
@@ -65,9 +71,10 @@ export async function startConversation(
     };
   }
 
-  const name = String(formData.get("name") ?? "")
+  const normalizedName = String(formData.get("name") ?? "")
     .replace(/\s+/gu, " ")
     .trim();
+  const name = capitalizeName(normalizedName);
 
   if (
     name.length < 1 ||

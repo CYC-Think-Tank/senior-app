@@ -15,7 +15,7 @@
   padding: 4rem 1.5rem;
   color: var(--room-white);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  background: #000;
+  background: #1c1011;
 }
 
 .shell::before {
@@ -47,8 +47,8 @@
     radial-gradient(
       ellipse 62% 54% at 50% 50%,
       transparent 26%,
-      rgb(0 0 0 / 0.32) 68%,
-      #000 100%
+      rgb(5 2 1 / 0.32) 68%,
+      #16090b 100%
     );
   content: "";
   pointer-events: none;
@@ -75,13 +75,39 @@
   animation: screenReveal 1s cubic-bezier(0.45, 0, 0.55, 1) both;
 }
 
+.introScreen {
+  width: 100%;
+}
+
+.greetingCharacter {
+  display: inline-block;
+}
+
+.startScreen {
+  animation: none;
+}
+
+:global(html[data-page-elements-leaving]) .startScreen {
+  animation: startElementsExit 700ms cubic-bezier(0.45, 0, 0.55, 1) both;
+  pointer-events: none;
+}
+
+.startQuestion {
+  animation: startQuestionReveal 1.5s 50ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
 .eyebrow {
   color: var(--room-muted);
   font-size: 1rem;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.01em;
 }
 
 .body {
   color: var(--room-muted);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  line-height: 1.55;
 }
 
 .accentIcon {
@@ -103,6 +129,14 @@
   width: min(31rem, 100%);
   margin: 3rem auto 0;
   animation: formReveal 1s 120ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+.startScreen .form {
+  animation: startFormReveal 900ms 720ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+.startScreen .formRow::after {
+  animation-delay: 1.15s;
 }
 
 .formRow {
@@ -156,9 +190,12 @@
   height: 3.5rem;
   padding: 0 2.75rem;
   color: var(--room-white);
-  font: inherit;
-  font-size: 1.05rem;
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1;
   text-align: center;
+  text-transform: capitalize;
   caret-color: var(--room-white);
   background: transparent;
   border: 0;
@@ -219,41 +256,53 @@
   margin-top: 1.25rem;
   color: var(--room-muted);
   font-size: 0.9rem;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.01em;
 }
 
 .beginButton {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 3.25rem;
+  width: 7rem;
+  height: 7rem;
   margin-top: 2.5rem;
-  padding: 0 1.1rem;
+  padding: 0;
   gap: 0.55rem;
   color: var(--room-white);
   cursor: pointer;
-  background: transparent;
-  border: 1px solid var(--room-line);
-  border-radius: 8px;
+  background: rgb(255 255 255 / 0.035);
+  border: 1px solid rgb(247 247 245 / 0.2);
+  border-radius: 50%;
+  box-shadow: 0 0 2rem rgb(223 125 59 / 0.1);
   transition:
     border-color 340ms ease,
+    background 340ms ease,
     color 340ms ease,
+    box-shadow 500ms ease,
     transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .beginButton:hover {
-  color: var(--room-ember);
-  border-color: #555;
+  color: var(--room-white);
+  background: rgb(255 255 255 / 0.09);
+  border-color: rgb(247 247 245 / 0.58);
+  box-shadow: 0 0 2.75rem rgb(223 125 59 / 0.18);
   transform: translateY(-2px);
 }
 
 .beginButton svg {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  stroke-width: 1.7;
 }
 
 .beginButton span {
-  font-size: 0.95rem;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.9rem;
   font-weight: 550;
+  letter-spacing: 0.01em;
 }
 
 .statusLine {
@@ -281,6 +330,7 @@
 .caption {
   color: var(--room-muted);
   font-size: 1rem;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   line-height: 1.65;
 }
 
@@ -432,6 +482,43 @@
   }
 }
 
+@keyframes startQuestionReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(3.5rem);
+  }
+  36% {
+    opacity: 1;
+    transform: translateY(3.5rem);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes startFormReveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes startElementsExit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.4rem);
+  }
+}
+
 @keyframes formReveal {
   from {
     opacity: 0;
@@ -488,9 +575,16 @@
 
   .screen,
   .form,
+  .startScreen .form,
   .formRow::after,
+  .startScreen .formRow::after,
   .shell::before,
-  .customCaret {
+  .customCaret,
+  .startQuestion {
+    animation: none;
+  }
+
+  :global(html[data-page-elements-leaving]) .startScreen {
     animation: none;
   }
 
