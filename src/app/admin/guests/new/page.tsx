@@ -1,64 +1,71 @@
+import { cookies } from "next/headers";
 import { createGuest } from "@/app/admin/actions";
 import { Card, buttonStyles, inputStyles } from "@/components/ui";
+import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 
-export default function NewGuestPage() {
+export default async function NewGuestPage() {
+  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="font-serif text-3xl font-semibold">New guest</h1>
-      <p className="mt-1 text-ink-soft">
-        The storyteller whose episodes this will be.
-      </p>
+      <h1 className="font-serif text-3xl font-semibold">
+        {t("commonNewGuest")}
+      </h1>
+      <p className="mt-1 text-ink-soft">{t("guestNewIntro")}</p>
 
       <Card className="mt-6 p-8">
         <form action={createGuest} className="space-y-5">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-soft">
-              Name *
+              {t("guestName")}
             </label>
             <input
               name="name"
               required
-              placeholder="e.g. Margaret Chen"
+              placeholder={t("guestNamePlaceholder")}
               className={inputStyles}
             />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-soft">
-              About them
+              {t("guestAbout")}
             </label>
             <textarea
               name="bio"
               rows={3}
-              placeholder="Anything the interviewer should know — where they grew up, career, family…"
+              placeholder={t("guestAboutPlaceholder")}
               className={inputStyles}
             />
             <p className="mt-1 text-xs text-ink-faint">
-              This is shared with the AI host so its questions feel personal.
+              {t("guestAboutHelp")}
             </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-soft">
-              Favourite subjects
+              {t("guestSubjects")}
             </label>
             <input
               name="topics"
-              placeholder="childhood, the bakery, immigration, grandchildren"
+              placeholder={t("guestSubjectsPlaceholder")}
               className={inputStyles}
             />
-            <p className="mt-1 text-xs text-ink-faint">Comma-separated.</p>
+            <p className="mt-1 text-xs text-ink-faint">
+              {t("guestSubjectsHelp")}
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-soft">
-              Interview language
+              {t("guestLanguage")}
             </label>
             <input
               name="language"
-              defaultValue="English"
+              defaultValue={t("guestLanguageDefault")}
               className={inputStyles}
             />
           </div>
           <button type="submit" className={`${buttonStyles.primary} w-full`}>
-            Create guest
+            {t("guestCreate")}
           </button>
         </form>
       </Card>

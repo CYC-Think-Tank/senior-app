@@ -1,13 +1,18 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Play } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { Card, Monogram, formatDuration } from "@/components/ui";
+import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import type { Episode, Guest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
   const { supabase } = await requireUser();
+  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const t = (key: Parameters<typeof translate>[1], values = {}) =>
+    translate(locale, key, values);
 
   const [{ data: guests }, { data: episodes }] = await Promise.all([
     supabase.from("guests").select("*").order("name"),
@@ -25,24 +30,24 @@ export default async function FeedPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-serif text-4xl font-semibold">Family stories</h1>
+        <h1 className="font-serif text-4xl font-semibold">
+          {t("feedTitle")}
+        </h1>
         <p className="mt-2 text-lg text-ink-soft">
           {guests?.length
-            ? `New episodes with ${(guests as Guest[])
-                .map((g) => g.name)
-                .join(", ")} appear here as they're released.`
-            : "When you're invited to a storyteller's episodes, they'll appear here."}
+            ? t("feedIntroWithGuests", {
+                names: (guests as Guest[]).map((g) => g.name).join(", "),
+              })
+            : t("feedIntroEmpty")}
         </p>
       </div>
 
       {rows.length === 0 ? (
         <Card className="p-12 text-center">
           <p className="font-serif text-2xl text-ink-soft">
-            No episodes released yet.
+            {t("feedNoEpisodes")}
           </p>
-          <p className="mt-2 text-ink-faint">
-            The first story is worth the wait.
-          </p>
+          <p className="mt-2 text-ink-faint">{t("feedWait")}</p>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -52,7 +57,7 @@ export default async function FeedPage() {
                 <Monogram name={e.guests.name} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium uppercase tracking-wide text-ember">
-                    {e.guests.name} · Episode {e.episode_number}
+                    {e.guests.name} · {t("commonEpisode")} {e.episode_number}
                   </p>
                   <h2 className="mt-0.5 truncate font-serif text-2xl font-semibold">
                     {e.title}
@@ -64,7 +69,7 @@ export default async function FeedPage() {
                   )}
                   <p className="mt-1.5 text-sm text-ink-faint">
                     {e.publish_at
-                      ? new Date(e.publish_at).toLocaleDateString(undefined, {
+                      ? new Date(e.publish_at).toLocaleDateString(locale, {
                           year: "numeric",
                           month: "long",
                           day: "numeric",

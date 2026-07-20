@@ -7,9 +7,11 @@ import {
   InterviewClient,
   type InterviewPhase,
 } from "@/lib/realtime/interview-client";
-import { HOST_NAME } from "@/lib/realtime/interviewer-prompt";
 import type { TurnDraft } from "@/lib/types";
 import { formatTimestamp } from "@/components/ui";
+import { InterviewShell } from "@/components/interview-shell";
+import theme from "@/components/interview-theme.module.css";
+import { useI18n } from "@/components/i18n-provider";
 
 type Props = {
   token: string;
@@ -24,7 +26,9 @@ export default function InterviewRoom({
   topic,
   alreadyRecorded,
 }: Props) {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<InterviewPhase>("idle");
+  const [showWelcome, setShowWelcome] = useState(true);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [turns, setTurns] = useState<TurnDraft[]>([]);
   const [liveAiText, setLiveAiText] = useState("");
@@ -59,6 +63,18 @@ export default function InterviewRoom({
     };
   }, []);
 
+  useEffect(() => {
+    if (alreadyRecorded) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowWelcome(false);
+    }, 2200);
+
+    return () => window.clearTimeout(timeout);
+  }, [alreadyRecorded]);
+
   const lastGuestTurn = [...turns].reverse().find((t) => t.speaker === "guest");
   const lastAiTurn = [...turns].reverse().find((t) => t.speaker === "ai");
   const captionText =
@@ -69,96 +85,104 @@ export default function InterviewRoom({
 
   if (alreadyRecorded && phase === "idle") {
     return (
-      <Shell>
-        <Sparkles className="mx-auto mb-6 h-12 w-12 text-ember" />
-        <h1 className="font-serif text-4xl font-semibold sm:text-5xl">
-          This chat is already saved
+      <InterviewShell>
+        <Sparkles className={`${theme.accentIcon} mx-auto mb-6 h-12 w-12`} />
+        <h1 className={`${theme.heading} text-4xl sm:text-5xl`}>
+          {t("interviewAlreadyTitle")}
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-2xl leading-relaxed text-ink-soft">
-          Thank you, {guestName}. Your stories from this conversation are safe
-          with us.
+        <p className={`${theme.body} mx-auto mt-4 max-w-xl text-xl leading-relaxed`}>
+          {t("interviewAlreadyBody", { guestName })}
         </p>
-      </Shell>
+      </InterviewShell>
     );
   }
 
   return (
-    <Shell>
-      <AnimatePresence mode="wait">
-        {phase === "idle" && (
-          <Screen key="idle">
-            <p className="text-2xl text-ink-soft">Hello, {guestName}.</p>
-            <h1 className="mt-3 font-serif text-4xl font-semibold leading-tight sm:text-6xl">
-              Ready to share
-              <br />
-              some stories?
-            </h1>
-            {topic && (
-              <p className="mx-auto mt-6 inline-block rounded-full bg-ember-soft px-6 py-2 text-xl text-ember-deep">
-                Today we&apos;ll talk about {topic}
+    <InterviewShell>
+      <>
+        <AnimatePresence mode="wait">
+          {showWelcome && (
+            <IntroScreen key="welcome">
+              <GreetingText guestName={guestName} />
+            </IntroScreen>
+          )}
+
+          {!showWelcome && phase === "idle" && (
+            <IntroScreen key="idle">
+              <p className={theme.eyebrow}>
+                {t("interviewHello", { guestName })}
               </p>
-            )}
-            <p className="mx-auto mt-6 max-w-xl text-xl leading-relaxed text-ink-soft">
-              {HOST_NAME}, your host, will ask the questions. Just speak
-              naturally — there&apos;s nothing to read and nothing to type.
-            </p>
-            <button
-              onClick={begin}
-              className="mx-auto mt-10 flex h-40 w-40 flex-col items-center justify-center gap-2 rounded-full bg-ember text-cream shadow-lg shadow-ember/30 transition-transform hover:scale-105 hover:bg-ember-deep sm:h-48 sm:w-48"
-            >
-              <Mic className="h-12 w-12" />
-              <span className="text-xl font-semibold">Begin</span>
-            </button>
-          </Screen>
-        )}
+              <h1 className={`${theme.heading} mt-3 text-4xl sm:text-6xl`}>
+                {t("interviewReady")} {t("interviewSomeStories")}
+              </h1>
+              {topic && (
+                <p className={theme.topic}>
+                  {t("interviewTopic", { topic })}
+                </p>
+              )}
+              <p className={`${theme.body} mx-auto mt-6 max-w-xl text-lg leading-relaxed`}>
+                {t("interviewIntro")}
+              </p>
+              <button
+                onClick={begin}
+                className={theme.beginButton}
+              >
+                <Mic />
+                <span>{t("interviewBegin")}</span>
+              </button>
+            </IntroScreen>
+          )}
+        </AnimatePresence>
 
         {(phase === "mic" || phase === "connecting") && (
           <Screen key="connecting">
             <BreathingCircle levelRef={levelRef} aiSpeaking={false} idlePulse />
-            <h1 className="mt-10 font-serif text-3xl font-semibold sm:text-4xl">
+            <h1 className={`${theme.heading} mt-10 text-3xl sm:text-4xl`}>
               {phase === "mic"
-                ? "Please allow the microphone…"
-                : `Finding ${HOST_NAME}…`}
+                ? t("interviewAllowMic")
+                : t("interviewFinding")}
             </h1>
-            <p className="mt-3 text-xl text-ink-soft">Just a moment.</p>
+            <p className={`${theme.body} mt-3 text-lg`}>
+              {t("interviewMoment")}
+            </p>
           </Screen>
         )}
 
         {phase === "live" && (
           <Screen key="live">
-            <div className="flex items-center justify-center gap-3 text-lg text-ink-soft">
-              <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-ember" />
-              Recording · {formatTimestamp(elapsedMs)}
+            <div className={theme.statusLine}>
+              <span className={`${theme.recordingDot} animate-pulse`} />
+              {t("interviewRecording")} · {formatTimestamp(elapsedMs)}
             </div>
 
             <div className="my-10">
               <BreathingCircle levelRef={levelRef} aiSpeaking={aiSpeaking} />
             </div>
 
-            <p className="text-2xl font-medium text-ink">
-              {aiSpeaking ? `${HOST_NAME} is speaking…` : "We're listening."}
+            <p className={theme.liveLabel}>
+              {aiSpeaking ? t("interviewAiSpeaking") : t("interviewListening")}
             </p>
 
             <RotatingCaption text={captionText} speaking={aiSpeaking} />
 
-            <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <div className={theme.actions}>
               <button
                 onClick={() => {
                   setWrappingUp(true);
                   clientRef.current?.requestWrapUp();
                 }}
                 disabled={wrappingUp}
-                className="inline-flex items-center gap-3 rounded-2xl border-2 border-line bg-cream px-8 py-4 text-xl font-semibold text-ink transition-colors hover:bg-paper-deep disabled:opacity-50"
+                className={theme.secondaryAction}
               >
-                <Sparkles className="h-6 w-6 text-ember" />
-                {wrappingUp ? `${HOST_NAME} is wrapping up…` : "Time to finish"}
+                <Sparkles className="h-5 w-5" />
+                {wrappingUp ? t("interviewWrapBusy") : t("interviewWrap")}
               </button>
               <button
                 onClick={() => void clientRef.current?.stop()}
-                className="inline-flex items-center gap-3 rounded-2xl bg-ink px-8 py-4 text-xl font-semibold text-cream transition-colors hover:bg-ink/80"
+                className={theme.primaryAction}
               >
-                <PhoneOff className="h-6 w-6" />
-                End &amp; save
+                <PhoneOff className="h-5 w-5" />
+                {t("interviewEndSave")}
               </button>
             </div>
           </Screen>
@@ -167,77 +191,107 @@ export default function InterviewRoom({
         {phase === "uploading" && (
           <Screen key="uploading">
             <motion.div
-              className="mx-auto h-16 w-16 rounded-full border-4 border-line border-t-ember"
+              className={theme.spinner}
               animate={{ rotate: 360 }}
               transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
             />
-            <h1 className="mt-8 font-serif text-3xl font-semibold sm:text-4xl">
-              Saving your stories…
+            <h1 className={`${theme.heading} mt-8 text-3xl sm:text-4xl`}>
+              {t("interviewSaving")}
             </h1>
-            <p className="mt-3 text-xl text-ink-soft">
-              Please keep this page open.
+            <p className={`${theme.body} mt-3 text-lg`}>
+              {t("interviewKeepOpen")}
             </p>
           </Screen>
         )}
 
         {phase === "done" && (
           <Screen key="done">
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-sage-soft">
-              <Check className="h-12 w-12 text-sage" />
+            <div className={theme.successMark}>
+              <Check className="h-11 w-11" />
             </div>
-            <h1 className="mt-8 font-serif text-4xl font-semibold sm:text-5xl">
-              Thank you, {guestName}.
+            <h1 className={`${theme.heading} mt-8 text-4xl sm:text-5xl`}>
+              {t("interviewThanks", { guestName })}
             </h1>
-            <p className="mx-auto mt-4 max-w-xl text-2xl leading-relaxed text-ink-soft">
-              Your stories are saved. Your family is going to love this. You
-              can close this page now.
+            <p className={`${theme.body} mx-auto mt-4 max-w-xl text-xl leading-relaxed`}>
+              {t("interviewDone")}
             </p>
           </Screen>
         )}
 
         {phase === "error" && (
           <Screen key="error">
-            <h1 className="font-serif text-3xl font-semibold sm:text-4xl">
-              Something went wrong
+            <h1 className={`${theme.heading} text-3xl sm:text-4xl`}>
+              {t("interviewErrorTitle")}
             </h1>
-            <p className="mx-auto mt-4 max-w-xl text-xl leading-relaxed text-ink-soft">
-              {errorDetail ?? "We couldn't connect. It's not your fault."}
+            <p className={`${theme.body} mx-auto mt-4 max-w-xl text-lg leading-relaxed`}>
+              {errorDetail ?? t("interviewErrorBody")}
             </p>
             <button
               onClick={() => {
+                setShowWelcome(false);
                 setPhase("idle");
                 setTurns([]);
                 setWrappingUp(false);
               }}
-              className="mx-auto mt-8 rounded-2xl bg-ember px-8 py-4 text-xl font-semibold text-cream hover:bg-ember-deep"
+              className={`${theme.retryButton} mx-auto mt-8`}
             >
-              Try again
+              {t("commonTryAgain")}
             </button>
           </Screen>
         )}
-      </AnimatePresence>
-    </Shell>
-  );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-3xl text-center">{children}</div>
-    </main>
+      </>
+    </InterviewShell>
   );
 }
 
 function Screen({ children }: { children: React.ReactNode }) {
+  return <div className={theme.screen}>{children}</div>;
+}
+
+function IntroScreen({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      className={theme.introScreen}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
-      transition={{ duration: 0.35 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.85, ease: [0.45, 0, 0.55, 1] }}
     >
       {children}
     </motion.div>
+  );
+}
+
+function GreetingText({ guestName }: { guestName: string }) {
+  const text = `Hi ${guestName}!`;
+
+  return (
+    <h1
+      className={`${theme.heading} text-4xl sm:text-6xl`}
+      aria-label={text}
+    >
+      <span aria-hidden="true">
+        {Array.from(text).map((character, index) => (
+          <motion.span
+            key={`${character}-${index}`}
+            className={theme.greetingCharacter}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.42,
+              delay: index * 0.055,
+              ease: [0.45, 0, 0.55, 1],
+            }}
+          >
+            {character === " " ? "\u00a0" : character}
+          </motion.span>
+        ))}
+      </span>
+    </h1>
   );
 }
 
@@ -248,8 +302,7 @@ function Screen({ children }: { children: React.ReactNode }) {
 const CAPTION_LINES = 3;
 const CAPTION_CHARS_PER_SECOND = 15.5; // ~150 wpm TTS incl. spaces; tune by ear
 const CAPTION_TICK_MS = 250;
-// text-xl leading-relaxed: 1.25rem font × 1.625 line-height per line.
-const CAPTION_HEIGHT_REM = CAPTION_LINES * 1.25 * 1.625;
+const CAPTION_HEIGHT_REM = CAPTION_LINES * 1 * 1.65;
 
 let measureCtx: CanvasRenderingContext2D | null = null;
 
@@ -354,7 +407,7 @@ function RotatingCaption({
   return (
     <div
       ref={containerRef}
-      className="mx-auto mt-6 max-w-2xl overflow-hidden text-xl leading-relaxed text-ink-soft"
+      className={`${theme.caption} mx-auto mt-6 max-w-2xl overflow-hidden`}
       style={{ height: `${CAPTION_HEIGHT_REM}rem` }}
     >
       {visible.map((line, i) => (
@@ -402,25 +455,25 @@ function BreathingCircle({
   }, [levelRef]);
 
   return (
-    <div className="relative mx-auto flex h-44 w-44 items-center justify-center sm:h-52 sm:w-52">
+    <div className={theme.orbStage}>
       {aiSpeaking && (
         <motion.div
-          className="absolute inset-0 rounded-full bg-ember/20"
+          className={theme.orbHalo}
           animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0.15, 0.6] }}
           transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
         />
       )}
       {idlePulse && (
         <motion.div
-          className="absolute inset-0 rounded-full bg-paper-deep"
+          className={theme.orbIdleHalo}
           animate={{ scale: [1, 1.12, 1] }}
           transition={{ repeat: Infinity, duration: 2.4, ease: "easeInOut" }}
         />
       )}
       <div
         ref={innerRef}
-        className={`h-28 w-28 rounded-full transition-colors duration-500 sm:h-32 sm:w-32 ${
-          aiSpeaking ? "bg-ember" : "bg-ember/70"
+        className={`${theme.orbCore} ${
+          aiSpeaking ? theme.orbSpeaking : ""
         }`}
         style={{ willChange: "transform" }}
       />

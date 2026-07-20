@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { LogOut } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { signOut } from "@/app/auth/actions";
 import { Wordmark } from "@/components/ui";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 
 export default async function AdminLayout({
   children,
@@ -10,6 +13,8 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   await requireAdmin();
+  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -22,25 +27,26 @@ export default async function AdminLayout({
                 href="/admin"
                 className="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-paper-deep hover:text-ink"
               >
-                Dashboard
+                {t("commonDashboard")}
               </Link>
               <Link
                 href="/admin/guests/new"
                 className="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-paper-deep hover:text-ink"
               >
-                New guest
+                {t("commonNewGuest")}
               </Link>
               <Link
                 href="/feed"
                 className="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-paper-deep hover:text-ink"
               >
-                View feed
+                {t("commonViewFeed")}
               </Link>
             </nav>
           </div>
+          <LanguageSwitcher />
           <form action={signOut}>
             <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-paper-deep hover:text-ink">
-              <LogOut className="h-4 w-4" /> Sign out
+              <LogOut className="h-4 w-4" /> {t("commonSignOut")}
             </button>
           </form>
         </div>

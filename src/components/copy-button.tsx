@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useI18n } from "@/components/i18n-provider";
 
 export function CopyButton({
   value,
@@ -10,7 +11,9 @@ export function CopyButton({
   value: string;
   label?: string;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const buttonLabel = label === "Copy link" ? t("commonCopyLink") : label;
 
   return (
     <button
@@ -24,11 +27,11 @@ export function CopyButton({
     >
       {copied ? (
         <>
-          <Check className="h-3.5 w-3.5 text-sage" /> Copied
+          <Check className="h-3.5 w-3.5 text-sage" /> {t("commonCopied")}
         </>
       ) : (
         <>
-          <Copy className="h-3.5 w-3.5" /> {label}
+          <Copy className="h-3.5 w-3.5" /> {buttonLabel}
         </>
       )}
     </button>

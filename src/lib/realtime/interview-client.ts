@@ -35,7 +35,45 @@ const MIME_CANDIDATES = [
   "audio/mp4",
 ];
 
+const KRISP_SDK_URL = "/krisp/krispsdk.mjs";
+const KRISP_MODEL_BVC_URL = "/krisp/models/model_bvc.kef";
+const KRISP_MODEL_8_URL = "/krisp/models/model_8.kef";
+const KRISP_MODEL_NC_URL = "/krisp/models/model_nc.kef";
+const KRISP_BVC_ALLOWED_DEVICES_URL = "/krisp/assets/bvc-allowed.txt";
+
 type PendingAi = { start?: number; end?: number; text?: string; live: string };
+type KrispFilterNode = AudioNode & {
+  enable?: () => void;
+  dispose?: () => void;
+};
+type KrispSdkInstance = {
+  init: () => Promise<void>;
+  dispose?: () => void;
+  createNoiseFilter: (
+    args: { audioContext: AudioContext; stream: MediaStream },
+    onReady?: () => void,
+    onDispose?: () => void
+  ) => Promise<KrispFilterNode>;
+};
+type KrispSdkConstructor = {
+  new (options: {
+    params: {
+      debugLogs: boolean;
+      logProcessStats: boolean;
+      useSharedArrayBuffer: boolean;
+      useBVC: boolean;
+      bufferOverflowMS: number;
+      bufferDropMS: number;
+      models: {
+        modelBVC: { url: string; preload: boolean };
+        model8: string;
+        modelNC: string;
+      };
+      bvc: { allowedDevices: string };
+    };
+  }): KrispSdkInstance;
+  isSupported?: () => boolean;
+};
 
 export class InterviewClient {
   private cb: InterviewCallbacks;
@@ -44,8 +82,11 @@ export class InterviewClient {
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
   private micStream: MediaStream | null = null;
+  private processedMicStream: MediaStream | null = null;
   private audioCtx: AudioContext | null = null;
-  private analyser: AnalyserNode | null = null;
+  private meterAnalyser: AnalyserNode | null = null;
+  private krispSdk: KrispSdkInstance | null = null;
+  private krispFilterNode: KrispFilterNode | null = null;
   private remoteAudioEl: HTMLAudioElement | null = null;
 
   private recorder: MediaRecorder | null = null;
@@ -58,7 +99,6 @@ export class InterviewClient {
   private guestTimings = new Map<string, { start: number; end?: number }>();
   private pendingAi = new Map<string, PendingAi>();
   private rafId: number | null = null;
-  private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
 
   constructor(token: string, callbacks: InterviewCallbacks) {
@@ -75,12 +115,21 @@ export class InterviewClient {
   async start() {
     try {
       this.cb.onPhase("mic");
+      const KrispSDK = await this.loadKrispSDK();
       this.micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: KrispSDK
+          ? {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              channelCount: 1,
+            }
+          : {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: false,
+              channelCount: 1,
+            },
       });
 
       this.cb.onPhase("connecting");
@@ -98,15 +147,19 @@ export class InterviewClient {
       // Mix mic + AI into one stream for recording.
       this.audioCtx = new AudioContext();
       await this.audioCtx.resume();
-      const dest = this.audioCtx.createMediaStreamDestination();
+      const recordingDest = this.audioCtx.createMediaStreamDestination();
       const micSource = this.audioCtx.createMediaStreamSource(this.micStream);
-      micSource.connect(dest);
-      this.analyser = this.audioCtx.createAnalyser();
-      this.analyser.fftSize = 256;
-      micSource.connect(this.analyser);
+      this.processedMicStream = await this.createProcessedMicStream({
+        KrispSDK,
+        micSource,
+        recordingDest,
+      });
 
       this.pc = new RTCPeerConnection();
-      this.pc.addTrack(this.micStream.getAudioTracks()[0], this.micStream);
+      this.pc.addTrack(
+        this.processedMicStream.getAudioTracks()[0],
+        this.processedMicStream
+      );
 
       this.pc.ontrack = (event) => {
         const remote = new MediaStream([event.track]);
@@ -115,35 +168,33 @@ export class InterviewClient {
         this.remoteAudioEl.srcObject = remote;
         this.remoteAudioEl.autoplay = true;
         // …and mix it into the recording.
-        this.audioCtx!.createMediaStreamSource(remote).connect(dest);
+        this.audioCtx!.createMediaStreamSource(remote).connect(recordingDest);
       };
 
       this.pc.onconnectionstatechange = () => {
         const state = this.pc?.connectionState;
         console.info("Interview WebRTC state:", state);
-        if (this.stopped || this.recStartPerf === null) return;
-        if (state === "failed") {
-          // Unrecoverable: save what we have.
-          void this.stop();
-        } else if (state === "disconnected") {
-          // Usually a transient network blip — only save if it doesn't
-          // recover within the grace period.
-          this.disconnectTimer ??= setTimeout(() => {
-            this.disconnectTimer = null;
-            if (!this.stopped && this.pc?.connectionState !== "connected") {
-              void this.stop();
-            }
-          }, 10_000);
-        } else if (state === "connected" && this.disconnectTimer) {
-          clearTimeout(this.disconnectTimer);
-          this.disconnectTimer = null;
+        if (this.stopped) return;
+        if (state === "failed" || state === "disconnected") {
+          console.warn(
+            "Interview WebRTC connection changed, but the app will not auto-end the interview:",
+            state
+          );
         }
       };
 
       this.dc = this.pc.createDataChannel("oai-events");
       this.dc.onmessage = (e) => this.handleEvent(e.data);
+      this.dc.onclose = () => {
+        if (!this.stopped) {
+          console.warn("Interview data channel closed before the user ended.");
+        }
+      };
+      this.dc.onerror = (event) => {
+        console.warn("Interview data channel error:", event);
+      };
       this.dc.onopen = () => {
-        this.startRecorder(dest.stream);
+        this.startRecorder(recordingDest.stream);
         this.cb.onPhase("live");
         // Config (persona, VAD, voice) is baked into the ephemeral session
         // server-side; we only need to ask the AI to open the conversation.
@@ -210,20 +261,123 @@ export class InterviewClient {
   }
 
   private startMeter() {
-    const data = new Uint8Array(this.analyser!.fftSize);
+    const meterData = new Uint8Array(this.meterAnalyser!.fftSize);
     const tick = () => {
-      if (!this.analyser || this.stopped) return;
-      this.analyser.getByteTimeDomainData(data);
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) {
-        const v = (data[i] - 128) / 128;
-        sum += v * v;
+      if (!this.meterAnalyser || this.stopped) {
+        return;
       }
-      const rms = Math.sqrt(sum / data.length);
+
+      this.meterAnalyser.getByteTimeDomainData(meterData);
+      const rms = this.calculateRms(meterData);
       this.cb.onMeter(Math.min(1, rms * 4), this.now());
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
+  }
+
+  private calculateRms(data: Uint8Array): number {
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = (data[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / data.length);
+  }
+
+  private async loadKrispSDK(): Promise<KrispSdkConstructor | null> {
+    try {
+      const mod = (await import(
+        /* webpackIgnore: true */ KRISP_SDK_URL
+      )) as { default?: KrispSdkConstructor };
+      const KrispSDK = mod.default;
+      if (!KrispSDK) return null;
+      if (KrispSDK.isSupported && !KrispSDK.isSupported()) {
+        console.warn("Krisp SDK is not supported in this browser.");
+        return null;
+      }
+      return KrispSDK;
+    } catch (error) {
+      console.info(
+        "Krisp SDK not loaded; using browser microphone processing instead.",
+        error
+      );
+      return null;
+    }
+  }
+
+  private async createProcessedMicStream({
+    KrispSDK,
+    micSource,
+    recordingDest,
+  }: {
+    KrispSDK: KrispSdkConstructor | null;
+    micSource: MediaStreamAudioSourceNode;
+    recordingDest: MediaStreamAudioDestinationNode;
+  }): Promise<MediaStream> {
+    const processedMicDest = this.audioCtx!.createMediaStreamDestination();
+    this.meterAnalyser = this.audioCtx!.createAnalyser();
+    this.meterAnalyser.fftSize = 256;
+
+    if (!KrispSDK || !this.micStream) {
+      micSource.connect(processedMicDest);
+      micSource.connect(recordingDest);
+      micSource.connect(this.meterAnalyser);
+      return processedMicDest.stream;
+    }
+
+    try {
+      this.krispSdk = new KrispSDK({
+        params: {
+          debugLogs: false,
+          logProcessStats: false,
+          useSharedArrayBuffer: false,
+          useBVC: true,
+          bufferOverflowMS: 200,
+          bufferDropMS: 400,
+          models: {
+            modelBVC: { url: KRISP_MODEL_BVC_URL, preload: true },
+            model8: KRISP_MODEL_8_URL,
+            modelNC: KRISP_MODEL_NC_URL,
+          },
+          bvc: {
+            allowedDevices: KRISP_BVC_ALLOWED_DEVICES_URL,
+          },
+        },
+      });
+      await this.krispSdk.init();
+      this.krispFilterNode = await this.krispSdk.createNoiseFilter(
+        {
+          audioContext: this.audioCtx!,
+          stream: this.micStream,
+        },
+        () => {
+          this.krispFilterNode?.enable?.();
+          console.info("Krisp BVC noise filter is ready.");
+        },
+        () => console.info("Krisp BVC noise filter disposed.")
+      );
+      this.krispFilterNode.addEventListener("error", (event) => {
+        console.warn("Krisp filter error:", event);
+      });
+      this.krispFilterNode.addEventListener("buffer_overflow", (event) => {
+        console.warn("Krisp filter buffer overflow:", event);
+      });
+
+      micSource.connect(this.krispFilterNode);
+      this.krispFilterNode.connect(processedMicDest);
+      this.krispFilterNode.connect(recordingDest);
+      this.krispFilterNode.connect(this.meterAnalyser);
+      return processedMicDest.stream;
+    } catch (error) {
+      console.warn(
+        "Krisp filter failed to initialize; using unfiltered microphone stream.",
+        error
+      );
+      micSource.connect(processedMicDest);
+      micSource.connect(recordingDest);
+      micSource.connect(this.meterAnalyser);
+      return processedMicDest.stream;
+    }
   }
 
   private handleEvent(raw: string) {
@@ -398,19 +552,21 @@ export class InterviewClient {
   }
 
   private cleanup() {
-    if (this.disconnectTimer) {
-      clearTimeout(this.disconnectTimer);
-      this.disconnectTimer = null;
-    }
     this.dc?.close();
     this.pc?.close();
+    this.krispFilterNode?.dispose?.();
+    this.krispSdk?.dispose?.();
     this.micStream?.getTracks().forEach((t) => t.stop());
+    this.processedMicStream?.getTracks().forEach((t) => t.stop());
     if (this.remoteAudioEl) this.remoteAudioEl.srcObject = null;
     void this.audioCtx?.close().catch(() => {});
     this.dc = null;
     this.pc = null;
     this.micStream = null;
+    this.processedMicStream = null;
     this.audioCtx = null;
-    this.analyser = null;
+    this.meterAnalyser = null;
+    this.krispFilterNode = null;
+    this.krispSdk = null;
   }
 }

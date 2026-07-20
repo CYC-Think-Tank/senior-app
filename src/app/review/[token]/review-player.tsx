@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Heart, MessageCircleMore, Pause, Play } from "lucide-react";
 import { approveEpisode, requestChanges } from "@/app/review/actions";
 import type { EpisodeStatus } from "@/lib/types";
+import { useI18n } from "@/components/i18n-provider";
 
 type Props = {
   token: string;
@@ -23,6 +24,7 @@ export default function ReviewPlayer({
   status,
   audioUrl,
 }: Props) {
+  const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -48,11 +50,10 @@ export default function ReviewPlayer({
       <Shell>
         <Heart className="mx-auto mb-6 h-14 w-14 fill-ember text-ember" />
         <h1 className="font-serif text-4xl font-semibold sm:text-5xl">
-          Wonderful, {guestName}!
+          {t("reviewApprovedTitle", { guestName })}
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-2xl leading-relaxed text-ink-soft">
-          Your episode is approved. Your family will hear it soon. You can
-          close this page now.
+          {t("reviewApprovedBody")}
         </p>
       </Shell>
     );
@@ -63,10 +64,10 @@ export default function ReviewPlayer({
       <Shell>
         <MessageCircleMore className="mx-auto mb-6 h-14 w-14 text-ember" />
         <h1 className="font-serif text-4xl font-semibold sm:text-5xl">
-          Thank you, {guestName}.
+          {t("reviewChangesTitle", { guestName })}
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-2xl leading-relaxed text-ink-soft">
-          We&apos;ll make those changes and send you a new version to hear.
+          {t("reviewChangesBody")}
         </p>
       </Shell>
     );
@@ -74,12 +75,14 @@ export default function ReviewPlayer({
 
   return (
     <Shell>
-      <p className="text-2xl text-ink-soft">Hello, {guestName}.</p>
+      <p className="text-2xl text-ink-soft">
+        {t("interviewHello", { guestName })}
+      </p>
       <h1 className="mt-3 font-serif text-4xl font-semibold leading-tight sm:text-5xl">
-        Your episode is ready to hear
+        {t("reviewReadyTitle")}
       </h1>
       <p className="mt-4 text-xl text-ink-soft">
-        Episode {episodeNumber}: “{title}”
+        {t("reviewEpisodeTitle", { episodeNumber, title })}
       </p>
 
       {audioUrl ? (
@@ -106,7 +109,7 @@ export default function ReviewPlayer({
               <Play className="ml-2 h-14 w-14" />
             )}
             <span className="text-xl font-semibold">
-              {playing ? "Pause" : "Listen"}
+              {playing ? t("commonPause") : t("commonListen")}
             </span>
           </motion.button>
           <div className="mx-auto mt-6 h-3 w-full max-w-md overflow-hidden rounded-full bg-paper-deep">
@@ -118,7 +121,7 @@ export default function ReviewPlayer({
         </>
       ) : (
         <p className="mt-8 text-xl text-ink-soft">
-          The audio isn&apos;t available right now — please try again later.
+          {t("reviewAudioMissing")}
         </p>
       )}
 
@@ -134,20 +137,20 @@ export default function ReviewPlayer({
           className="inline-flex items-center justify-center gap-3 rounded-2xl bg-sage px-8 py-5 text-2xl font-semibold text-cream transition-colors hover:brightness-110 disabled:opacity-50"
         >
           <Heart className="h-7 w-7" />
-          I love it — share it with my family
+          {t("reviewApprove")}
         </button>
 
         {askingChanges ? (
           <div className="rounded-2xl border-2 border-line bg-cream p-5 text-left">
             <label className="mb-2 block text-lg font-medium text-ink">
-              What should we change? (A family member can type this for you.)
+              {t("reviewChangeLabel")}
             </label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
               className="w-full rounded-xl border border-line bg-paper px-4 py-3 text-lg focus:border-ember focus:outline-none"
-              placeholder="e.g. Please remove the part about the old house."
+              placeholder={t("reviewChangePlaceholder")}
             />
             <button
               disabled={busy}
@@ -159,7 +162,7 @@ export default function ReviewPlayer({
               }
               className="mt-3 w-full rounded-xl bg-ink px-6 py-3 text-lg font-semibold text-cream hover:bg-ink/80 disabled:opacity-50"
             >
-              Send request
+              {t("reviewSendRequest")}
             </button>
           </div>
         ) : (
@@ -169,7 +172,7 @@ export default function ReviewPlayer({
             className="inline-flex items-center justify-center gap-3 rounded-2xl border-2 border-line bg-cream px-8 py-5 text-2xl font-semibold text-ink transition-colors hover:bg-paper-deep disabled:opacity-50"
           >
             <MessageCircleMore className="h-7 w-7 text-ember" />
-            I&apos;d like some changes
+            {t("reviewAskChanges")}
           </button>
         )}
       </div>

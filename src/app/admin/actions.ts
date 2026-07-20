@@ -3,7 +3,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { sendAuthEmail } from "@/lib/resend";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createAuthCallbackUrl } from "@/lib/supabase/auth-link";
 
 export async function createGuest(formData: FormData) {
   const { supabase } = await requireAdmin();
@@ -50,7 +52,12 @@ export async function inviteFamily(guestId: string, formData: FormData) {
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
-  if (!email) return;
+  if (
+    email.length > 320 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new Error("Enter a valid email address.");
+  }
 
   const admin = createSupabaseAdminClient();
 
@@ -72,12 +79,30 @@ export async function inviteFamily(guestId: string, formData: FormData) {
   );
   if (error) throw new Error("Could not save the invite.");
 
-  if (!profile) {
-    // Sends a Supabase invite email; the signup trigger claims the invite.
-    const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-    await admin.auth.admin
-      .inviteUserByEmail(email, { redirectTo: `${site}/auth/callback` })
-      .catch((err) => console.warn("inviteUserByEmail failed:", err));
+  const linkType = profile ? "magiclink" : "invite";
+  const { data: link, error: linkError } =
+    await admin.auth.admin.generateLink({
+      type: linkType,
+      email,
+    });
+
+  if (linkError || !link.properties?.hashed_token) {
+    console.error("Could not generate a Supabase invite link:", linkError);
+    throw new Error("Could not send the family invitation.");
+  }
+
+  try {
+    await sendAuthEmail({
+      to: email,
+      actionLink: createAuthCallbackUrl(
+        link.properties.hashed_token,
+        linkType
+      ),
+      kind: "invitation",
+    });
+  } catch (error) {
+    console.error("Could not send a Resend invitation email:", error);
+    throw new Error("Could not send the family invitation.");
   }
 
   revalidatePath(`/admin/guests/${guestId}`);
