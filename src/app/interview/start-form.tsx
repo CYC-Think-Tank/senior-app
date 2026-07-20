@@ -1,6 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useState,
+} from "react";
 import { ArrowRight } from "lucide-react";
 import {
   startConversation,
@@ -21,6 +26,7 @@ function capitalizeName(value: string) {
 export function StartForm() {
   const [name, setName] = useState("");
   const [focused, setFocused] = useState(true);
+  const [leaving, setLeaving] = useState(false);
   const [state, formAction, pending] = useActionState(
     startConversation,
     initialState,
@@ -37,9 +43,24 @@ export function StartForm() {
       action={formAction}
       className={theme.form}
       onSubmit={(event) => {
-        if (event.currentTarget.checkValidity()) {
-          document.documentElement.dataset.pageElementsLeaving = "true";
+        if (!event.currentTarget.checkValidity()) {
+          return;
         }
+
+        if (leaving && !state.error) {
+          return;
+        }
+
+        event.preventDefault();
+        setLeaving(true);
+        document.documentElement.dataset.pageElementsLeaving = "true";
+
+        const formData = new FormData(event.currentTarget);
+        window.setTimeout(() => {
+          startTransition(() => {
+            formAction(formData);
+          });
+        }, 760);
       }}
     >
       <label htmlFor="name" className={theme.visuallyHidden}>
@@ -65,9 +86,9 @@ export function StartForm() {
         )}
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || (leaving && !state.error)}
           className={theme.submitButton}
-          aria-label={pending ? "Getting ready..." : "Continue"}
+          aria-label={pending || leaving ? "Getting ready..." : "Continue"}
         >
           <ArrowRight aria-hidden="true" />
         </button>

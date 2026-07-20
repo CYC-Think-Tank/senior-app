@@ -79,7 +79,7 @@ html::after {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #1c1011;
+  background: #25232b;
   opacity: 0;
   transition: opacity 360ms cubic-bezier(0.45, 0, 0.55, 1);
   content: "";

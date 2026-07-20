@@ -6,6 +6,7 @@
   --room-ember: #df7d3b;
   position: relative;
   isolation: isolate;
+  z-index: 1;
   display: flex;
   flex: 1;
   align-items: center;
@@ -15,20 +16,36 @@
   padding: 4rem 1.5rem;
   color: var(--room-white);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  background: #1c1011;
+  background: transparent;
 }
 
-.shell::before {
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      #25232b 0%,
+      #4d2923 35%,
+      #8f412d 70%,
+      #c7633b 100%
+    );
+  pointer-events: none;
+}
+
+.atmosphere::before {
   position: absolute;
-  z-index: -2;
+  z-index: 0;
   width: 125%;
   height: 125%;
   background:
     radial-gradient(
       ellipse 44% 38% at 50% 51%,
-      rgb(255 135 65 / 0.38) 0%,
-      rgb(224 79 31 / 0.18) 42%,
-      rgb(128 41 18 / 0.065) 68%,
+      rgb(255 222 151 / 0.68) 0%,
+      rgb(247 143 57 / 0.32) 42%,
+      rgb(194 75 28 / 0.12) 68%,
       transparent 78%
     );
   filter: blur(8px) saturate(1.12);
@@ -39,16 +56,16 @@
   pointer-events: none;
 }
 
-.shell::after {
+.atmosphere::after {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   background:
     radial-gradient(
       ellipse 62% 54% at 50% 50%,
       transparent 26%,
-      rgb(5 2 1 / 0.32) 68%,
-      #16090b 100%
+      rgb(34 14 14 / 0.13) 70%,
+      rgb(30 19 24 / 0.3) 100%
     );
   content: "";
   pointer-events: none;
