@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import InterviewRoom from "./interview-room";
 
 // Token-gated page: the unguessable URL is the credential, so the senior
@@ -21,6 +22,10 @@ export default async function InterviewPage({
   if (!session) notFound();
 
   const guest = session.guests as unknown as { name: string };
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
     <InterviewRoom
@@ -28,6 +33,7 @@ export default async function InterviewPage({
       guestName={guest.name}
       topic={session.topic}
       alreadyRecorded={session.status === "ready"}
+      isLoggedIn={Boolean(user)}
     />
   );
 }

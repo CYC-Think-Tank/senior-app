@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Mic, PhoneOff, Sparkles } from "lucide-react";
+import Link from "next/link";
 import {
   InterviewClient,
   type InterviewPhase,
@@ -18,6 +19,7 @@ type Props = {
   guestName: string;
   topic: string | null;
   alreadyRecorded: boolean;
+  isLoggedIn: boolean;
 };
 
 export default function InterviewRoom({
@@ -25,6 +27,7 @@ export default function InterviewRoom({
   guestName,
   topic,
   alreadyRecorded,
+  isLoggedIn,
 }: Props) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<InterviewPhase>("idle");
@@ -34,7 +37,6 @@ export default function InterviewRoom({
   const [liveAiText, setLiveAiText] = useState("");
   const [aiSpeaking, setAiSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
-  const levelRef = useRef(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const clientRef = useRef<InterviewClient | null>(null);
 
@@ -48,8 +50,7 @@ export default function InterviewRoom({
       onTurns: setTurns,
       onLiveAiText: setLiveAiText,
       onAiSpeaking: setAiSpeaking,
-      onMeter: (level, elapsed) => {
-        levelRef.current = level;
+      onMeter: (_, elapsed) => {
         setElapsedMs(elapsed);
       },
     });
@@ -136,7 +137,7 @@ export default function InterviewRoom({
 
         {(phase === "mic" || phase === "connecting") && (
           <Screen key="connecting">
-            <BreathingCircle levelRef={levelRef} aiSpeaking={false} idlePulse />
+            <BreathingCircle aiSpeaking={false} />
             <h1 className={`${theme.heading} mt-10 text-3xl sm:text-4xl`}>
               {phase === "mic"
                 ? t("interviewAllowMic")
@@ -156,7 +157,7 @@ export default function InterviewRoom({
             </div>
 
             <div className="my-10">
-              <BreathingCircle levelRef={levelRef} aiSpeaking={aiSpeaking} />
+              <BreathingCircle aiSpeaking={aiSpeaking} />
             </div>
 
             <p className={theme.liveLabel}>
@@ -213,8 +214,13 @@ export default function InterviewRoom({
               {t("interviewThanks", { guestName })}
             </h1>
             <p className={`${theme.body} mx-auto mt-4 max-w-xl text-xl leading-relaxed`}>
-              {t("interviewDone")}
+              {t(isLoggedIn ? "interviewDone" : "interviewDoneAnonymous")}
             </p>
+            {!isLoggedIn && (
+              <Link href="/login" className={theme.loginPrompt}>
+                {t("interviewLogInToSave")}
+              </Link>
+            )}
           </Screen>
         )}
 
@@ -429,54 +435,13 @@ function RotatingCaption({
  * the AI host is speaking.
  */
 function BreathingCircle({
-  levelRef,
   aiSpeaking,
-  idlePulse = false,
 }: {
-  levelRef: React.RefObject<number>;
   aiSpeaking: boolean;
-  idlePulse?: boolean;
 }) {
-  const innerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let raf: number;
-    let smoothed = 0;
-    const tick = () => {
-      smoothed += ((levelRef.current ?? 0) - smoothed) * 0.2;
-      if (innerRef.current) {
-        const scale = 1 + Math.min(0.45, smoothed * 1.4);
-        innerRef.current.style.transform = `scale(${scale})`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [levelRef]);
-
   return (
     <div className={theme.orbStage}>
-      {aiSpeaking && (
-        <motion.div
-          className={theme.orbHalo}
-          animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0.15, 0.6] }}
-          transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-        />
-      )}
-      {idlePulse && (
-        <motion.div
-          className={theme.orbIdleHalo}
-          animate={{ scale: [1, 1.12, 1] }}
-          transition={{ repeat: Infinity, duration: 2.4, ease: "easeInOut" }}
-        />
-      )}
-      <div
-        ref={innerRef}
-        className={`${theme.orbCore} ${
-          aiSpeaking ? theme.orbSpeaking : ""
-        }`}
-        style={{ willChange: "transform" }}
-      />
+      <div className={`${theme.orbCore} ${aiSpeaking ? theme.orbSpeaking : ""}`} />
     </div>
   );
 }

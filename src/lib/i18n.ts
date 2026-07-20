@@ -129,6 +129,9 @@ const en = {
   interviewThanks: "Thank you, {guestName}.",
   interviewDone:
     "Your stories are saved. Your family is going to love this. You can close this page now.",
+  interviewDoneAnonymous:
+    "Your conversation is complete. Log in to save it to your Fireside account.",
+  interviewLogInToSave: "Log in to save your conversation",
   interviewErrorTitle: "Something went wrong",
   interviewErrorBody: "We couldn't connect. It's not your fault.",
   reviewApprovedTitle: "Wonderful, {guestName}!",
@@ -254,6 +257,8 @@ const zhHans: typeof en = {
   interviewKeepOpen: "请保持此页面打开。",
   interviewThanks: "谢谢你，{guestName}。",
   interviewDone: "你的故事已经保存。家人一定会喜欢。现在可以关闭此页面。",
+  interviewDoneAnonymous: "对话已经完成。登录 Fireside 账户即可保存这次对话。",
+  interviewLogInToSave: "登录以保存这次对话",
   interviewErrorTitle: "出了点问题",
   interviewErrorBody: "我们暂时无法连接。这不是你的错。",
   reviewApprovedTitle: "太好了，{guestName}！",
@@ -339,6 +344,8 @@ const zhHant: typeof en = {
   interviewSaving: "正在儲存你的故事...",
   interviewKeepOpen: "請保持此頁面開啟。",
   interviewDone: "你的故事已經儲存。家人一定會喜歡。現在可以關閉此頁面。",
+  interviewDoneAnonymous: "對話已經完成。登入 Fireside 帳戶即可儲存這次對話。",
+  interviewLogInToSave: "登入以儲存這次對話",
   interviewErrorTitle: "出了點問題",
   interviewErrorBody: "我們暫時無法連線。這不是你的錯。",
   reviewApprovedBody: "你的節目已批准。家人很快就能聽到。現在可以關閉此頁面。",

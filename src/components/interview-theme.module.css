@@ -27,10 +27,10 @@
   background:
     linear-gradient(
       180deg,
-      #25232b 0%,
-      #4d2923 35%,
-      #8f412d 70%,
-      #c7633b 100%
+      #462117 0%,
+      #552019 35%,
+      #9f3f22 70%,
+      #e87838 100%
     );
   pointer-events: none;
 }
@@ -43,12 +43,12 @@
   background:
     radial-gradient(
       ellipse 44% 38% at 50% 51%,
-      rgb(255 222 151 / 0.68) 0%,
-      rgb(247 143 57 / 0.32) 42%,
-      rgb(194 75 28 / 0.12) 68%,
+      rgb(255 225 143 / 0.76) 0%,
+      rgb(255 131 35 / 0.42) 42%,
+      rgb(207 57 16 / 0.18) 68%,
       transparent 78%
     );
-  filter: blur(8px) saturate(1.12);
+  filter: blur(8px) saturate(1.4);
   transform: translate3d(0, 1.5%, 0) scale(0.98);
   transform-origin: center;
   animation: ambientBreathe 11s cubic-bezier(0.45, 0, 0.55, 1) infinite;
@@ -64,8 +64,8 @@
     radial-gradient(
       ellipse 62% 54% at 50% 50%,
       transparent 26%,
-      rgb(34 14 14 / 0.13) 70%,
-      rgb(30 19 24 / 0.3) 100%
+      rgb(25 8 8 / 0.22) 70%,
+      rgb(18 8 14 / 0.48) 100%
     );
   content: "";
   pointer-events: none;
@@ -114,15 +114,17 @@
 }
 
 .eyebrow {
-  color: var(--room-muted);
+  color: var(--room-white);
   font-size: 1rem;
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-weight: 500;
   letter-spacing: 0.01em;
 }
 
 .body {
-  color: var(--room-muted);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  color: var(--room-white);
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-weight: 500;
   letter-spacing: 0.01em;
   line-height: 1.55;
 }
@@ -436,46 +438,61 @@
   color: var(--room-white);
 }
 
+.loginPrompt {
+  display: inline-block;
+  margin-top: 1.5rem;
+  color: var(--room-white);
+  font-family: var(--font-playfair), Georgia, "Times New Roman", serif;
+  font-size: 1.15rem;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 0.45);
+  text-underline-offset: 0.3rem;
+  transition: color 240ms ease, text-decoration-color 240ms ease;
+}
+
+.loginPrompt:hover {
+  color: #ffd19c;
+  text-decoration-color: currentColor;
+}
+
 .orbStage {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 4.5rem;
-  height: 4.5rem;
+  width: 11rem;
+  height: 11rem;
   margin: 0 auto;
 }
 
-.orbHalo,
-.orbIdleHalo {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-}
-
-.orbHalo {
-  background: rgb(223 125 59 / 0.1);
-}
-
-.orbIdleHalo {
-  border: 1px solid var(--room-line);
-}
-
 .orbCore {
-  width: 1.15rem;
-  height: 1.15rem;
-  background: #a94c27;
+  width: 9rem;
+  height: 9rem;
+  background: radial-gradient(
+    circle,
+    rgb(255 248 229 / 0.95) 0%,
+    rgb(255 203 128 / 0.9) 16%,
+    rgb(223 125 59 / 0.68) 39%,
+    rgb(169 63 31 / 0.28) 67%,
+    transparent 100%
+  );
   border-radius: 50%;
-  transition:
-    background 850ms ease,
-    box-shadow 850ms ease;
+  filter: blur(0.2rem);
 }
 
 .orbSpeaking {
-  background: var(--room-ember);
-  box-shadow:
-    0 0 1.25rem rgb(223 125 59 / 0.45),
-    0 0 4rem rgb(196 75 27 / 0.18);
+  animation: orbSpeakingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes orbSpeakingPulse {
+  0%,
+  100% {
+    opacity: 0.68;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
 }
 
 @keyframes ambientBreathe {
@@ -599,6 +616,8 @@
   .startScreen .form,
   .formRow::after,
   .startScreen .formRow::after,
+  .orbCore,
+  .orbSpeaking,
   .shell::before,
   .customCaret,
   .startQuestion {
