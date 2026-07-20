@@ -245,9 +245,11 @@ function Screen({ children }: { children: React.ReactNode }) {
 // the caption paces itself: text is wrapped to the lines that actually fit the
 // container, and a window of them rotates forward with the estimated spoken
 // position instead of dumping the whole reply at once.
-const CAPTION_LINES = 4;
-const CAPTION_CHARS_PER_SECOND = 17; // ~150 wpm TTS incl. spaces; tune by ear
+const CAPTION_LINES = 3;
+const CAPTION_CHARS_PER_SECOND = 16; // ~150 wpm TTS incl. spaces; tune by ear
 const CAPTION_TICK_MS = 250;
+// text-xl leading-relaxed: 1.25rem font × 1.625 line-height per line.
+const CAPTION_HEIGHT_REM = CAPTION_LINES * 1.25 * 1.625;
 
 let measureCtx: CanvasRenderingContext2D | null = null;
 
@@ -352,7 +354,8 @@ function RotatingCaption({
   return (
     <div
       ref={containerRef}
-      className="mx-auto mt-6 min-h-24 max-w-2xl text-xl leading-relaxed text-ink-soft"
+      className="mx-auto mt-6 max-w-2xl overflow-hidden text-xl leading-relaxed text-ink-soft"
+      style={{ height: `${CAPTION_HEIGHT_REM}rem` }}
     >
       {visible.map((line, i) => (
         <motion.p
