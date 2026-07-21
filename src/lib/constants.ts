@@ -2,9 +2,8 @@
 export const APP_NAME = "Fireside";
 export const TAGLINE = "Every life is worth the telling.";
 
-// gpt-realtime-2.1 is the newest full-size realtime model; the plain
-// "gpt-realtime" alias stays pinned to the older 2025-08-28 snapshot.
-export const REALTIME_MODEL = "gpt-realtime-2.1";
+// Use the faster, lower-cost distilled realtime model for interview sessions.
+export const REALTIME_MODEL = "gpt-realtime-2.1-mini";
 export const REALTIME_VOICE = "marin";
 export const CHAT_MODEL = "gpt-5-mini";
 

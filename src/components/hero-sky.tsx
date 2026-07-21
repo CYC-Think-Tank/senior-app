@@ -110,13 +110,27 @@ vec3 shade(vec2 uv, vec2 p, float time) {
 void main() {
   vec2 uv = gl_FragCoord.xy / u_resolution.xy;
   vec2 screenUv = uv;
-  float paletteY = max(
+  float pageY = max(
     0.0,
-    (
-      gl_FragCoord.y -
-      (u_resolution.y - u_viewportHeight)
-    ) / max(u_viewportHeight, 1.0)
+    (u_resolution.y - gl_FragCoord.y) / max(u_viewportHeight, 1.0)
   );
+  float paletteY;
+
+  if (pageY <= 1.0) {
+    // Preserve the hero's original dark-to-light sweep.
+    paletteY = 1.0 - pageY;
+  } else {
+    // Reverse after the hero, then mirror through the darker portion of the
+    // palette so the shader remains continuous without washing out content.
+    float postHeroY = pageY - 1.0;
+    float mirroredY = 1.0 - abs(mod(postHeroY, 2.0) - 1.0);
+    float postHeroPalette = 0.55 + mirroredY * 0.45;
+    paletteY = mix(
+      0.0,
+      postHeroPalette,
+      smoothstep(0.0, 0.95, postHeroY)
+    );
+  }
   vec2 p = (
     gl_FragCoord.xy - 0.5 * u_resolution.xy
   ) / min(u_resolution.x, u_resolution.y);
@@ -232,9 +246,13 @@ function compileShader(
 
 type HeroSkyProps = {
   className?: string;
+  shaderRevision?: string;
 };
 
-export function HeroSky({ className }: HeroSkyProps) {
+export function HeroSky({
+  className,
+  shaderRevision = "default",
+}: HeroSkyProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -551,7 +569,9 @@ export function HeroSky({ className }: HeroSkyProps) {
       }, 0);
       pendingContextReleases.set(canvas, releaseTimer);
     };
-  }, []);
+  // Recompile when a shader revision changes during Fast Refresh. Otherwise
+  // CSS can update while the canvas keeps its previous WebGL program.
+  }, [shaderRevision]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }
