@@ -17,6 +17,7 @@ export function ConversationRow({
   meta,
   shareToken,
   origin,
+  unfinished = false,
 }: {
   sessionId: string;
   guestName: string;
@@ -27,6 +28,8 @@ export function ConversationRow({
   meta: string;
   shareToken: string | null;
   origin: string;
+  /** Ended before it was wrapped up; recovered from its checkpoints. */
+  unfinished?: boolean;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -103,7 +106,16 @@ export function ConversationRow({
       >
         <Monogram name={guestName} />
         <div className="min-w-0 flex-1">
-          <h2 className="truncate font-serif text-2xl font-semibold">{name}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="truncate font-serif text-2xl font-semibold">
+              {name}
+            </h2>
+            {unfinished && (
+              <span className="rounded-full bg-paper-deep px-2.5 py-0.5 text-xs font-medium text-ink-soft">
+                {t("familyUnfinished")}
+              </span>
+            )}
+          </div>
           <p className="mt-1.5 text-sm text-ink-faint">{meta}</p>
         </div>
       </Link>
@@ -115,11 +127,14 @@ export function ConversationRow({
         >
           <Pencil className="h-3.5 w-3.5" /> {t("familyRename")}
         </button>
-        <ShareConversation
-          sessionId={sessionId}
-          initialToken={shareToken}
-          origin={origin}
-        />
+        {/* Nothing to share until the recording has been assembled. */}
+        {!unfinished && (
+          <ShareConversation
+            sessionId={sessionId}
+            initialToken={shareToken}
+            origin={origin}
+          />
+        )}
       </div>
     </Card>
   );

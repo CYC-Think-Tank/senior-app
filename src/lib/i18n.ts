@@ -118,6 +118,12 @@ const en = {
   familyAllConversations: "All conversations",
   familyShareError: "Couldn't create a link. Please try again.",
   familyStartConversation: "Start a conversation",
+  familyUnfinished: "Ended early",
+  familyUnfinishedNote:
+    "This conversation ended before it was wrapped up. We saved what was said — finish saving it to listen back.",
+  familyFinishSaving: "Finish saving",
+  familyFinishSavingBusy: "Saving…",
+  familyFinishSavingError: "Couldn't finish saving it. Please try again.",
   interviewAlreadyTitle: "This chat is already saved",
   interviewAlreadyBody:
     "Thank you, {guestName}. Your stories from this conversation are safe with us.",
@@ -262,6 +268,12 @@ const zhHans: typeof en = {
   familyAllConversations: "所有对话",
   familyShareError: "无法创建链接，请再试一次。",
   familyStartConversation: "开始新对话",
+  familyUnfinished: "提前结束",
+  familyUnfinishedNote:
+    "这次对话在结束前中断了。我们已保存当时说过的内容 — 完成保存后即可回听。",
+  familyFinishSaving: "完成保存",
+  familyFinishSavingBusy: "保存中…",
+  familyFinishSavingError: "无法完成保存，请再试一次。",
   interviewAlreadyTitle: "这次访谈已经保存",
   interviewAlreadyBody: "谢谢你，{guestName}。这次对话里的故事已经安全保存。",
   interviewHello: "你好，{guestName}。",
@@ -372,6 +384,12 @@ const zhHant: typeof en = {
   familyAllConversations: "所有對話",
   familyShareError: "無法建立連結，請再試一次。",
   familyStartConversation: "開始新對話",
+  familyUnfinished: "提前結束",
+  familyUnfinishedNote:
+    "這次對話在結束前中斷了。我們已儲存當時說過的內容 — 完成儲存後即可回聽。",
+  familyFinishSaving: "完成儲存",
+  familyFinishSavingBusy: "儲存中…",
+  familyFinishSavingError: "無法完成儲存，請再試一次。",
   interviewAlreadyTitle: "這次訪談已經儲存",
   interviewAlreadyBody: "謝謝你，{guestName}。這次對話裡的故事已經安全儲存。",
   interviewTopic: "今天我們會聊 {topic}",

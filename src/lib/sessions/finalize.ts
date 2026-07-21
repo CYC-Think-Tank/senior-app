@@ -1,0 +1,46 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { stitchSessionParts } from "@/lib/audio/stitch-parts";
+
+/**
+ * Turns the chunks uploaded during an interview into the session's finished
+ * recording and marks it ready for editing.
+ *
+ * Shared by the guest's own end-of-interview call and by admin recovery of a
+ * session whose tab was closed early, so both paths produce identical state.
+ */
+export async function finalizeSessionAudio(
+  admin: SupabaseClient,
+  session: { id: string; duration_ms: number | null },
+  clientDurationMs?: number
+): Promise<{ error: string | null }> {
+  const stitched = await stitchSessionParts(admin, session.id);
+  if (!stitched) {
+    return { error: "No audio was recorded." };
+  }
+
+  // ffmpeg measured the audio itself; the browser's clock is the fallback, and
+  // the last checkpoint's is what recovery has to work with.
+  const durationMs =
+    stitched.durationMs ?? clientDurationMs ?? session.duration_ms ?? 0;
+
+  const { error } = await admin
+    .from("sessions")
+    .update({
+      status: "ready",
+      raw_audio_path: stitched.path,
+      duration_ms: Math.max(0, Math.round(durationMs)),
+    })
+    .eq("id", session.id);
+
+  if (error) {
+    console.error("session finalize failed:", error);
+    return { error: "Could not finalize the session." };
+  }
+
+  await admin
+    .from("podcast_participation")
+    .update({ status: "interview_done", updated_at: new Date().toISOString() })
+    .eq("session_id", session.id);
+
+  return { error: null };
+}

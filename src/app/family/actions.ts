@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
+import { finalizeSessionAudio } from "@/lib/sessions/finalize";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { localeCookieName, normalizeLocale } from "@/lib/i18n";
 import { personName } from "@/lib/names";
@@ -95,6 +96,37 @@ export async function generateShareLink(
 }
 
 /**
+ * Assembles the recording of a conversation that ended before it was wrapped
+ * up, from the chunks its live checkpoints managed to upload.
+ *
+ * Access is enforced the same way as sharing: the session is read through the
+ * caller's RLS-scoped client first, so this only ever runs on a conversation
+ * their family owns.
+ */
+export async function finishSavingConversation(sessionId: string) {
+  const { supabase } = await requireUser();
+
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("id, duration_ms")
+    .eq("id", sessionId)
+    .eq("status", "recording")
+    .single();
+  if (!session) return { ok: false as const };
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await finalizeSessionAudio(admin, session);
+  if (error) {
+    console.error("Could not finish saving a conversation:", error);
+    return { ok: false as const };
+  }
+
+  revalidatePath("/family");
+  revalidatePath(`/family/${sessionId}`);
+  return { ok: true as const };
+}
+
+/**
  * Renames a conversation. Writes to `title`, never `topic` — the latter feeds
  * the AI host and episode metadata, so it must keep describing the interview.
  * Passing an empty name clears it, returning the conversation to numbering.
@@ -102,12 +134,13 @@ export async function generateShareLink(
 export async function renameConversation(sessionId: string, name: string) {
   const { supabase } = await requireUser();
 
-  // RLS: only returns a row the caller's family is allowed to see.
+  // RLS: only returns a row the caller's family is allowed to see. Unfinished
+  // conversations are nameable too — they show up in the same list.
   const { data: session } = await supabase
     .from("sessions")
     .select("id")
     .eq("id", sessionId)
-    .eq("status", "ready")
+    .in("status", ["ready", "recording"])
     .single();
   if (!session) return { ok: false as const };
 

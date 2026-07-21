@@ -33,6 +33,8 @@ export type InterviewSession = {
   raw_audio_path: string | null;
   share_token: string | null;
   started_at: string | null;
+  /** Last time the live interview saved its progress; null before it starts. */
+  last_checkpoint_at: string | null;
   duration_ms: number | null;
   created_at: string;
 };

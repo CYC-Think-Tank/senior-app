@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { sendAuthEmail } from "@/lib/resend";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createAuthCallbackUrl } from "@/lib/supabase/auth-link";
+import { finalizeSessionAudio } from "@/lib/sessions/finalize";
 import { personName } from "@/lib/names";
 
 export async function createGuest(formData: FormData) {
@@ -40,6 +41,30 @@ export async function createSession(guestId: string, formData: FormData) {
     .insert({ guest_id: guestId, topic });
   if (error) throw new Error("Could not create the interview link.");
   revalidatePath(`/admin/guests/${guestId}`);
+}
+
+/**
+ * Salvages an interview whose tab was closed before the guest ended it. The
+ * transcript is already saved by the live checkpoints; this stitches together
+ * the recording chunks that made it up and marks the session ready.
+ */
+export async function recoverSession(sessionId: string, guestId: string) {
+  await requireAdmin();
+  const admin = createSupabaseAdminClient();
+
+  const { data: session } = await admin
+    .from("sessions")
+    .select("id, status, duration_ms")
+    .eq("id", sessionId)
+    .single();
+  if (!session) throw new Error("Session not found.");
+  if (session.status === "ready") return;
+
+  const { error } = await finalizeSessionAudio(admin, session);
+  if (error) throw new Error(error);
+
+  revalidatePath(`/admin/guests/${guestId}`);
+  revalidatePath("/admin");
 }
 
 export async function deleteSession(sessionId: string, guestId: string) {

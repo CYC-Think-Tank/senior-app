@@ -10,6 +10,11 @@ export const CHAT_MODEL = "gpt-5-mini";
 export const RAW_BUCKET = "raw-audio";
 export const EPISODES_BUCKET = "episodes";
 
+// A live interview checkpoints every 30s, so a session still marked
+// 'recording' after this long lost its tab. Kept in step with the family
+// sessions RLS policy in migration 004 — change both together.
+export const ABANDONED_AFTER_MS = 2 * 60 * 1000;
+
 // Padding applied around kept transcript turns when rendering the edited cut,
 // to absorb timestamp imprecision from the live event stream.
 export const CUT_PADDING_MS = 250;

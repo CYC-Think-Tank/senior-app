@@ -6,8 +6,10 @@ import {
   createSession,
   deleteSession,
   inviteFamily,
+  recoverSession,
 } from "@/app/admin/actions";
 import { CopyButton } from "@/components/copy-button";
+import { ABANDONED_AFTER_MS } from "@/lib/constants";
 import {
   Badge,
   Card,
@@ -19,6 +21,17 @@ import {
 import type { Episode, Guest, InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+// Recovering an abandoned interview restitches its recording server-side.
+export const maxDuration = 300;
+
+/** A session is presumed abandoned once its checkpoints go quiet. */
+function isAbandoned(s: InterviewSession): boolean {
+  if (s.status !== "recording") return false;
+  if (!s.last_checkpoint_at) return true;
+  return (
+    Date.now() - new Date(s.last_checkpoint_at).getTime() > ABANDONED_AFTER_MS
+  );
+}
 
 export default async function GuestPage({
   params,
@@ -112,13 +125,34 @@ export default async function GuestPage({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={s.status === "ready" ? "sage" : "neutral"}>
+                  <Badge
+                    tone={
+                      s.status === "ready"
+                        ? "sage"
+                        : isAbandoned(s)
+                          ? "ember"
+                          : "neutral"
+                    }
+                  >
                     {s.status === "ready"
                       ? "Recorded"
-                      : s.status === "recording"
-                        ? "In progress"
-                        : "Waiting"}
+                      : isAbandoned(s)
+                        ? "Ended early"
+                        : s.status === "recording"
+                          ? "In progress"
+                          : "Waiting"}
                   </Badge>
+                  {isAbandoned(s) && (
+                    <form action={recoverSession.bind(null, s.id, g.id)}>
+                      <button
+                        type="submit"
+                        className="text-sm font-medium text-ember hover:text-ember-deep"
+                        title="Stitch together what was recorded before the tab closed"
+                      >
+                        Recover recording
+                      </button>
+                    </form>
+                  )}
                   {s.status !== "ready" && (
                     <CopyButton
                       value={`${site}/interview/${s.token}`}

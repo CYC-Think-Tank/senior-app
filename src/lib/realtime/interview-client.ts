@@ -36,6 +36,20 @@ const MIME_CANDIDATES = [
   "audio/mp4",
 ];
 
+// The recording is uploaded in chunks while the interview runs, so a closed
+// tab costs at most one chunk instead of the whole conversation. Ten seconds
+// keeps the object count sane for an hour-long interview (~360 parts) while
+// staying well inside what anyone would notice losing.
+const PART_INTERVAL_MS = 10_000;
+const PART_UPLOAD_RETRIES = 3;
+
+// The transcript is checkpointed shortly after each new turn rather than on a
+// fixed timer: turns land every 10-30s, so a timer would mostly send nothing.
+const CHECKPOINT_DEBOUNCE_MS = 2_000;
+// Heartbeat in between, so an abandoned session is distinguishable from a
+// live one by how stale its last checkpoint is.
+const CHECKPOINT_HEARTBEAT_MS = 30_000;
+
 const KRISP_SDK_URL = "/krisp/krispsdk.mjs";
 const KRISP_MODEL_BVC_URL = "/krisp/models/model_bvc.kef";
 const KRISP_MODEL_8_URL = "/krisp/models/model_8.kef";
@@ -92,10 +106,23 @@ export class InterviewClient {
   private remoteAudioEl: HTMLAudioElement | null = null;
 
   private recorder: MediaRecorder | null = null;
-  private chunks: Blob[] = [];
   private mimeType = "";
   private recStartPerf: number | null = null;
   private recStopPerf: number | null = null;
+
+  private partIndex = 0;
+  /** Assigned by the server on the first chunk; groups this run's chunks. */
+  private attemptId: number | null = null;
+  /** Serialised so parts land in order and never race the live audio stream. */
+  private uploadChain: Promise<void> = Promise.resolve();
+  /** Chunks whose upload exhausted its retries; retried again before finalize. */
+  private failedParts = new Map<number, Blob>();
+
+  private checkpointTimer: number | null = null;
+  private heartbeatTimer: number | null = null;
+  private checkpointInFlight = false;
+  private savedTurnCount = -1;
+  private flushOnHide: (() => void) | null = null;
 
   private turns: TurnDraft[] = [];
   private guestTimings = new Map<string, { start: number; end?: number }>();
@@ -260,10 +287,71 @@ export class InterviewClient {
     });
     this.mimeType = this.recorder.mimeType || this.mimeType || "audio/webm";
     this.recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) this.chunks.push(e.data);
+      // Chunks go straight to storage — holding an hour of audio in memory is
+      // both wasteful and exactly what a closed tab would throw away.
+      if (e.data.size > 0) this.enqueuePart(e.data);
     };
-    this.recorder.start(5000);
+    this.recorder.start(PART_INTERVAL_MS);
     this.recStartPerf = performance.now();
+    this.startCheckpoints();
+  }
+
+  private enqueuePart(blob: Blob) {
+    const index = this.partIndex++;
+    this.uploadChain = this.uploadChain.then(() => this.uploadPart(index, blob));
+  }
+
+  /**
+   * Uploads one chunk, retrying with backoff. A permanent failure is stashed
+   * rather than thrown: a gap in the middle of the recording is recoverable,
+   * a rejected upload chain that abandons every later chunk is not.
+   */
+  private async uploadPart(index: number, blob: Blob): Promise<void> {
+    for (let retry = 0; retry <= PART_UPLOAD_RETRIES; retry++) {
+      if (retry > 0) {
+        await new Promise((r) => setTimeout(r, 500 * 2 ** retry));
+      }
+      try {
+        const res = await fetch(`/api/sessions/${this.token}/upload-url`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contentType: this.mimeType,
+            part: index,
+            attempt: this.attemptId,
+          }),
+        });
+        if (!res.ok) throw new Error(`upload-url returned ${res.status}`);
+        const { path, uploadToken, attempt } = await res.json();
+        // Remembered even if the upload below fails, so a chunk that never
+        // lands cannot split the recording across two attempts.
+        this.attemptId ??= attempt;
+
+        const supabase = createSupabaseBrowserClient();
+        const { error } = await supabase.storage
+          .from(RAW_BUCKET)
+          .uploadToSignedUrl(path, uploadToken, blob, {
+            contentType: this.mimeType,
+          });
+        if (error) throw error;
+
+        this.failedParts.delete(index);
+        return;
+      } catch (err) {
+        if (retry === PART_UPLOAD_RETRIES) {
+          console.warn(`Recording part ${index} failed to upload:`, err);
+          this.failedParts.set(index, blob);
+        }
+      }
+    }
+  }
+
+  /** Last chance for chunks that never made it up during the interview. */
+  private async retryFailedParts() {
+    const pending = [...this.failedParts.entries()];
+    for (const [index, blob] of pending) {
+      await this.uploadPart(index, blob);
+    }
   }
 
   private async startMeter() {
@@ -533,6 +621,99 @@ export class InterviewClient {
     this.turns.push(turn);
     this.turns.sort((a, b) => a.startMs - b.startMs);
     this.cb.onTurns([...this.turns]);
+    this.scheduleCheckpoint();
+  }
+
+  private startCheckpoints() {
+    this.heartbeatTimer = window.setInterval(() => {
+      void this.checkpoint();
+    }, CHECKPOINT_HEARTBEAT_MS);
+
+    // Tab close, navigation, backgrounding on iOS: the last window in which
+    // anything can still be sent. `pagehide` is the one Safari reliably fires.
+    this.flushOnHide = ((event: Event) => {
+      if (event.type === "pagehide" || document.visibilityState === "hidden") {
+        this.checkpointBeacon();
+      }
+    }) as () => void;
+    window.addEventListener("pagehide", this.flushOnHide);
+    document.addEventListener("visibilitychange", this.flushOnHide);
+  }
+
+  private scheduleCheckpoint() {
+    if (this.stopped || this.checkpointTimer !== null) return;
+    this.checkpointTimer = window.setTimeout(() => {
+      this.checkpointTimer = null;
+      void this.checkpoint();
+    }, CHECKPOINT_DEBOUNCE_MS);
+  }
+
+  /**
+   * Saves the transcript so far. Turns are re-sent whole (the sort in
+   * `pushTurn` can renumber earlier ones), but only when the count changed —
+   * otherwise this is a bare heartbeat.
+   */
+  private async checkpoint() {
+    if (this.checkpointInFlight) return;
+    const count = this.turns.length;
+    this.checkpointInFlight = true;
+    try {
+      const res = await fetch(`/api/sessions/${this.token}/checkpoint`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: this.checkpointBody(count > this.savedTurnCount),
+      });
+      if (res.ok) this.savedTurnCount = count;
+    } catch (err) {
+      // Offline or the tab is going away; the next checkpoint will catch up.
+      console.info("Interview checkpoint failed:", err);
+    } finally {
+      this.checkpointInFlight = false;
+    }
+  }
+
+  /** Fire-and-forget flush that survives the page being torn down. */
+  private checkpointBeacon() {
+    if (this.stopped || this.turns.length === 0) return;
+    const url = `/api/sessions/${this.token}/checkpoint`;
+    const body = this.checkpointBody(true);
+    const blob = new Blob([body], { type: "application/json" });
+    if (navigator.sendBeacon?.(url, blob)) return;
+    try {
+      // `keepalive` caps the body at 64KB; a transcript that long has already
+      // been checkpointed repeatedly, so losing this last flush is survivable.
+      void fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // Nothing left to try.
+    }
+  }
+
+  private checkpointBody(includeTurns: boolean): string {
+    return JSON.stringify({
+      durationMs: Math.round(this.now()),
+      ...(includeTurns ? { turns: this.turns } : {}),
+    });
+  }
+
+  private stopCheckpoints() {
+    if (this.checkpointTimer !== null) {
+      window.clearTimeout(this.checkpointTimer);
+      this.checkpointTimer = null;
+    }
+    if (this.heartbeatTimer !== null) {
+      window.clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    if (this.flushOnHide) {
+      window.removeEventListener("pagehide", this.flushOnHide);
+      document.removeEventListener("visibilitychange", this.flushOnHide);
+      this.flushOnHide = null;
+    }
   }
 
   /** Ask the AI to deliver its warm closing, then end the interview. */
@@ -572,32 +753,23 @@ export class InterviewClient {
       const durationMs = Math.round(this.now());
       this.cleanup();
 
-      if (this.chunks.length === 0) {
+      if (this.partIndex === 0) {
         throw new Error("No audio was recorded.");
       }
-      const blob = new Blob(this.chunks, { type: this.mimeType });
 
-      const urlRes = await fetch(`/api/sessions/${this.token}/upload-url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentType: this.mimeType }),
-      });
-      if (!urlRes.ok) throw new Error("Could not prepare the upload.");
-      const { path, uploadToken } = await urlRes.json();
-
-      const supabase = createSupabaseBrowserClient();
-      const { error: uploadError } = await supabase.storage
-        .from(RAW_BUCKET)
-        .uploadToSignedUrl(path, uploadToken, blob, {
-          contentType: this.mimeType,
-        });
-      if (uploadError) throw new Error("Uploading the recording failed.");
+      // Most of the recording is already in storage; this waits for the tail.
+      await this.uploadChain;
+      await this.retryFailedParts();
+      if (this.failedParts.size > 0) {
+        console.warn(
+          `${this.failedParts.size} recording part(s) could not be uploaded.`
+        );
+      }
 
       const finRes = await fetch(`/api/sessions/${this.token}/finalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          audioPath: path,
           durationMs,
           turns: this.turns,
         }),
@@ -615,6 +787,7 @@ export class InterviewClient {
 
   private cleanup() {
     this.clearWrapUpStopTimer();
+    this.stopCheckpoints();
     this.dc?.close();
     this.pc?.close();
     this.krispFilterNode?.dispose?.();

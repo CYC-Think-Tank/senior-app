@@ -28,12 +28,13 @@ export default async function FamilyPage() {
     (host?.startsWith("localhost") ? "http" : "https");
   const origin = host ? `${proto}://${host}` : "";
 
-  // RLS limits this to finished conversations of the family's storyteller(s).
+  // RLS limits this to the family's storyteller(s). Conversations that ended
+  // early come along too — their checkpoints saved most of what was said.
   const [{ data: sessions }, { data: participation }] = await Promise.all([
     supabase
       .from("sessions")
       .select("*, guests(name)")
-      .eq("status", "ready")
+      .in("status", ["ready", "recording"])
       .order("created_at", { ascending: false }),
     admin
       .from("podcast_participation")
@@ -127,6 +128,7 @@ export default async function FamilyPage() {
                 })} · ${formatDuration(s.duration_ms)}`}
                 shareToken={s.share_token}
                 origin={origin}
+                unfinished={s.status !== "ready"}
               />
             ))}
           </div>

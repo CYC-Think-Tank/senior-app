@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AudioPlayer } from "@/components/audio-player";
+import { FinishSaving } from "@/components/finish-saving";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { RAW_BUCKET } from "@/lib/constants";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
@@ -12,6 +13,8 @@ import { conversationNames } from "@/lib/names";
 import type { Guest, InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+// Finishing an unfinished conversation restitches its recording server-side.
+export const maxDuration = 300;
 
 export default async function FamilyConversationPage({
   params,
@@ -30,7 +33,7 @@ export default async function FamilyConversationPage({
   const { data: sessions } = await supabase
     .from("sessions")
     .select("*, guests(name)")
-    .eq("status", "ready");
+    .in("status", ["ready", "recording"]);
 
   type SessionRow = InterviewSession & { guests: Pick<Guest, "name"> };
   const all = (sessions ?? []) as unknown as SessionRow[];
@@ -79,6 +82,8 @@ export default async function FamilyConversationPage({
 
       {audioUrl ? (
         <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
+      ) : s.status === "recording" ? (
+        <FinishSaving sessionId={s.id} />
       ) : (
         <Card className="p-6 text-ink-soft">{t("reviewAudioMissing")}</Card>
       )}
