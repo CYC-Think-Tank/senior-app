@@ -237,9 +237,7 @@ export default function InterviewRoom({
             </p>
 
             <AnimatePresence initial={false} mode="wait">
-              {!greetingStarted ? (
-                <GreetingSkeleton key="greeting-skeleton" />
-              ) : !userSpeaking ? (
+              {greetingStarted && !userSpeaking ? (
                 <RotatingCaption
                   key="caption"
                   text={captionText}
@@ -325,26 +323,6 @@ export default function InterviewRoom({
         </AnimatePresence>
       </>
     </InterviewShell>
-  );
-}
-
-function GreetingSkeleton() {
-  return (
-    <motion.div
-      className={theme.greetingSkeleton}
-      role="status"
-      aria-label="Rosie is preparing her greeting."
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-    >
-      <span className={theme.skeletonLine} aria-hidden="true" />
-      <span
-        className={`${theme.skeletonLine} ${theme.skeletonLineShort}`}
-        aria-hidden="true"
-      />
-    </motion.div>
   );
 }
 

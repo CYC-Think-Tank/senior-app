@@ -13,6 +13,7 @@ An AI interviewer (OpenAI Realtime API) holds warm voice conversations with a se
 1. **Supabase**: create a project at [supabase.com](https://supabase.com).
    - Edit the `admin_emails` insert at the top of [supabase/migrations/001_init.sql](supabase/migrations/001_init.sql) (your email is pre-filled), then run the whole file in the SQL editor.
    - This creates the schema, RLS policies, the signup trigger, and the two private storage buckets.
+   - Existing projects that ran the original schema must also run [supabase/migrations/002_family_dashboard.sql](supabase/migrations/002_family_dashboard.sql) to add the family-dashboard columns and policies.
 2. **Environment**: copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Settings → API)
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (the sender must use a domain verified in Resend; `onboarding@resend.dev` only sends to the Resend account owner)
