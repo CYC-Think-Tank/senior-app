@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { personName } from "@/lib/names";
 
 export type ShareLinkResult =
   | { ok: true; token: string }
@@ -51,15 +52,38 @@ export async function generateShareLink(
   return { ok: true, token };
 }
 
-/** Falls back to the email's local part when no display name is set. */
-function speakerName(displayName: string | null, email: string) {
-  const raw =
-    displayName?.trim() ||
-    email.split("@")[0].replace(/[._-]+/g, " ").trim() ||
-    "Friend";
-  return raw.replace(/(^|\s)(\p{L})/gu, (_, space, letter) =>
-    `${space}${letter.toLocaleUpperCase()}`
-  );
+/**
+ * Renames a conversation. Writes to `title`, never `topic` — the latter feeds
+ * the AI host and episode metadata, so it must keep describing the interview.
+ * Passing an empty name clears it, returning the conversation to numbering.
+ */
+export async function renameConversation(sessionId: string, name: string) {
+  const { supabase } = await requireUser();
+
+  // RLS: only returns a row the caller's family is allowed to see.
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("id")
+    .eq("id", sessionId)
+    .eq("status", "ready")
+    .single();
+  if (!session) return { ok: false as const };
+
+  const title = name.trim().slice(0, 120) || null;
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("sessions")
+    .update({ title })
+    .eq("id", sessionId);
+
+  if (error) {
+    console.error("Could not rename the conversation:", error);
+    return { ok: false as const };
+  }
+
+  revalidatePath("/family");
+  revalidatePath(`/family/${sessionId}`);
+  return { ok: true as const };
 }
 
 /**
@@ -95,7 +119,7 @@ export async function startMyConversation() {
       .insert({
         user_id: user.id,
         family_id: profile?.family_id ?? null,
-        name: speakerName(profile?.display_name ?? null, email),
+        name: personName(profile?.display_name, email),
         language: locale === "en" ? "English" : "Chinese",
       })
       .select("id")

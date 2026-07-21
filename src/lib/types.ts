@@ -28,6 +28,7 @@ export type InterviewSession = {
   guest_id: string;
   token: string;
   topic: string | null;
+  title: string | null;
   status: SessionStatus;
   raw_audio_path: string | null;
   share_token: string | null;

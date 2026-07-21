@@ -50,7 +50,11 @@ create table public.sessions (
   token text not null unique default encode(extensions.gen_random_bytes(24), 'hex'),
   -- Set once, on demand, to publish the raw recording at /share/<token>.
   share_token text unique,
+  -- What the interview is about; feeds the AI host and episode metadata.
   topic text,
+  -- What the family calls this recording. Renameable from their dashboard;
+  -- when null the dashboard numbers it instead.
+  title text,
   status text not null default 'pending' check (status in ('pending', 'recording', 'ready')),
   raw_audio_path text,
   started_at timestamptz,

@@ -4,7 +4,7 @@ import { Play } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
-import type { Episode, Guest } from "@/lib/types";
+import type { Episode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +23,6 @@ export default async function FeedPage() {
     .lte("publish_at", new Date().toISOString())
     .order("publish_at", { ascending: false });
 
-  const guests = Array.from(
-    new Map(
-      ((episodes ?? []) as unknown as (Episode & { guests: { name: string } })[]).map(
-        (e) => [e.guests.name, { name: e.guests.name } as Guest]
-      )
-    ).values()
-  );
-
   type EpisodeRow = Episode & { guests: { name: string } };
   const rows = (episodes ?? []) as unknown as EpisodeRow[];
 
@@ -40,13 +32,6 @@ export default async function FeedPage() {
         <h1 className="font-serif text-4xl font-semibold">
           {t("feedTitle")}
         </h1>
-        <p className="mt-2 text-lg text-ink-soft">
-          {guests?.length
-            ? t("feedIntroWithGuests", {
-                names: (guests as Guest[]).map((g) => g.name).join(", "),
-              })
-            : t("feedIntroEmpty")}
-        </p>
       </div>
 
       {rows.length === 0 ? (

@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { Mic } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { startMyConversation } from "@/app/family/actions";
-import { Card, Monogram, formatDuration } from "@/components/ui";
-import { ShareConversation } from "@/components/share-conversation";
+import { Card, formatDuration } from "@/components/ui";
+import { ConversationRow } from "@/components/conversation-row";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { conversationNames } from "@/lib/names";
 import type { InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +33,9 @@ export default async function FamilyPage() {
 
   type SessionRow = InterviewSession & { guests: { name: string } };
   const rows = (sessions ?? []) as unknown as SessionRow[];
+  const names = conversationNames(rows, (number) =>
+    t("familyConversationNumbered", { number })
+  );
 
   return (
     <div className="space-y-8">
@@ -62,38 +65,20 @@ export default async function FamilyPage() {
       ) : (
         <div className="space-y-4">
           {rows.map((s) => (
-            <Card
+            <ConversationRow
               key={s.id}
-              className="flex flex-wrap items-center gap-5 p-6 transition-shadow hover:shadow-md"
-            >
-              <Link
-                href={`/family/${s.id}`}
-                className="flex min-w-0 flex-1 items-center gap-5"
-              >
-                <Monogram name={s.guests.name} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium uppercase tracking-wide text-ember">
-                    {s.guests.name} · {t("familyConversationLabel")}
-                  </p>
-                  <h2 className="mt-0.5 truncate font-serif text-2xl font-semibold">
-                    {s.topic || t("familyConversationLabel")}
-                  </h2>
-                  <p className="mt-1.5 text-sm text-ink-faint">
-                    {new Date(s.created_at).toLocaleDateString(locale, {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}{" "}
-                    · {formatDuration(s.duration_ms)}
-                  </p>
-                </div>
-              </Link>
-              <ShareConversation
-                sessionId={s.id}
-                initialToken={s.share_token}
-                origin={origin}
-              />
-            </Card>
+              sessionId={s.id}
+              guestName={s.guests.name}
+              name={names.get(s.id) ?? ""}
+              title={s.title}
+              meta={`${new Date(s.created_at).toLocaleDateString(locale, {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })} · ${formatDuration(s.duration_ms)}`}
+              shareToken={s.share_token}
+              origin={origin}
+            />
           ))}
         </div>
       )}

@@ -8,6 +8,7 @@ import { AudioPlayer } from "@/components/audio-player";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { RAW_BUCKET } from "@/lib/constants";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { conversationNames } from "@/lib/names";
 import type { Guest, InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -20,21 +21,26 @@ export default async function FamilyConversationPage({
   const { sessionId } = await params;
   const { supabase } = await requireUser();
   const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
-  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const t = (key: Parameters<typeof translate>[1], values = {}) =>
+    translate(locale, key, values);
 
   // Read through the user's client so RLS keeps this inside the family; the
-  // service role is only used afterwards to sign the audio URL.
-  const { data: session } = await supabase
+  // service role is only used afterwards to sign the audio URL. The siblings
+  // come along so an unnamed conversation gets the same number as the list.
+  const { data: sessions } = await supabase
     .from("sessions")
     .select("*, guests(name)")
-    .eq("id", sessionId)
-    .eq("status", "ready")
-    .single();
-  if (!session) notFound();
+    .eq("status", "ready");
 
-  const s = session as unknown as InterviewSession & {
-    guests: Pick<Guest, "name">;
-  };
+  type SessionRow = InterviewSession & { guests: Pick<Guest, "name"> };
+  const all = (sessions ?? []) as unknown as SessionRow[];
+  const s = all.find((row) => row.id === sessionId);
+  if (!s) notFound();
+
+  const name =
+    conversationNames(all, (number) =>
+      t("familyConversationNumbered", { number })
+    ).get(s.id) ?? "";
 
   let audioUrl: string | null = null;
   if (s.raw_audio_path) {
@@ -57,11 +63,8 @@ export default async function FamilyConversationPage({
       <div className="flex items-center gap-5">
         <Monogram name={s.guests.name} size="lg" />
         <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-ember">
-            {s.guests.name} · {t("familyConversationLabel")}
-          </p>
-          <h1 className="mt-1 font-serif text-3xl font-semibold sm:text-4xl">
-            {s.topic || t("familyConversationLabel")}
+          <h1 className="font-serif text-3xl font-semibold sm:text-4xl">
+            {name}
           </h1>
           <p className="mt-1 text-sm text-ink-faint">
             {new Date(s.created_at).toLocaleDateString(locale, {

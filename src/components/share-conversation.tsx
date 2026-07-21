@@ -64,9 +64,7 @@ export function ShareConversation({
           </>
         )}
       </button>
-      <p className="text-xs text-ink-faint">
-        {error ? t("familyShareError") : t("familyShareHint")}
-      </p>
+      {error && <p className="text-xs text-ember-deep">{t("familyShareError")}</p>}
     </div>
   );
 }
