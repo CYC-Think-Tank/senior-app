@@ -4,6 +4,10 @@ import { requireUser } from "@/lib/auth";
 import { Wordmark } from "@/components/ui";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { UserMenu } from "@/components/user-menu";
+import {
+  PortalShell,
+  portalStyles,
+} from "@/components/portal-shell";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import { personName } from "@/lib/names";
 
@@ -23,33 +27,39 @@ export default async function FamilyLayout({
   const name = personName(profile?.display_name, profile?.email ?? user.email);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-line bg-cream">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
-          <Wordmark href="/family" />
-          <div className="flex items-center gap-2">
+    <PortalShell>
+      <header className={portalStyles.header}>
+        <div
+          className={`${portalStyles.headerInner} ${portalStyles.headerInnerNarrow}`}
+        >
+          <div className={portalStyles.headerBrand}>
+            <Wordmark href="/family" tone="light" />
+          </div>
+          <nav className={portalStyles.nav} aria-label="Family navigation">
             <Link
               href="/feed"
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-paper-deep hover:text-ink"
+              className={portalStyles.navLink}
             >
               {t("commonViewFeed")}
             </Link>
             {profile?.role === "admin" && (
               <Link
                 href="/admin"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-paper-deep hover:text-ink"
+                className={portalStyles.navLink}
               >
                 {t("commonAdmin")}
               </Link>
             )}
-            <LanguageSwitcher />
-            <UserMenu name={name} />
+          </nav>
+          <div className={portalStyles.headerTools}>
+            <LanguageSwitcher tone="bare" />
+            <UserMenu name={name} tone="dark" />
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        {children}
+      <main className={`${portalStyles.main} ${portalStyles.mainNarrow}`}>
+        <div className={portalStyles.surface}>{children}</div>
       </main>
-    </div>
+    </PortalShell>
   );
 }

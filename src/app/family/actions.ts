@@ -13,6 +13,48 @@ export type ShareLinkResult =
   | { ok: true; token: string }
   | { ok: false };
 
+export async function requestPodcastInvitation() {
+  const { user } = await requireUser();
+  const admin = createSupabaseAdminClient();
+  const { data: existing } = await admin
+    .from("podcast_participation")
+    .select("status")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (existing) return;
+
+  const { error } = await admin.from("podcast_participation").insert({
+    user_id: user.id,
+    source: "request",
+    status: "requested",
+  });
+  if (error) throw new Error("Could not send your request.");
+  revalidatePath("/family");
+  revalidatePath("/admin/participation");
+}
+
+export async function acceptPodcastInvitation() {
+  const { user } = await requireUser();
+  const admin = createSupabaseAdminClient();
+  const { data: participation } = await admin
+    .from("podcast_participation")
+    .select("id, session_id, sessions(token)")
+    .eq("user_id", user.id)
+    .eq("status", "invited")
+    .single();
+  const session = participation?.sessions as unknown as { token: string } | null;
+  if (!participation?.session_id || !session?.token) throw new Error("This invitation is no longer available.");
+
+  const { error } = await admin
+    .from("podcast_participation")
+    .update({ status: "accepted", updated_at: new Date().toISOString() })
+    .eq("id", participation.id);
+  if (error) throw new Error("Could not accept the invitation.");
+  revalidatePath("/family");
+  revalidatePath("/admin/participation");
+  redirect(`/interview/${session.token}`);
+}
+
 /**
  * Creates (once) a permanent public share token for a finished conversation.
  * The caller must be a signed-in family member with access to the session —

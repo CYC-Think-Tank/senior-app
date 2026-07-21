@@ -1,187 +1,175 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
-import { Mic, Plus, Users } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
-import { Badge, Card, Monogram, formatDuration } from "@/components/ui";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
-import type { Episode, Guest, InterviewSession } from "@/lib/types";
+import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import type { Guest, InterviewSession } from "@/lib/types";
+import {
+  AdminDashboardView,
+  type AdminDashboardCopy,
+  type GuestDirectoryItem,
+  type UsagePoint,
+} from "./admin-dashboard-view";
 
 export const dynamic = "force-dynamic";
 
-const episodeTone = (status: string) =>
-  status === "approved" || status === "published"
-    ? "sage"
-    : status === "pending_approval" || status === "changes_requested"
-      ? "ember"
-      : "neutral";
+const dateKey = (date: Date) => date.toISOString().slice(0, 10);
+
+const copyByLocale: Record<string, AdminDashboardCopy> = {
+  en: {
+    eyebrow: "Fireside overview",
+    title: "Good to see you.",
+    intro: "A clear view of the people, stories, and conversations growing across Fireside.",
+    newGuest: "Add a guest",
+    totalUsers: "Total users",
+    recordingsToday: "Recordings today",
+    averageTime: "Average conversation time",
+    registered: "Registered",
+    notRegistered: "Not registered",
+    usersByCategory: "Users by category",
+    conversationsByCategory: "Conversations by category",
+    usage: "Conversation activity",
+    lastSevenDays: "Last 7 days",
+    conversations: "conversations",
+    ready: "Recorded",
+    recording: "In progress",
+    pending: "Waiting",
+    guestDirectory: "Guest directory",
+    guestDirectoryIntro: "Everyone who has been invited to share their stories.",
+    guest: "Guest",
+    account: "Account",
+    language: "Language",
+    lastActive: "Last active",
+    never: "Not yet",
+    noGuests: "No guests have been added yet.",
+    openGuest: "Open guest",
+  },
+  "zh-Hans": {
+    eyebrow: "Fireside 概览",
+    title: "欢迎回来。",
+    intro: "清晰了解 Fireside 中不断增长的用户、故事和对话。",
+    newGuest: "添加访客",
+    totalUsers: "用户总数",
+    recordingsToday: "今日录音",
+    averageTime: "平均对话时长",
+    registered: "已注册",
+    notRegistered: "未注册",
+    usersByCategory: "用户类别",
+    conversationsByCategory: "对话类别",
+    usage: "对话活跃度",
+    lastSevenDays: "最近 7 天",
+    conversations: "次对话",
+    ready: "已录制",
+    recording: "进行中",
+    pending: "等待中",
+    guestDirectory: "访客列表",
+    guestDirectoryIntro: "所有受邀分享故事的人。",
+    guest: "访客",
+    account: "账户",
+    language: "语言",
+    lastActive: "最近活跃",
+    never: "暂无",
+    noGuests: "尚未添加访客。",
+    openGuest: "打开访客",
+  },
+  "zh-Hant": {
+    eyebrow: "Fireside 概覽",
+    title: "歡迎回來。",
+    intro: "清楚掌握 Fireside 中持續成長的使用者、故事和對話。",
+    newGuest: "新增訪客",
+    totalUsers: "使用者總數",
+    recordingsToday: "今日錄音",
+    averageTime: "平均對話時長",
+    registered: "已註冊",
+    notRegistered: "未註冊",
+    usersByCategory: "使用者類別",
+    conversationsByCategory: "對話類別",
+    usage: "對話活躍度",
+    lastSevenDays: "最近 7 天",
+    conversations: "次對話",
+    ready: "已錄製",
+    recording: "進行中",
+    pending: "等待中",
+    guestDirectory: "訪客列表",
+    guestDirectoryIntro: "所有受邀分享故事的人。",
+    guest: "訪客",
+    account: "帳戶",
+    language: "語言",
+    lastActive: "最近活躍",
+    never: "暫無",
+    noGuests: "尚未新增訪客。",
+    openGuest: "開啟訪客",
+  },
+};
 
 export default async function AdminDashboard() {
   const { supabase } = await requireAdmin();
   const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
-  const t = (key: Parameters<typeof translate>[1], values = {}) =>
-    translate(locale, key, values);
-  const statusLabel: Record<string, string> = {
-    draft: t("statusDraft"),
-    pending_approval: t("statusPendingApproval"),
-    changes_requested: t("statusChangesRequested"),
-    approved: t("statusApproved"),
-    published: t("statusPublished"),
-    pending: t("statusPending"),
-    recording: t("statusRecording"),
-    ready: t("statusReady"),
-  };
+  const copy = copyByLocale[locale] ?? copyByLocale.en;
 
-  const [{ data: guests }, { data: sessions }, { data: episodes }] =
-    await Promise.all([
-      supabase.from("guests").select("*").order("created_at"),
-      supabase
-        .from("sessions")
-        .select("*, guests(name), episodes(id)")
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("episodes")
-        .select("*, guests(name)")
-        .order("created_at", { ascending: false }),
-    ]);
+  const [{ data: guestRows }, { data: sessionRows }] = await Promise.all([
+    supabase.from("guests").select("*").order("created_at", { ascending: false }),
+    supabase.from("sessions").select("*").order("created_at", { ascending: false }),
+  ]);
 
-  type SessionRow = InterviewSession & {
-    guests: { name: string };
-    episodes: { id: string } | null;
-  };
-  type EpisodeRow = Episode & { guests: { name: string } };
+  const guests = (guestRows ?? []) as Guest[];
+  const sessions = (sessionRows ?? []) as InterviewSession[];
+  const today = dateKey(new Date());
+  const finishedSessions = sessions.filter((session) => session.status === "ready");
+  const durations = finishedSessions
+    .map((session) => session.duration_ms ?? 0)
+    .filter((duration) => duration > 0);
+  const averageDurationMs = durations.length
+    ? Math.round(durations.reduce((total, duration) => total + duration, 0) / durations.length)
+    : 0;
+
+  const usage: UsagePoint[] = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setUTCHours(12, 0, 0, 0);
+    date.setUTCDate(date.getUTCDate() - (6 - index));
+    const key = dateKey(date);
+    return {
+      key,
+      label: new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(date),
+      value: sessions.filter((session) => dateKey(new Date(session.created_at)) === key).length,
+    };
+  });
+
+  const sessionsByGuest = new Map<string, InterviewSession[]>();
+  for (const session of sessions) {
+    const existing = sessionsByGuest.get(session.guest_id) ?? [];
+    existing.push(session);
+    sessionsByGuest.set(session.guest_id, existing);
+  }
+
+  const guestDirectory: GuestDirectoryItem[] = guests.map((guest) => {
+    const guestSessions = sessionsByGuest.get(guest.id) ?? [];
+    return {
+      id: guest.id,
+      name: guest.name,
+      language: guest.language,
+      registered: Boolean(guest.user_id),
+      conversationCount: guestSessions.length,
+      lastActive: guestSessions[0]?.created_at ?? null,
+    };
+  });
 
   return (
-    <div className="space-y-10">
-      <div>
-        <h1 className="font-serif text-3xl font-semibold">
-          {t("commonDashboard")}
-        </h1>
-        <p className="mt-1 text-ink-soft">{t("adminIntro")}</p>
-      </div>
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 font-serif text-xl font-semibold">
-            <Users className="h-5 w-5 text-ember" /> {t("commonGuests")}
-          </h2>
-          <Link
-            href="/admin/guests/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-cream hover:bg-ember-deep"
-          >
-            <Plus className="h-4 w-4" /> {t("commonNewGuest")}
-          </Link>
-        </div>
-        {!guests?.length ? (
-          <Card className="p-8 text-center text-ink-soft">
-            {t("adminNoGuests")}
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(guests as Guest[]).map((g) => (
-              <Link key={g.id} href={`/admin/guests/${g.id}`}>
-                <Card className="flex items-center gap-4 p-5 transition-shadow hover:shadow-md">
-                  <Monogram name={g.name} />
-                  <div>
-                    <p className="font-serif text-lg font-semibold">{g.name}</p>
-                    <p className="text-sm text-ink-soft">
-                      {g.topics?.length
-                        ? g.topics.slice(0, 3).join(" · ")
-                        : g.language}
-                    </p>
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 font-serif text-xl font-semibold">
-          <Mic className="h-5 w-5 text-ember" /> {t("commonRecentSessions")}
-        </h2>
-        {!sessions?.length ? (
-          <Card className="p-8 text-center text-ink-soft">
-            {t("adminNoSessions")}
-          </Card>
-        ) : (
-          <Card className="divide-y divide-line">
-            {(sessions as unknown as SessionRow[]).map((s) => (
-              <div
-                key={s.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
-              >
-                <div>
-                  <p className="font-medium">
-                    {s.guests.name}
-                    {s.topic ? (
-                      <span className="text-ink-soft"> — {s.topic}</span>
-                    ) : null}
-                  </p>
-                  <p className="text-sm text-ink-faint">
-                    {new Date(s.created_at).toLocaleDateString()} ·{" "}
-                    {formatDuration(s.duration_ms)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge tone={s.status === "ready" ? "sage" : "neutral"}>
-                    {statusLabel[s.status]}
-                  </Badge>
-                  {s.status === "ready" && (
-                    <Link
-                      href={`/admin/sessions/${s.id}`}
-                      className="text-sm font-medium text-ember hover:text-ember-deep"
-                    >
-                      {s.episodes
-                        ? t("adminOpenTranscript")
-                        : t("adminEditTranscript")}
-                    </Link>
-                  )}
-                </div>
-              </div>
-            ))}
-          </Card>
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-3 font-serif text-xl font-semibold">
-          {t("commonEpisodes")}
-        </h2>
-        {!episodes?.length ? (
-          <Card className="p-8 text-center text-ink-soft">
-            {t("adminNoEpisodes")}
-          </Card>
-        ) : (
-          <Card className="divide-y divide-line">
-            {(episodes as unknown as EpisodeRow[]).map((e) => (
-              <Link
-                key={e.id}
-                href={`/admin/episodes/${e.id}`}
-                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 hover:bg-paper-deep/40"
-              >
-                <div>
-                  <p className="font-medium">
-                    Ep. {e.episode_number} — {e.title}
-                  </p>
-                  <p className="text-sm text-ink-faint">
-                    {e.guests.name} · {formatDuration(e.duration_ms)}
-                    {e.publish_at
-                      ? ` · ${t("adminReleases")} ${new Date(
-                          e.publish_at
-                        ).toLocaleDateString(locale)}`
-                      : ""}
-                  </p>
-                </div>
-                <Badge tone={episodeTone(e.status)}>
-                  {statusLabel[e.status]}
-                </Badge>
-              </Link>
-            ))}
-          </Card>
-        )}
-      </section>
-    </div>
+    <AdminDashboardView
+      locale={locale}
+      copy={copy}
+      totalUsers={guests.length}
+      recordingsToday={finishedSessions.filter(
+        (session) => dateKey(new Date(session.created_at)) === today,
+      ).length}
+      averageDurationMs={averageDurationMs}
+      registeredUsers={guests.filter((guest) => Boolean(guest.user_id)).length}
+      unregisteredUsers={guests.filter((guest) => !guest.user_id).length}
+      conversationCategories={{
+        ready: sessions.filter((session) => session.status === "ready").length,
+        recording: sessions.filter((session) => session.status === "recording").length,
+        pending: sessions.filter((session) => session.status === "pending").length,
+      }}
+      usage={usage}
+      guests={guestDirectory}
+    />
   );
 }

@@ -1,14 +1,24 @@
 import Link from "next/link";
 import { APP_NAME } from "@/lib/constants";
 
-export function Wordmark({ href = "/" }: { href?: string }) {
+export function Wordmark({
+  href = "/",
+  tone = "ink",
+}: {
+  href?: string;
+  tone?: "ink" | "light";
+}) {
   return (
     <Link
       href={href}
-      className="font-serif text-2xl font-semibold tracking-tight text-ink"
+      className={`font-serif text-2xl font-semibold tracking-tight ${
+        tone === "light" ? "text-cream" : "text-ink"
+      }`}
     >
       {APP_NAME}
-      <span className="text-ember">.</span>
+      <span className={tone === "light" ? "text-[#ffd19c]" : "text-ember"}>
+        .
+      </span>
     </Link>
   );
 }
@@ -22,7 +32,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-line bg-cream shadow-[0_1px_3px_rgba(42,32,24,0.06)] ${className}`}
+      className={`portal-card rounded-xl border border-line bg-cream/95 shadow-[0_1px_3px_rgba(42,32,24,0.05)] ${className}`}
     >
       {children}
     </div>
@@ -52,15 +62,15 @@ export function Badge({
 
 export const buttonStyles = {
   primary:
-    "inline-flex items-center justify-center gap-2 rounded-xl bg-ember px-5 py-2.5 font-medium text-cream transition-colors hover:bg-ember-deep disabled:opacity-50 disabled:pointer-events-none",
+    "portal-button-primary inline-flex items-center justify-center gap-2 rounded-lg bg-ember px-5 py-2.5 font-medium text-cream transition-colors hover:bg-ember-deep disabled:opacity-50 disabled:pointer-events-none",
   secondary:
-    "inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-cream px-5 py-2.5 font-medium text-ink transition-colors hover:bg-paper-deep disabled:opacity-50 disabled:pointer-events-none",
+    "portal-button-secondary inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-cream px-5 py-2.5 font-medium text-ink transition-colors hover:bg-paper-deep disabled:opacity-50 disabled:pointer-events-none",
   ghost:
-    "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 font-medium text-ink-soft transition-colors hover:bg-paper-deep hover:text-ink disabled:opacity-50 disabled:pointer-events-none",
+    "portal-button-ghost inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium text-ink-soft transition-colors hover:bg-paper-deep hover:text-ink disabled:opacity-50 disabled:pointer-events-none",
 };
 
 export const inputStyles =
-  "w-full rounded-xl border border-line bg-cream px-4 py-2.5 text-ink placeholder:text-ink-faint focus:border-ember focus:outline-none";
+  "portal-input w-full rounded-lg border border-line bg-cream px-4 py-2.5 text-ink placeholder:text-ink-faint focus:border-ember focus:outline-none";
 
 export function Monogram({
   name,
@@ -75,7 +85,7 @@ export function Monogram({
   };
   return (
     <div
-      className={`flex items-center justify-center rounded-full bg-ember-soft font-serif font-semibold text-ember-deep ${sizes[size]}`}
+      className={`portal-monogram flex items-center justify-center rounded-lg border border-ember/10 bg-ember-soft font-serif font-semibold text-ember-deep ${sizes[size]}`}
       aria-hidden
     >
       {name.trim().charAt(0).toUpperCase()}

@@ -5,7 +5,13 @@ import { ChevronDown, LogOut } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { useI18n } from "@/components/i18n-provider";
 
-export function UserMenu({ name }: { name: string }) {
+export function UserMenu({
+  name,
+  tone = "light",
+}: {
+  name: string;
+  tone?: "light" | "dark";
+}) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -35,11 +41,17 @@ export function UserMenu({ name }: { name: string }) {
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex max-w-[12rem] items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-deep"
+        className={`inline-flex max-w-[12rem] items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-[color,background-color,box-shadow,transform] ${
+          tone === "dark"
+            ? "text-cream/80 hover:-translate-y-px hover:text-white"
+            : "text-ink hover:bg-paper-deep"
+        }`}
       >
         <span className="truncate">{name}</span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-ink-soft transition-transform ${
+          className={`h-4 w-4 shrink-0 transition-transform ${
+            tone === "dark" ? "text-cream/65" : "text-ink-soft"
+          } ${
             open ? "rotate-180" : ""
           }`}
         />

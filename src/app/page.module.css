@@ -130,17 +130,19 @@
   align-items: center;
   min-height: 2.5rem;
   padding: 0 1rem;
-  color: var(--color-whiteout);
+  color: rgb(255 250 241 / 0.76);
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
   border-radius: 8px;
-  transition: background 160ms ease, color 160ms ease;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
 }
 
 .navGhost:hover {
-  background: rgb(255 250 241 / 0.14);
   color: var(--color-whiteout);
+  transform: translateY(-1px);
 }
 
 .navPrimary {

@@ -88,5 +88,10 @@ export async function POST(
     );
   }
 
+  await admin
+    .from("podcast_participation")
+    .update({ status: "interview_done", updated_at: new Date().toISOString() })
+    .eq("session_id", session.id);
+
   return NextResponse.json({ ok: true });
 }

@@ -2,16 +2,22 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { localeLabels, locales, type Locale } from "@/lib/i18n";
 import { useI18n } from "@/components/i18n-provider";
 import { setLocaleAction } from "@/app/language/actions";
+import styles from "@/components/language-switcher.module.css";
 
-export function LanguageSwitcher() {
+export function LanguageSwitcher({
+  tone = "light",
+}: {
+  tone?: "light" | "dark" | "bare";
+}) {
   const router = useRouter();
   const { locale } = useI18n();
   const [pending, startTransition] = useTransition();
 
-  function setLocale(nextLocale: Locale) {
+  function toggleLocale() {
+    const nextLocale = locale === "en" ? "zh-Hans" : "en";
+
     startTransition(async () => {
       await setLocaleAction(nextLocale);
       router.refresh();
@@ -19,22 +25,20 @@ export function LanguageSwitcher() {
   }
 
   return (
-    <div className="inline-flex rounded-lg border border-line bg-cream p-1 text-sm">
-      {locales.map((item) => (
-        <button
-          key={item}
-          type="button"
-          onClick={() => setLocale(item)}
-          disabled={pending}
-          className={`rounded-md px-2.5 py-1 font-medium ${
-            item === locale
-              ? "bg-ember text-cream"
-              : "text-ink-soft hover:bg-paper-deep hover:text-ink"
-          }`}
-        >
-          {localeLabels[item]}
-        </button>
-      ))}
-    </div>
+    <button
+      type="button"
+      onClick={toggleLocale}
+      disabled={pending}
+      className={`${styles.control} inline-flex min-h-10 items-center justify-center rounded-lg border text-sm disabled:cursor-wait disabled:opacity-60 ${
+        tone === "bare"
+          ? `${styles.bare} border-transparent bg-transparent px-4 font-medium`
+          : tone === "dark"
+            ? "border-white/20 bg-white/10 px-3 font-semibold text-cream hover:bg-white/16"
+            : "border-line bg-cream px-3 font-semibold text-ink-soft hover:bg-paper-deep hover:text-ink"
+      }`}
+      aria-label={locale === "en" ? "Switch to Chinese" : "Switch to English"}
+    >
+      {locale === "en" ? "中文" : "English"}
+    </button>
   );
 }

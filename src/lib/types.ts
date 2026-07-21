@@ -37,6 +37,22 @@ export type InterviewSession = {
   created_at: string;
 };
 
+export type PodcastParticipationStatus =
+  | "requested"
+  | "invited"
+  | "accepted"
+  | "interview_done";
+
+export type PodcastParticipation = {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  source: "request" | "admin_invite";
+  status: PodcastParticipationStatus;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Speaker = "ai" | "guest";
 
 export type TranscriptTurn = {

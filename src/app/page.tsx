@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { HeroSky } from "@/components/hero-sky";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import styles from "./page.module.css";
@@ -20,6 +21,7 @@ export default function LandingPage() {
             Fireside.
           </Link>
           <nav className={styles.authNav} aria-label="Account">
+            <LanguageSwitcher tone="bare" />
             <Link href="/login" className={styles.navGhost}>
               Log in
             </Link>

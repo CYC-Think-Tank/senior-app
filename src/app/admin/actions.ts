@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { sendAuthEmail } from "@/lib/resend";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createAuthCallbackUrl } from "@/lib/supabase/auth-link";
+import { personName } from "@/lib/names";
 
 export async function createGuest(formData: FormData) {
   const { supabase } = await requireAdmin();
@@ -45,6 +46,99 @@ export async function deleteSession(sessionId: string, guestId: string) {
   const { supabase } = await requireAdmin();
   await supabase.from("sessions").delete().eq("id", sessionId);
   revalidatePath(`/admin/guests/${guestId}`);
+  revalidatePath("/admin");
+}
+
+export async function invitePodcastUser(userId: string) {
+  const { user: adminUser } = await requireAdmin();
+  if (userId === adminUser.id) throw new Error("You cannot invite your own admin account.");
+
+  const admin = createSupabaseAdminClient();
+  const { error: participationStorageError } = await admin
+    .from("podcast_participation")
+    .select("id")
+    .limit(1);
+  if (participationStorageError) {
+    console.error("Podcast participation storage is unavailable:", participationStorageError);
+    throw new Error(
+      "Podcast invitations are not set up yet. Apply database migration 003_podcast_participation.sql.",
+    );
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, display_name, email, family_id, role")
+    .eq("id", userId)
+    .single();
+  if (!profile || profile.role === "admin") throw new Error("Could not find that user.");
+
+  const { data: existingGuest } = await admin
+    .from("guests")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  let guestId = existingGuest?.id as string | undefined;
+
+  if (!guestId) {
+    const { data: guest, error: guestError } = await admin
+      .from("guests")
+      .insert({
+        user_id: userId,
+        family_id: profile.family_id,
+        name: personName(profile.display_name, profile.email),
+        language: "English",
+      })
+      .select("id")
+      .single();
+    if (guestError || !guest) throw new Error("Could not prepare the invitation.");
+    guestId = guest.id;
+  }
+
+  const { data: existingParticipation } = await admin
+    .from("podcast_participation")
+    .select("session_id, status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  let sessionId = existingParticipation?.session_id as string | null | undefined;
+
+  if (!sessionId || existingParticipation?.status === "interview_done") {
+    const { data: session, error: sessionError } = await admin
+      .from("sessions")
+      .insert({ guest_id: guestId })
+      .select("id")
+      .single();
+    if (sessionError || !session) throw new Error("Could not create the interview invitation.");
+    sessionId = session.id;
+  }
+
+  const { error } = await admin.from("podcast_participation").upsert(
+    {
+      user_id: userId,
+      session_id: sessionId,
+      source: "admin_invite",
+      status: "invited",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  if (error) {
+    console.error("Could not save the podcast invitation:", error);
+    throw new Error("Could not save the invitation.");
+  }
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/participation");
+  revalidatePath("/family");
+}
+
+export async function deletePodcastUser(userId: string) {
+  const { user } = await requireAdmin();
+  if (userId === user.id) throw new Error("You cannot delete your own account.");
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw new Error("Could not delete that user.");
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/participation");
   revalidatePath("/admin");
 }
 

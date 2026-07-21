@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
-import { LogOut } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
-import { signOut } from "@/app/auth/actions";
-import { Wordmark } from "@/components/ui";
-import { LanguageSwitcher } from "@/components/language-switcher";
+import {
+  PortalShell,
+  portalStyles,
+} from "@/components/portal-shell";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { AdminSidebar } from "./admin-sidebar";
 
 export default async function AdminLayout({
   children,
@@ -17,43 +17,30 @@ export default async function AdminLayout({
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-line bg-cream">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-8">
-            <Wordmark href="/admin" />
-            <nav className="flex items-center gap-1 text-sm font-medium">
-              <Link
-                href="/admin"
-                className="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-paper-deep hover:text-ink"
-              >
-                {t("commonDashboard")}
-              </Link>
-              <Link
-                href="/admin/guests/new"
-                className="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-paper-deep hover:text-ink"
-              >
-                {t("commonNewGuest")}
-              </Link>
-              <Link
-                href="/feed"
-                className="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-paper-deep hover:text-ink"
-              >
-                {t("commonViewFeed")}
-              </Link>
-            </nav>
-          </div>
-          <LanguageSwitcher />
-          <form action={signOut}>
-            <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-paper-deep hover:text-ink">
-              <LogOut className="h-4 w-4" /> {t("commonSignOut")}
-            </button>
-          </form>
+    <PortalShell>
+      <div className={portalStyles.adminApp}>
+        <AdminSidebar
+          dashboardLabel={t("commonDashboard")}
+          guestsLabel={t("commonGuests")}
+          usersLabel={
+            locale === "en" ? "Users" : locale === "zh-Hans" ? "用户" : "使用者"
+          }
+          participationLabel={
+            locale === "en"
+              ? "Invites & requests"
+              : locale === "zh-Hans"
+                ? "邀请与申请"
+                : "邀請與申請"
+          }
+          feedLabel={t("commonViewFeed")}
+          signOutLabel={t("commonSignOut")}
+        />
+        <div className={portalStyles.adminContent}>
+          <main className={portalStyles.adminMain}>
+            <div className={portalStyles.surface}>{children}</div>
+          </main>
         </div>
-      </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-        {children}
-      </main>
-    </div>
+      </div>
+    </PortalShell>
   );
 }
