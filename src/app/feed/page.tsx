@@ -1,28 +1,27 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { Play } from "lucide-react";
-import { requireUser } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
-import type { Episode, Guest } from "@/lib/types";
+import type { Episode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
-  const { supabase } = await requireUser();
   const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
 
-  const [{ data: guests }, { data: episodes }] = await Promise.all([
-    supabase.from("guests").select("*").order("name"),
-    supabase
-      .from("episodes")
-      .select("*, guests(name)")
-      .in("status", ["approved", "published"])
-      .lte("publish_at", new Date().toISOString())
-      .order("publish_at", { ascending: false }),
-  ]);
+  // Public feed: only released (approved/published, past publish_at) episodes,
+  // across every storyteller. Served via the service role so no login is needed.
+  const admin = createSupabaseAdminClient();
+  const { data: episodes } = await admin
+    .from("episodes")
+    .select("*, guests(name)")
+    .in("status", ["approved", "published"])
+    .lte("publish_at", new Date().toISOString())
+    .order("publish_at", { ascending: false });
 
   type EpisodeRow = Episode & { guests: { name: string } };
   const rows = (episodes ?? []) as unknown as EpisodeRow[];
@@ -33,13 +32,6 @@ export default async function FeedPage() {
         <h1 className="font-serif text-4xl font-semibold">
           {t("feedTitle")}
         </h1>
-        <p className="mt-2 text-lg text-ink-soft">
-          {guests?.length
-            ? t("feedIntroWithGuests", {
-                names: (guests as Guest[]).map((g) => g.name).join(", "),
-              })
-            : t("feedIntroEmpty")}
-        </p>
       </div>
 
       {rows.length === 0 ? (

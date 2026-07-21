@@ -5,11 +5,14 @@ export type Profile = {
   email: string;
   display_name: string | null;
   role: Role;
+  family_id: string;
   created_at: string;
 };
 
 export type Guest = {
   id: string;
+  user_id: string | null;
+  family_id: string | null;
   name: string;
   bio: string | null;
   photo_path: string | null;
@@ -25,8 +28,10 @@ export type InterviewSession = {
   guest_id: string;
   token: string;
   topic: string | null;
+  title: string | null;
   status: SessionStatus;
   raw_audio_path: string | null;
+  share_token: string | null;
   started_at: string | null;
   duration_ms: number | null;
   created_at: string;
@@ -66,15 +71,6 @@ export type Episode = {
   status: EpisodeStatus;
   change_note: string | null;
   publish_at: string | null;
-  created_at: string;
-};
-
-export type FamilyAccess = {
-  id: string;
-  guest_id: string;
-  user_id: string | null;
-  invite_email: string | null;
-  status: "pending" | "active";
   created_at: string;
 };
 

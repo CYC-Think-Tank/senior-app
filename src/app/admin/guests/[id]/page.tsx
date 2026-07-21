@@ -16,12 +16,7 @@ import {
   formatDuration,
   inputStyles,
 } from "@/components/ui";
-import type {
-  Episode,
-  FamilyAccess,
-  Guest,
-  InterviewSession,
-} from "@/lib/types";
+import type { Episode, Guest, InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +28,7 @@ export default async function GuestPage({
   const { id } = await params;
   const { supabase } = await requireAdmin();
 
-  const [{ data: guest }, { data: sessions }, { data: episodes }, { data: family }] =
+  const [{ data: guest }, { data: sessions }, { data: episodes }] =
     await Promise.all([
       supabase.from("guests").select("*").eq("id", id).single(),
       supabase
@@ -46,15 +41,19 @@ export default async function GuestPage({
         .select("*")
         .eq("guest_id", id)
         .order("episode_number", { ascending: false }),
-      supabase
-        .from("family_access")
-        .select("*")
-        .eq("guest_id", id)
-        .order("created_at"),
     ]);
 
   if (!guest) notFound();
   const g = guest as Guest;
+
+  // Everyone sharing this guest's family_id can hear their episodes.
+  const { data: family } = g.family_id
+    ? await supabase
+        .from("profiles")
+        .select("id, email")
+        .eq("family_id", g.family_id)
+        .order("created_at")
+    : { data: null };
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
   return (
@@ -216,17 +215,15 @@ export default async function GuestPage({
               Send invite
             </button>
           </form>
-          {(family as FamilyAccess[] | null)?.length ? (
+          {family?.length ? (
             <ul className="mt-4 space-y-2 border-t border-line pt-4">
-              {(family as FamilyAccess[]).map((f) => (
+              {family.map((f) => (
                 <li
                   key={f.id}
                   className="flex items-center justify-between text-sm"
                 >
-                  <span>{f.invite_email}</span>
-                  <Badge tone={f.status === "active" ? "sage" : "neutral"}>
-                    {f.status === "active" ? "Has access" : "Invited"}
-                  </Badge>
+                  <span>{f.email}</span>
+                  <Badge tone="sage">Has access</Badge>
                 </li>
               ))}
             </ul>

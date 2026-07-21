@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
@@ -61,24 +62,32 @@ export async function inviteFamily(guestId: string, formData: FormData) {
 
   const admin = createSupabaseAdminClient();
 
-  // If this person already has an account, link them immediately.
+  // The invitee joins the guest's family. Give the guest one if it has none.
+  const { data: guest } = await admin
+    .from("guests")
+    .select("family_id")
+    .eq("id", guestId)
+    .single();
+  if (!guest) throw new Error("Could not find that guest.");
+
+  let familyId = guest.family_id as string | null;
+  if (!familyId) {
+    familyId = randomUUID();
+    const { error: familyError } = await admin
+      .from("guests")
+      .update({ family_id: familyId })
+      .eq("id", guestId);
+    if (familyError) throw new Error("Could not save the invite.");
+  }
+
   const { data: profile } = await admin
     .from("profiles")
     .select("id")
     .ilike("email", email)
     .maybeSingle();
 
-  const { error } = await admin.from("family_access").upsert(
-    {
-      guest_id: guestId,
-      invite_email: email,
-      user_id: profile?.id ?? null,
-      status: profile ? "active" : "pending",
-    },
-    { onConflict: "guest_id,invite_email" }
-  );
-  if (error) throw new Error("Could not save the invite.");
-
+  // An "invite" link also creates the auth user, which fires the trigger that
+  // creates their profile — so the profile exists by the time we set family_id.
   const linkType = profile ? "magiclink" : "invite";
   const { data: link, error: linkError } =
     await admin.auth.admin.generateLink({
@@ -89,6 +98,15 @@ export async function inviteFamily(guestId: string, formData: FormData) {
   if (linkError || !link.properties?.hashed_token) {
     console.error("Could not generate a Supabase invite link:", linkError);
     throw new Error("Could not send the family invitation.");
+  }
+
+  const { error: joinError } = await admin
+    .from("profiles")
+    .update({ family_id: familyId })
+    .ilike("email", email);
+  if (joinError) {
+    console.error("Could not add the invitee to the family:", joinError);
+    throw new Error("Could not save the invite.");
   }
 
   try {
