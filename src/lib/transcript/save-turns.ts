@@ -46,6 +46,10 @@ function toRows(sessionId: string, turns: TurnDraft[]): TurnRow[] {
  * table is never momentarily empty — a checkpoint that is interrupted halfway
  * leaves the previous transcript intact rather than wiping it. `excluded` is
  * deliberately not written so admin edits survive a re-finalize.
+ *
+ * An empty write is a no-op, never an instruction to erase: a conversation
+ * being picked back up has said nothing *yet*, and its first checkpoint must
+ * not take the earlier sitting down with it.
  */
 export async function saveTurns(
   admin: SupabaseClient,
@@ -53,15 +57,14 @@ export async function saveTurns(
   turns: TurnDraft[]
 ): Promise<{ error: string | null; count: number }> {
   const rows = toRows(sessionId, turns);
+  if (rows.length === 0) return { error: null, count: 0 };
 
-  if (rows.length > 0) {
-    const { error } = await admin
-      .from("transcript_turns")
-      .upsert(rows, { onConflict: "session_id,idx" });
-    if (error) {
-      console.error("transcript upsert failed:", error);
-      return { error: "Could not save the transcript.", count: 0 };
-    }
+  const { error } = await admin
+    .from("transcript_turns")
+    .upsert(rows, { onConflict: "session_id,idx" });
+  if (error) {
+    console.error("transcript upsert failed:", error);
+    return { error: "Could not save the transcript.", count: 0 };
   }
 
   // Drop turns left behind by a longer previous attempt on this session.

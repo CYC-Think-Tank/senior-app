@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
-import { renameConversation } from "@/app/family/actions";
+import { Mic, Pencil } from "lucide-react";
+import { renameConversation, resumeConversation } from "@/app/family/actions";
 import { ShareConversation } from "@/components/share-conversation";
 import { Card, Monogram, inputStyles } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
@@ -120,6 +120,17 @@ export function ConversationRow({
         </div>
       </Link>
       <div className="flex items-center gap-2">
+        {/* A conversation that ended early can simply be carried on. */}
+        {unfinished && (
+          <form action={resumeConversation.bind(null, sessionId)}>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-ember px-3 py-1.5 text-sm font-medium text-cream transition-colors hover:bg-ember-deep"
+            >
+              <Mic className="h-3.5 w-3.5" /> {t("familyContinue")}
+            </button>
+          </form>
+        )}
         <button
           type="button"
           onClick={() => setEditing(true)}

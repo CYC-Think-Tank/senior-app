@@ -1,4 +1,13 @@
+import type { Speaker } from "@/lib/types";
+
 export const HOST_NAME = "Rosie";
+
+/**
+ * A transcript long enough to hit this was never going to fit in the model's
+ * attention either; the oldest exchanges are dropped rather than risking a
+ * request the realtime API refuses outright.
+ */
+const PRIOR_TRANSCRIPT_BUDGET = 60_000;
 
 type PromptOptions = {
   guestName: string;
@@ -6,7 +15,31 @@ type PromptOptions = {
   topics?: string[] | null;
   language?: string;
   topic?: string | null;
+  /** Everything said in earlier sittings, when this conversation is resuming. */
+  priorTurns?: { speaker: Speaker; text: string }[];
 };
+
+/** The earlier sittings as dialogue, newest kept when the budget is tight. */
+function renderPriorTranscript(
+  turns: { speaker: Speaker; text: string }[],
+  guestName: string
+): { text: string; truncated: boolean } {
+  const lines = turns.map(
+    (turn) => `${turn.speaker === "ai" ? HOST_NAME : guestName}: ${turn.text}`
+  );
+
+  let kept = lines.length;
+  let size = lines.reduce((total, line) => total + line.length + 1, 0);
+  while (kept > 1 && size > PRIOR_TRANSCRIPT_BUDGET) {
+    size -= lines[lines.length - kept].length + 1;
+    kept--;
+  }
+
+  return {
+    text: lines.slice(lines.length - kept).join("\n"),
+    truncated: kept < lines.length,
+  };
+}
 
 /**
  * System instructions for the AI interviewer. Baked into the ephemeral
@@ -18,6 +51,7 @@ export function buildInterviewerInstructions({
   topics,
   language = "English",
   topic,
+  priorTurns,
 }: PromptOptions): string {
   const focus = topic
     ? `Today's conversation is about: ${topic}.`
@@ -32,10 +66,40 @@ export function buildInterviewerInstructions({
     .filter(Boolean)
     .join("\n");
 
+  // Picking a conversation back up is nothing like starting one: re-introducing
+  // herself or re-asking a question they already answered would tell the guest
+  // that the last sitting was not really kept.
+  const prior = priorTurns?.length
+    ? renderPriorTranscript(priorTurns, guestName)
+    : null;
+
+  const resuming = prior
+    ? `
+# You are picking this conversation back up
+${guestName} has already spoken with you in an earlier sitting${
+        prior.truncated ? " (the beginning of it is no longer shown)" : ""
+      }, and has just come back to carry on. Here is everything said so far:
+
+${prior.text}
+
+- Do NOT introduce yourself again, and do NOT start the conversation over.
+- Do NOT ask anything they have already answered above.
+- Treat the whole exchange above as your own memory of them.
+`
+    : "";
+
+  const opening = prior
+    ? `1. Open: welcome ${guestName} back warmly by name and say how glad you are they came back. Refer to something specific they were telling you last time, then pick that thread back up with one gentle question — or move on to a new one if their story felt finished.`
+    : `1. Open: greet ${guestName} by name, introduce yourself as ${HOST_NAME}, say how glad you are to hear their stories today, and mention today's subject. Then ask one easy, comfortable opening question.`;
+
+  const begin = prior
+    ? `Begin now by welcoming ${guestName} back.`
+    : `Begin now by greeting ${guestName}.`;
+
   return `You are ${HOST_NAME}, a warm, unhurried radio host and biographer. You are recording an episode of a private family podcast with ${guestName}, a senior sharing their life stories. Their family — children and grandchildren — will treasure this recording.
 
 ${focus}
-${background ? `\n${background}\n` : ""}
+${background ? `\n${background}\n` : ""}${resuming}
 # How you speak
 - Conduct the entire conversation in ${language}.
 - Speak slowly, clearly, and warmly. Short sentences. A gentle, unrushed pace.
@@ -56,9 +120,9 @@ ${background ? `\n${background}\n` : ""}
 - Do not invent facts about their life. Everything about them must come from what they tell you.
 
 # The arc of the episode
-1. Open: greet ${guestName} by name, introduce yourself as ${HOST_NAME}, say how glad you are to hear their stories today, and mention today's subject. Then ask one easy, comfortable opening question.
+${opening}
 2. Middle: go deeper with follow-ups. Aim for feelings and scenes, not just facts.
 3. Close: after about 15–20 minutes of conversation — or when asked to wrap up — reflect back one or two highlights in their own words, thank them warmly by name, and say goodbye.
 
-Begin now by greeting ${guestName}.`;
+${begin}`;
 }

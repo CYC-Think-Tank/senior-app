@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Mic } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { resumeConversation } from "@/app/family/actions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AudioPlayer } from "@/components/audio-player";
-import { FinishSaving } from "@/components/finish-saving";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { RAW_BUCKET } from "@/lib/constants";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
@@ -13,8 +13,6 @@ import { conversationNames } from "@/lib/names";
 import type { Guest, InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-// Finishing an unfinished conversation restitches its recording server-side.
-export const maxDuration = 300;
 
 export default async function FamilyConversationPage({
   params,
@@ -83,7 +81,17 @@ export default async function FamilyConversationPage({
       {audioUrl ? (
         <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
       ) : s.status === "recording" ? (
-        <FinishSaving sessionId={s.id} />
+        <Card className="space-y-4 p-6">
+          <p className="text-ink-soft">{t("familyUnfinishedNote")}</p>
+          <form action={resumeConversation.bind(null, s.id)}>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-lg bg-ember px-4 py-2 font-medium text-cream transition-colors hover:bg-ember-deep"
+            >
+              <Mic className="h-4 w-4" /> {t("familyContinue")}
+            </button>
+          </form>
+        </Card>
       ) : (
         <Card className="p-6 text-ink-soft">{t("reviewAudioMissing")}</Card>
       )}

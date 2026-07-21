@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/trash-anonymous",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

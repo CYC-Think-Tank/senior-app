@@ -5,7 +5,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { finalizeSessionAudio } from "@/lib/sessions/finalize";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { localeCookieName, normalizeLocale } from "@/lib/i18n";
 import { personName } from "@/lib/names";
@@ -96,34 +95,30 @@ export async function generateShareLink(
 }
 
 /**
- * Assembles the recording of a conversation that ended before it was wrapped
- * up, from the chunks its live checkpoints managed to upload.
+ * Picks a conversation that ended before it was wrapped up back up, at the
+ * interview link it was recorded on. The transcript its live checkpoints saved
+ * is handed to the AI host, and the new recording is appended to the old one.
  *
  * Access is enforced the same way as sharing: the session is read through the
  * caller's RLS-scoped client first, so this only ever runs on a conversation
- * their family owns.
+ * their family owns. That read is also what keeps a *live* interview safe —
+ * the policy only exposes one whose checkpoints have gone stale, so this
+ * cannot walk in on a conversation already in progress.
  */
-export async function finishSavingConversation(sessionId: string) {
+export async function resumeConversation(sessionId: string) {
   const { supabase } = await requireUser();
 
   const { data: session } = await supabase
     .from("sessions")
-    .select("id, duration_ms")
+    .select("token")
     .eq("id", sessionId)
     .eq("status", "recording")
     .single();
-  if (!session) return { ok: false as const };
-
-  const admin = createSupabaseAdminClient();
-  const { error } = await finalizeSessionAudio(admin, session);
-  if (error) {
-    console.error("Could not finish saving a conversation:", error);
-    return { ok: false as const };
+  if (!session) {
+    throw new Error("This conversation can no longer be continued.");
   }
 
-  revalidatePath("/family");
-  revalidatePath(`/family/${sessionId}`);
-  return { ok: true as const };
+  redirect(`/interview/${session.token}`);
 }
 
 /**

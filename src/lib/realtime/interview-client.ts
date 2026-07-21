@@ -14,6 +14,20 @@ export type InterviewPhase =
   | "done"
   | "error";
 
+/**
+ * A conversation being picked back up: everything said in the earlier
+ * sitting(s), and how long they ran for.
+ */
+export type InterviewResume = {
+  turns: TurnDraft[];
+  /**
+   * Where this sitting sits on the conversation's timeline. The new audio is
+   * appended to the earlier recording, so every timestamp from here on is
+   * measured from the very beginning of the conversation.
+   */
+  offsetMs: number;
+};
+
 export type InterviewCallbacks = {
   onPhase: (phase: InterviewPhase, detail?: string) => void;
   /** All completed turns so far, sorted by start time. */
@@ -47,8 +61,10 @@ const PART_UPLOAD_RETRIES = 3;
 // fixed timer: turns land every 10-30s, so a timer would mostly send nothing.
 const CHECKPOINT_DEBOUNCE_MS = 2_000;
 // Heartbeat in between, so an abandoned session is distinguishable from a
-// live one by how stale its last checkpoint is.
-const CHECKPOINT_HEARTBEAT_MS = 30_000;
+// live one by how stale its last checkpoint is. Matched to the chunk interval
+// because the duration it carries is where a resumed sitting picks up the
+// timeline: a staler heartbeat means a wronger offset.
+const CHECKPOINT_HEARTBEAT_MS = PART_INTERVAL_MS;
 
 const KRISP_SDK_URL = "/krisp/krispsdk.mjs";
 const KRISP_MODEL_BVC_URL = "/krisp/models/model_bvc.kef";
@@ -125,6 +141,15 @@ export class InterviewClient {
   private flushOnHide: (() => void) | null = null;
 
   private turns: TurnDraft[] = [];
+  /**
+   * How much conversation happened before this sitting. Taken from the last
+   * checkpoint of the earlier one, so it can trail the true length of that
+   * audio by up to a heartbeat plus the chunk that never made it up (~10-40s).
+   * That shifts this sitting's timestamps uniformly, which only shows up in
+   * admin cut-editing; measuring it exactly would mean stitching the earlier
+   * recording before the guest is allowed to speak.
+   */
+  private offsetMs = 0;
   private guestTimings = new Map<string, { start: number; end?: number }>();
   private pendingAi = new Map<string, PendingAi>();
   private rafId: number | null = null;
@@ -132,15 +157,23 @@ export class InterviewClient {
   private wrapUpRequested = false;
   private wrapUpStopTimer: number | null = null;
 
-  constructor(token: string, callbacks: InterviewCallbacks) {
+  constructor(
+    token: string,
+    callbacks: InterviewCallbacks,
+    resume?: InterviewResume
+  ) {
     this.token = token;
     this.cb = callbacks;
+    this.turns = resume ? [...resume.turns] : [];
+    this.offsetMs = resume?.offsetMs ?? 0;
   }
 
-  /** ms since recording started */
+  /** ms since the conversation started, earlier sittings included */
   private now(): number {
-    if (this.recStartPerf === null) return 0;
-    return (this.recStopPerf ?? performance.now()) - this.recStartPerf;
+    if (this.recStartPerf === null) return this.offsetMs;
+    return (
+      this.offsetMs + (this.recStopPerf ?? performance.now()) - this.recStartPerf
+    );
   }
 
   async start() {
@@ -651,7 +684,9 @@ export class InterviewClient {
   /**
    * Saves the transcript so far. Turns are re-sent whole (the sort in
    * `pushTurn` can renumber earlier ones), but only when the count changed —
-   * otherwise this is a bare heartbeat.
+   * otherwise this is a bare heartbeat. Never sends an empty transcript: on a
+   * conversation nobody has spoken in yet there is nothing to save, and the
+   * count only ever grows from here.
    */
   private async checkpoint() {
     if (this.checkpointInFlight) return;
@@ -661,7 +696,7 @@ export class InterviewClient {
       const res = await fetch(`/api/sessions/${this.token}/checkpoint`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: this.checkpointBody(count > this.savedTurnCount),
+        body: this.checkpointBody(count > 0 && count > this.savedTurnCount),
       });
       if (res.ok) this.savedTurnCount = count;
     } catch (err) {

@@ -15,6 +15,12 @@ export const EPISODES_BUCKET = "episodes";
 // sessions RLS policy in migration 004 — change both together.
 export const ABANDONED_AFTER_MS = 2 * 60 * 1000;
 
+// How long an unfinished conversation from the public /interview flow is kept
+// before it is trashed. Its guest belongs to no family and no account, so
+// nothing will ever surface it — but a day's grace means someone who walks
+// away mid-conversation can still reopen their link and pick it back up.
+export const ANON_RETENTION_MS = 24 * 60 * 60 * 1000;
+
 // Padding applied around kept transcript turns when rendering the edited cut,
 // to absorb timestamp imprecision from the live event stream.
 export const CUT_PADDING_MS = 250;
