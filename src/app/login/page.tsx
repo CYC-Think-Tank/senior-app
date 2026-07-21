@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       const result = await signInWithEmail(email);
       if (result.ok) {
-        router.replace("/admin");
+        router.replace(result.redirectTo);
         router.refresh();
       } else {
         setError(result.error);

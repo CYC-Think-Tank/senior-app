@@ -7,13 +7,28 @@ import { useI18n } from "@/components/i18n-provider";
 
 const SPEEDS = [1, 1.25, 1.5, 2];
 
-export function AudioPlayer({ src }: { src: string }) {
+export function AudioPlayer({
+  src,
+  durationMs,
+}: {
+  src: string;
+  durationMs?: number | null;
+}) {
   const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [mediaDuration, setMediaDuration] = useState(0);
   const [speedIdx, setSpeedIdx] = useState(0);
+
+  // MediaRecorder WebM reports duration as Infinity until it has been seeked
+  // to the end, so fall back to the length recorded in the database.
+  const fallback = durationMs && durationMs > 0 ? durationMs / 1000 : 0;
+  const duration = mediaDuration || fallback;
+
+  function readDuration(el: HTMLAudioElement) {
+    setMediaDuration(Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0);
+  }
 
   function toggle() {
     const el = audioRef.current;
@@ -25,10 +40,8 @@ export function AudioPlayer({ src }: { src: string }) {
   function skip(seconds: number) {
     const el = audioRef.current;
     if (!el) return;
-    el.currentTime = Math.max(
-      0,
-      Math.min(el.duration || Infinity, el.currentTime + seconds)
-    );
+    const limit = duration || Infinity;
+    el.currentTime = Math.max(0, Math.min(limit, el.currentTime + seconds));
   }
 
   function cycleSpeed() {
@@ -44,9 +57,14 @@ export function AudioPlayer({ src }: { src: string }) {
         src={src}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          // The stored length rarely matches the media exactly; fill the bar.
+          if (duration) setCurrent(duration);
+        }}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onLoadedMetadata={(e) => readDuration(e.currentTarget)}
+        onDurationChange={(e) => readDuration(e.currentTarget)}
       />
       <div className="flex items-center gap-4">
         <button
@@ -79,8 +97,10 @@ export function AudioPlayer({ src }: { src: string }) {
             type="range"
             min={0}
             max={duration || 0}
-            step={1}
-            value={current}
+            // Integer steps can't reach a fractional max, which leaves the
+            // thumb short of the end when playback finishes.
+            step="any"
+            value={duration ? Math.min(current, duration) : 0}
             onChange={(e) => {
               const t = Number(e.target.value);
               if (audioRef.current) audioRef.current.currentTime = t;

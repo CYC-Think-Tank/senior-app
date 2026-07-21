@@ -17,7 +17,7 @@ export async function requireAdmin() {
     .select("role")
     .eq("id", user.id)
     .single();
-  if (profile?.role !== "admin") redirect("/feed");
+  if (profile?.role !== "admin") redirect("/family");
 
   return { supabase, user };
 }

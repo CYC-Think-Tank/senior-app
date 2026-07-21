@@ -31,6 +31,6 @@ export async function GET(request: NextRequest) {
     .single();
 
   return NextResponse.redirect(
-    `${origin}${profile?.role === "admin" ? "/admin" : "/feed"}`
+    `${origin}${profile?.role === "admin" ? "/admin" : "/family"}`
   );
 }

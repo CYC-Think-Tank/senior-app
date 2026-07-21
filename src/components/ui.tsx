@@ -92,6 +92,8 @@ export function formatDuration(ms: number | null | undefined) {
 }
 
 export function formatTimestamp(ms: number) {
+  // Streamed WebM reports a non-finite duration until it's fully seeked.
+  if (!Number.isFinite(ms) || ms <= 0) return "0:00";
   const totalSec = Math.floor(ms / 1000);
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;

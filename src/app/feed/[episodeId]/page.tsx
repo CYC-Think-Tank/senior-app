@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Monogram, formatDuration } from "@/components/ui";
@@ -16,20 +15,20 @@ export default async function EpisodePlayerPage({
   params: Promise<{ episodeId: string }>;
 }) {
   const { episodeId } = await params;
-  const { supabase } = await requireUser();
 
-  // Fetched with the user's client so RLS decides visibility; only then do
-  // we sign the audio URL with the service role.
-  const { data: episode } = await supabase
+  // Public page: only released episodes are visible. The status/publish_at
+  // filter is the gate (no login), then the service role signs the audio URL.
+  const admin = createSupabaseAdminClient();
+  const { data: episode } = await admin
     .from("episodes")
     .select("*, guests(name)")
     .eq("id", episodeId)
+    .in("status", ["approved", "published"])
+    .lte("publish_at", new Date().toISOString())
     .single();
   if (!episode) notFound();
 
   const e = episode as unknown as Episode & { guests: { name: string } };
-
-  const admin = createSupabaseAdminClient();
   const { data: signed } = await admin.storage
     .from(EPISODES_BUCKET)
     .createSignedUrl(e.audio_path, 60 * 60 * 6);
@@ -71,7 +70,7 @@ export default async function EpisodePlayerPage({
       </div>
 
       {signed?.signedUrl ? (
-        <AudioPlayer src={signed.signedUrl} />
+        <AudioPlayer src={signed.signedUrl} durationMs={e.duration_ms} />
       ) : (
         <Card className="p-6 text-ink-soft">
           The audio isn&apos;t available right now.

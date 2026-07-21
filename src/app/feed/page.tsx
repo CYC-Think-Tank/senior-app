@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { Play } from "lucide-react";
-import { requireUser } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import type { Episode, Guest } from "@/lib/types";
@@ -9,20 +9,27 @@ import type { Episode, Guest } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
-  const { supabase } = await requireUser();
   const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
 
-  const [{ data: guests }, { data: episodes }] = await Promise.all([
-    supabase.from("guests").select("*").order("name"),
-    supabase
-      .from("episodes")
-      .select("*, guests(name)")
-      .in("status", ["approved", "published"])
-      .lte("publish_at", new Date().toISOString())
-      .order("publish_at", { ascending: false }),
-  ]);
+  // Public feed: only released (approved/published, past publish_at) episodes,
+  // across every storyteller. Served via the service role so no login is needed.
+  const admin = createSupabaseAdminClient();
+  const { data: episodes } = await admin
+    .from("episodes")
+    .select("*, guests(name)")
+    .in("status", ["approved", "published"])
+    .lte("publish_at", new Date().toISOString())
+    .order("publish_at", { ascending: false });
+
+  const guests = Array.from(
+    new Map(
+      ((episodes ?? []) as unknown as (Episode & { guests: { name: string } })[]).map(
+        (e) => [e.guests.name, { name: e.guests.name } as Guest]
+      )
+    ).values()
+  );
 
   type EpisodeRow = Episode & { guests: { name: string } };
   const rows = (episodes ?? []) as unknown as EpisodeRow[];
