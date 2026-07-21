@@ -3,6 +3,7 @@
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RAW_BUCKET } from "@/lib/constants";
 import type { TurnDraft } from "@/lib/types";
+import type { DenoiseState } from "@shiguredo/rnnoise-wasm";
 
 export type InterviewPhase =
   | "idle"
@@ -20,8 +21,8 @@ export type InterviewCallbacks = {
   /** Streaming text of the AI's in-progress reply ("" when none). */
   onLiveAiText: (text: string) => void;
   onAiSpeaking: (speaking: boolean) => void;
-  /** ~60fps: mic input level (0..1) and elapsed recording ms. */
-  onMeter: (level: number, elapsedMs: number) => void;
+  /** ~60fps: mic input level (0..1), elapsed recording ms, and RNNoise VAD. */
+  onMeter: (level: number, elapsedMs: number, voiceActivity?: number) => void;
 };
 
 // Wall-clock corrections for the realtime session's semantic VAD: events lag
@@ -85,6 +86,7 @@ export class InterviewClient {
   private processedMicStream: MediaStream | null = null;
   private audioCtx: AudioContext | null = null;
   private meterAnalyser: AnalyserNode | null = null;
+  private rnnoiseState: DenoiseState | null = null;
   private krispSdk: KrispSdkInstance | null = null;
   private krispFilterNode: KrispFilterNode | null = null;
   private remoteAudioEl: HTMLAudioElement | null = null;
@@ -100,6 +102,8 @@ export class InterviewClient {
   private pendingAi = new Map<string, PendingAi>();
   private rafId: number | null = null;
   private stopped = false;
+  private wrapUpRequested = false;
+  private wrapUpStopTimer: number | null = null;
 
   constructor(token: string, callbacks: InterviewCallbacks) {
     this.token = token;
@@ -145,7 +149,9 @@ export class InterviewClient {
       const { clientSecret } = await res.json();
 
       // Mix mic + AI into one stream for recording.
-      this.audioCtx = new AudioContext();
+      // RNNoise processes 10ms frames at 48kHz, so keep the analyser source
+      // in the model's native sample rate where the browser supports it.
+      this.audioCtx = new AudioContext({ sampleRate: 48_000 });
       await this.audioCtx.resume();
       const recordingDest = this.audioCtx.createMediaStreamDestination();
       const micSource = this.audioCtx.createMediaStreamSource(this.micStream);
@@ -260,25 +266,58 @@ export class InterviewClient {
     this.recStartPerf = performance.now();
   }
 
-  private startMeter() {
-    const meterData = new Uint8Array(this.meterAnalyser!.fftSize);
+  private async startMeter() {
+    let rnnoiseFrameSize = 480;
+    try {
+      const { Rnnoise } = await import("@shiguredo/rnnoise-wasm");
+      const rnnoise = await Rnnoise.load();
+      if (this.stopped || !this.meterAnalyser) {
+        return;
+      }
+      this.rnnoiseState = rnnoise.createDenoiseState();
+      rnnoiseFrameSize = rnnoise.frameSize;
+    } catch (error) {
+      console.info("RNNoise VAD unavailable; using the browser mic meter.", error);
+    }
+
+    const meterData = new Float32Array(this.meterAnalyser!.fftSize);
+    const rnnoiseFrame = new Float32Array(rnnoiseFrameSize);
+    let lastVoiceActivity = 0;
+    let lastProcessedAt = 0;
     const tick = () => {
       if (!this.meterAnalyser || this.stopped) {
         return;
       }
 
-      this.meterAnalyser.getByteTimeDomainData(meterData);
+      this.meterAnalyser.getFloatTimeDomainData(meterData);
       const rms = this.calculateRms(meterData);
-      this.cb.onMeter(Math.min(1, rms * 4), this.now());
+      const level = Math.min(1, rms * 4);
+      const now = performance.now();
+
+      // RNNoise expects one 10ms, 48kHz mono frame in 16-bit PCM units.
+      // The returned value is a voice-activity probability from 0 to 1.
+      if (this.rnnoiseState && now - lastProcessedAt >= 20) {
+        for (let i = 0; i < rnnoiseFrame.length; i++) {
+          rnnoiseFrame[i] = meterData[i] * 32768;
+        }
+        lastVoiceActivity = this.rnnoiseState.processFrame(rnnoiseFrame);
+        lastProcessedAt = now;
+      }
+
+      this.cb.onMeter(
+        level,
+        this.now(),
+        this.rnnoiseState ? lastVoiceActivity : undefined
+      );
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
   }
 
-  private calculateRms(data: Uint8Array): number {
+  private calculateRms(data: Float32Array): number {
     let sum = 0;
     for (let i = 0; i < data.length; i++) {
-      const v = (data[i] - 128) / 128;
+      const v = data[i];
       sum += v * v;
     }
     return Math.sqrt(sum / data.length);
@@ -316,7 +355,7 @@ export class InterviewClient {
   }): Promise<MediaStream> {
     const processedMicDest = this.audioCtx!.createMediaStreamDestination();
     this.meterAnalyser = this.audioCtx!.createAnalyser();
-    this.meterAnalyser.fftSize = 256;
+    this.meterAnalyser.fftSize = 512;
 
     if (!KrispSDK || !this.micStream) {
       micSource.connect(processedMicDest);
@@ -409,6 +448,11 @@ export class InterviewClient {
         const end = t?.end ?? this.now();
         const start = t?.start ?? Math.max(0, end - 3000);
         this.pushTurn({ speaker: "guest", text, startMs: start, endMs: end });
+        if (this.wrapUpRequested) {
+          this.wrapUpStopTimer = window.setTimeout(() => {
+            void this.stop();
+          }, 500);
+        }
         break;
       }
       case "output_audio_buffer.started": {
@@ -423,6 +467,11 @@ export class InterviewClient {
         p.end = this.now();
         this.cb.onAiSpeaking(false);
         this.tryFinalizeAi(e.response_id as string);
+        if (this.wrapUpRequested) {
+          // The audio has finished playing; end without waiting for another
+          // user turn. Keep a short buffer so the final phonemes are audible.
+          this.scheduleWrapUpStop(750);
+        }
         break;
       }
       // GA event name, with the beta name kept as a fallback.
@@ -439,6 +488,16 @@ export class InterviewClient {
         const transcript = ((e.transcript as string) ?? "").trim();
         p.text = p.text ? `${p.text} ${transcript}` : transcript;
         this.tryFinalizeAi(e.response_id as string);
+        break;
+      }
+      case "response.output_audio.done":
+      case "response.audio.done":
+      case "response.done": {
+        if (this.wrapUpRequested) {
+          // Fallback for transports/models that do not emit the output buffer
+          // lifecycle event used above.
+          this.scheduleWrapUpStop(1500);
+        }
         break;
       }
       case "error": {
@@ -476,8 +535,10 @@ export class InterviewClient {
     this.cb.onTurns([...this.turns]);
   }
 
-  /** Ask the AI to deliver its warm closing; the user ends after it finishes. */
+  /** Ask the AI to deliver its warm closing, then end the interview. */
   requestWrapUp() {
+    if (this.stopped || this.wrapUpRequested) return;
+    this.wrapUpRequested = true;
     this.dc?.send(
       JSON.stringify({
         type: "response.create",
@@ -492,6 +553,7 @@ export class InterviewClient {
   /** Stop the interview, upload the recording, and finalize the session. */
   async stop() {
     if (this.stopped) return;
+    this.clearWrapUpStopTimer();
     this.stopped = true;
     this.cb.onPhase("uploading");
     this.cb.onAiSpeaking(false);
@@ -552,6 +614,7 @@ export class InterviewClient {
   }
 
   private cleanup() {
+    this.clearWrapUpStopTimer();
     this.dc?.close();
     this.pc?.close();
     this.krispFilterNode?.dispose?.();
@@ -566,7 +629,23 @@ export class InterviewClient {
     this.processedMicStream = null;
     this.audioCtx = null;
     this.meterAnalyser = null;
+    this.rnnoiseState?.destroy();
+    this.rnnoiseState = null;
     this.krispFilterNode = null;
     this.krispSdk = null;
+  }
+
+  private clearWrapUpStopTimer() {
+    if (this.wrapUpStopTimer !== null) {
+      window.clearTimeout(this.wrapUpStopTimer);
+      this.wrapUpStopTimer = null;
+    }
+  }
+
+  private scheduleWrapUpStop(delayMs: number) {
+    this.clearWrapUpStopTimer();
+    this.wrapUpStopTimer = window.setTimeout(() => {
+      void this.stop();
+    }, delayMs);
   }
 }

@@ -59,12 +59,12 @@ export async function POST(request: NextRequest) {
         audio: {
           input: {
             transcription: { model: "gpt-4o-transcribe" },
-            // Semantic VAD understands when a thought is finished rather than
-            // counting silence; low eagerness gives seniors room to pause
-            // mid-story without being interrupted.
+            // Semantic VAD understands when a thought is finished while still
+            // allowing natural pauses. Medium eagerness closes the turn after
+            // a reasonable silence instead of leaving Rosie waiting forever.
             turn_detection: {
               type: "semantic_vad",
-              eagerness: "low",
+              eagerness: "medium",
             },
           },
           output: { voice: REALTIME_VOICE },

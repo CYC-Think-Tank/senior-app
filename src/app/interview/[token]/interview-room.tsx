@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Mic, PhoneOff, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Mic, Sparkles } from "lucide-react";
 import Link from "next/link";
 import {
   InterviewClient,
@@ -36,22 +43,62 @@ export default function InterviewRoom({
   const [turns, setTurns] = useState<TurnDraft[]>([]);
   const [liveAiText, setLiveAiText] = useState("");
   const [aiSpeaking, setAiSpeaking] = useState(false);
+  const [greetingStarted, setGreetingStarted] = useState(false);
+  const [userSpeaking, setUserSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const clientRef = useRef<InterviewClient | null>(null);
+  const micLevelRef = useRef(0);
+  const userSpeakingRef = useRef(false);
+  const userSpeakingTimeoutRef = useRef<number | null>(null);
 
   const begin = useCallback(() => {
     setErrorDetail(null);
+    setGreetingStarted(false);
+    document.documentElement.dataset.interviewLive = "true";
     const client = new InterviewClient(token, {
       onPhase: (p, detail) => {
         setPhase(p);
         if (detail) setErrorDetail(detail);
       },
-      onTurns: setTurns,
-      onLiveAiText: setLiveAiText,
-      onAiSpeaking: setAiSpeaking,
-      onMeter: (_, elapsed) => {
+      onTurns: (nextTurns) => {
+        setTurns(nextTurns);
+        if (nextTurns.some((turn) => turn.speaker === "ai")) {
+          setGreetingStarted(true);
+        }
+      },
+      onLiveAiText: (text) => {
+        setLiveAiText(text);
+        if (text) setGreetingStarted(true);
+      },
+      onAiSpeaking: (speaking) => {
+        setAiSpeaking(speaking);
+        if (speaking) setGreetingStarted(true);
+      },
+      onMeter: (level, elapsed, voiceActivity) => {
+        micLevelRef.current = level;
         setElapsedMs(elapsed);
+        const isSpeaking =
+          voiceActivity === undefined ? level > 0.06 : voiceActivity > 0.5;
+        if (isSpeaking) {
+          if (userSpeakingTimeoutRef.current !== null) {
+            window.clearTimeout(userSpeakingTimeoutRef.current);
+            userSpeakingTimeoutRef.current = null;
+          }
+          if (!userSpeakingRef.current) {
+            userSpeakingRef.current = true;
+            setUserSpeaking(true);
+          }
+        } else if (
+          userSpeakingRef.current &&
+          userSpeakingTimeoutRef.current === null
+        ) {
+          userSpeakingTimeoutRef.current = window.setTimeout(() => {
+            userSpeakingRef.current = false;
+            userSpeakingTimeoutRef.current = null;
+            setUserSpeaking(false);
+          }, 180);
+        }
       },
     });
     clientRef.current = client;
@@ -61,6 +108,9 @@ export default function InterviewRoom({
   useEffect(() => {
     return () => {
       clientRef.current = null;
+      if (userSpeakingTimeoutRef.current !== null) {
+        window.clearTimeout(userSpeakingTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -75,6 +125,21 @@ export default function InterviewRoom({
 
     return () => window.clearTimeout(timeout);
   }, [alreadyRecorded]);
+
+  useEffect(() => {
+    const shouldDim =
+      phase !== "idle" && phase !== "done" && phase !== "error";
+
+    if (shouldDim) {
+      document.documentElement.dataset.interviewLive = "true";
+    } else {
+      document.documentElement.removeAttribute("data-interview-live");
+    }
+
+    return () => {
+      document.documentElement.removeAttribute("data-interview-live");
+    };
+  }, [phase]);
 
   const lastGuestTurn = [...turns].reverse().find((t) => t.speaker === "guest");
   const lastAiTurn = [...turns].reverse().find((t) => t.speaker === "ai");
@@ -133,11 +198,13 @@ export default function InterviewRoom({
               </button>
             </IntroScreen>
           )}
-        </AnimatePresence>
-
         {(phase === "mic" || phase === "connecting") && (
           <Screen key="connecting">
-            <BreathingCircle aiSpeaking={false} />
+            <BreathingCircle
+              aiSpeaking={false}
+              userSpeaking={false}
+              levelRef={micLevelRef}
+            />
             <h1 className={`${theme.heading} mt-10 text-3xl sm:text-4xl`}>
               {phase === "mic"
                 ? t("interviewAllowMic")
@@ -152,19 +219,34 @@ export default function InterviewRoom({
         {phase === "live" && (
           <Screen key="live">
             <div className={theme.statusLine}>
-              <span className={`${theme.recordingDot} animate-pulse`} />
-              {t("interviewRecording")} · {formatTimestamp(elapsedMs)}
+              {formatTimestamp(elapsedMs)}
             </div>
 
             <div className="my-10">
-              <BreathingCircle aiSpeaking={aiSpeaking} />
+              <BreathingCircle
+                aiSpeaking={aiSpeaking}
+                // When Rosie is quiet, the guest owns the turn—even during
+                // the short pause before RNNoise has classified new speech.
+                userSpeaking={!aiSpeaking}
+                levelRef={micLevelRef}
+              />
             </div>
 
             <p className={theme.liveLabel}>
               {aiSpeaking ? t("interviewAiSpeaking") : t("interviewListening")}
             </p>
 
-            <RotatingCaption text={captionText} speaking={aiSpeaking} />
+            <AnimatePresence initial={false} mode="wait">
+              {!greetingStarted ? (
+                <GreetingSkeleton key="greeting-skeleton" />
+              ) : !userSpeaking ? (
+                <RotatingCaption
+                  key="caption"
+                  text={captionText}
+                  speaking={aiSpeaking}
+                />
+              ) : null}
+            </AnimatePresence>
 
             <div className={theme.actions}>
               <button
@@ -176,14 +258,7 @@ export default function InterviewRoom({
                 className={theme.secondaryAction}
               >
                 <Sparkles className="h-5 w-5" />
-                {wrappingUp ? t("interviewWrapBusy") : t("interviewWrap")}
-              </button>
-              <button
-                onClick={() => void clientRef.current?.stop()}
-                className={theme.primaryAction}
-              >
-                <PhoneOff className="h-5 w-5" />
-                {t("interviewEndSave")}
+                {t("interviewWrap")}
               </button>
             </div>
           </Screen>
@@ -217,8 +292,9 @@ export default function InterviewRoom({
               {t(isLoggedIn ? "interviewDone" : "interviewDoneAnonymous")}
             </p>
             {!isLoggedIn && (
-              <Link href="/login" className={theme.loginPrompt}>
+              <Link href="/login" className={`${theme.primaryAction} mt-6`}>
                 {t("interviewLogInToSave")}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             )}
           </Screen>
@@ -237,6 +313,7 @@ export default function InterviewRoom({
                 setShowWelcome(false);
                 setPhase("idle");
                 setTurns([]);
+                setGreetingStarted(false);
                 setWrappingUp(false);
               }}
               className={`${theme.retryButton} mx-auto mt-8`}
@@ -245,13 +322,44 @@ export default function InterviewRoom({
             </button>
           </Screen>
         )}
+        </AnimatePresence>
       </>
     </InterviewShell>
   );
 }
 
+function GreetingSkeleton() {
+  return (
+    <motion.div
+      className={theme.greetingSkeleton}
+      role="status"
+      aria-label="Rosie is preparing her greeting."
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+    >
+      <span className={theme.skeletonLine} aria-hidden="true" />
+      <span
+        className={`${theme.skeletonLine} ${theme.skeletonLineShort}`}
+        aria-hidden="true"
+      />
+    </motion.div>
+  );
+}
+
 function Screen({ children }: { children: React.ReactNode }) {
-  return <div className={theme.screen}>{children}</div>;
+  return (
+    <motion.div
+      className={theme.screen}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.65, ease: [0.45, 0, 0.55, 1] }}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 function IntroScreen({
@@ -305,10 +413,10 @@ function GreetingText({ guestName }: { guestName: string }) {
 // the caption paces itself: text is wrapped to the lines that actually fit the
 // container, and a window of them rotates forward with the estimated spoken
 // position instead of dumping the whole reply at once.
-const CAPTION_LINES = 3;
+const CAPTION_LINES = 2;
 const CAPTION_CHARS_PER_SECOND = 15.5; // ~150 wpm TTS incl. spaces; tune by ear
 const CAPTION_TICK_MS = 250;
-const CAPTION_HEIGHT_REM = CAPTION_LINES * 1 * 1.65;
+const CAPTION_HEIGHT_REM = CAPTION_LINES * 1.5 * 1.45;
 
 let measureCtx: CanvasRenderingContext2D | null = null;
 
@@ -411,37 +519,123 @@ function RotatingCaption({
   const visible = lines.slice(start, bottom + 1);
 
   return (
-    <div
+    <motion.div
       ref={containerRef}
       className={`${theme.caption} mx-auto mt-6 max-w-2xl overflow-hidden`}
       style={{ height: `${CAPTION_HEIGHT_REM}rem` }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.25, ease: [0.45, 0, 0.55, 1] }}
     >
-      {visible.map((line, i) => (
-        <motion.p
-          key={start + i}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        >
-          {line}
-        </motion.p>
-      ))}
-    </div>
+      {visible.map((line, i) => {
+        const words = line.split(" ");
+        return (
+          <motion.p
+            key={start + i}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            {words.map((word, wordIndex) => (
+              <Fragment key={`${start + i}-${wordIndex}-${word}`}>
+                <motion.span
+                  className={theme.captionWord}
+                  initial={{ opacity: 0, y: 5, filter: "blur(4px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{
+                    duration: 0.5,
+                    delay: Math.min(wordIndex, 14) * 0.08,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                >
+                  {word}
+                </motion.span>
+                {wordIndex < words.length - 1 ? " " : null}
+              </Fragment>
+            ))}
+          </motion.p>
+        );
+      })}
+    </motion.div>
   );
 }
 
 /**
- * A soft breathing circle: swells with the guest's voice, glows ember while
- * the AI host is speaking.
+ * Rosie becomes a five-bar microphone visualizer while the guest is speaking.
  */
 function BreathingCircle({
   aiSpeaking,
+  userSpeaking,
+  levelRef,
 }: {
   aiSpeaking: boolean;
+  userSpeaking: boolean;
+  levelRef: React.RefObject<number>;
 }) {
   return (
     <div className={theme.orbStage}>
-      <div className={`${theme.orbCore} ${aiSpeaking ? theme.orbSpeaking : ""}`} />
+      <AnimatePresence initial={false} mode="wait">
+        {userSpeaking ? (
+          <MicVisualizer key="visualizer" levelRef={levelRef} />
+        ) : (
+          <motion.div
+            key="orb"
+            initial={{ opacity: 0, scale: 0.72 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scaleX: 0.3, scaleY: 1.12 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className={`${theme.orbCore} ${aiSpeaking ? theme.orbSpeaking : ""}`} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function MicVisualizer({ levelRef }: { levelRef: React.RefObject<number> }) {
+  const barsRef = useRef<Array<HTMLSpanElement | null>>([]);
+
+  useEffect(() => {
+    let frame = 0;
+    let smoothed = 0;
+    const factors = [0.55, 0.8, 1, 0.8, 0.55];
+
+    const tick = () => {
+      smoothed += ((levelRef.current ?? 0) - smoothed) * 0.22;
+      const strength = Math.min(1, smoothed * 3.2);
+      const now = performance.now();
+      barsRef.current.forEach((bar, index) => {
+        if (!bar) return;
+        const pulse = 0.78 + Math.sin(now / 125 + index * 0.8) * 0.22;
+        const scale = 0.2 + strength * factors[index] * pulse;
+        bar.style.transform = `scaleY(${scale})`;
+      });
+      frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [levelRef]);
+
+  return (
+    <motion.div
+      className={theme.micVisualizer}
+      initial={{ opacity: 0, scaleX: 0.35 }}
+      animate={{ opacity: 1, scaleX: 1 }}
+      exit={{ opacity: 0, scaleX: 0.35 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {Array.from({ length: 5 }, (_, index) => (
+        <span
+          key={index}
+          ref={(bar) => {
+            barsRef.current[index] = bar;
+          }}
+          className={theme.micBar}
+        />
+      ))}
+    </motion.div>
   );
 }
