@@ -1,6 +1,4 @@
-import { cookies } from "next/headers";
 import { requireAdmin } from "@/lib/auth";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
 import type { Guest, InterviewSession } from "@/lib/types";
 import {
   AdminDashboardView,
@@ -102,16 +100,25 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
 
 export default async function AdminDashboard() {
   const { supabase } = await requireAdmin();
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
-  const copy = copyByLocale[locale] ?? copyByLocale.en;
 
   const [{ data: guestRows }, { data: sessionRows }] = await Promise.all([
-    supabase.from("guests").select("*").order("created_at", { ascending: false }),
-    supabase.from("sessions").select("*").order("created_at", { ascending: false }),
+    supabase
+      .from("guests")
+      .select("id, name, language, user_id")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("sessions")
+      .select("guest_id, status, duration_ms, created_at")
+      .order("created_at", { ascending: false }),
   ]);
 
-  const guests = (guestRows ?? []) as Guest[];
-  const sessions = (sessionRows ?? []) as InterviewSession[];
+  type GuestRow = Pick<Guest, "id" | "name" | "language" | "user_id">;
+  type SessionRow = Pick<
+    InterviewSession,
+    "guest_id" | "status" | "duration_ms" | "created_at"
+  >;
+  const guests = (guestRows ?? []) as GuestRow[];
+  const sessions = (sessionRows ?? []) as SessionRow[];
   const today = dateKey(new Date());
   const finishedSessions = sessions.filter((session) => session.status === "ready");
   const durations = finishedSessions
@@ -128,12 +135,11 @@ export default async function AdminDashboard() {
     const key = dateKey(date);
     return {
       key,
-      label: new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(date),
       value: sessions.filter((session) => dateKey(new Date(session.created_at)) === key).length,
     };
   });
 
-  const sessionsByGuest = new Map<string, InterviewSession[]>();
+  const sessionsByGuest = new Map<string, SessionRow[]>();
   for (const session of sessions) {
     const existing = sessionsByGuest.get(session.guest_id) ?? [];
     existing.push(session);
@@ -154,8 +160,7 @@ export default async function AdminDashboard() {
 
   return (
     <AdminDashboardView
-      locale={locale}
-      copy={copy}
+      copies={copyByLocale}
       totalUsers={guests.length}
       recordingsToday={finishedSessions.filter(
         (session) => dateKey(new Date(session.created_at)) === today,

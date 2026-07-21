@@ -7,6 +7,7 @@ import {
 import { APP_NAME, TAGLINE } from "@/lib/constants";
 import { I18nProvider } from "@/components/i18n-provider";
 import { InterviewAtmosphere } from "@/components/interview-atmosphere";
+import { PageEntrance } from "@/components/page-entrance";
 import {
   localeCookieName,
   normalizeLocale,
@@ -81,7 +82,11 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <InterviewAtmosphere />
-        <I18nProvider locale={locale}>{children}</I18nProvider>
+        <I18nProvider locale={locale}>
+          <div data-language-page className="contents">
+            <PageEntrance>{children}</PageEntrance>
+          </div>
+        </I18nProvider>
       </body>
     </html>
   );

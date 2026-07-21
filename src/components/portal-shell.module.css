@@ -150,6 +150,7 @@
   min-width: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
 }
 
 .adminMain {
@@ -268,6 +269,24 @@
   background: #fff;
 }
 
+.sidebarPending {
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: sidebar-spin 600ms linear infinite;
+}
+
+@keyframes sidebar-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebarPending { animation: none; }
+}
+
 .surface {
   width: 100%;
   align-self: flex-start;
@@ -358,6 +377,25 @@
 
 .surface :global(.bg-cream) {
   background: rgb(255 250 241 / 0.07);
+}
+
+.surface :global(.portal-audio-player) {
+  background: rgb(65 22 13 / 0.3);
+  border-color: rgb(255 250 241 / 0.16);
+  backdrop-filter: blur(14px) saturate(1.05);
+}
+
+.surface :global(.portal-audio-player .bg-ember) {
+  color: #2f2018;
+  background: #fffaf1;
+}
+
+.surface :global(.portal-audio-player .bg-ember:hover) {
+  background: #fff;
+}
+
+.surface :global(.portal-audio-player input[type="range"]) {
+  accent-color: #fffaf1;
 }
 
 .surface :global(.bg-paper-deep),

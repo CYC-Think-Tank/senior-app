@@ -15,9 +15,9 @@
   filter: blur(0);
   transform: translateY(0);
   transition:
-    opacity 700ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-    filter 700ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-    transform 700ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay);
+    opacity 620ms var(--motion-ease) var(--reveal-delay),
+    filter 620ms var(--motion-ease) var(--reveal-delay),
+    transform 620ms var(--motion-ease) var(--reveal-delay);
 }
 
 @media (prefers-reduced-motion: reduce) {

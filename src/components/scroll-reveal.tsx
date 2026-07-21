@@ -27,41 +27,22 @@ export function ScrollReveal({
 
   useEffect(() => {
     const element = elementRef.current;
+    if (!element) return;
 
-    if (!element) {
-      return;
-    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        } else {
+          setIsVisible(false);
+        }
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.08 },
+    );
 
-    let intervalId: number | null = null;
-
-    const stopWatching = () => {
-      window.removeEventListener("scroll", checkPosition);
-      window.removeEventListener("resize", checkPosition);
-
-      if (intervalId !== null) {
-        window.clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
-
-    const checkPosition = () => {
-      const bounds = element.getBoundingClientRect();
-      const revealLine = window.innerHeight * 0.92;
-
-      if (bounds.top < revealLine && bounds.bottom > 0) {
-        setIsVisible(true);
-        stopWatching();
-      } else {
-        setIsVisible(false);
-      }
-    };
-
-    window.addEventListener("scroll", checkPosition, { passive: true });
-    window.addEventListener("resize", checkPosition);
-    intervalId = window.setInterval(checkPosition, 250);
-    checkPosition();
-
-    return stopWatching;
+    observer.observe(element);
+    return () => observer.disconnect();
   }, []);
 
   const revealStyle = {

@@ -48,6 +48,7 @@ export type PodcastParticipation = {
   user_id: string;
   session_id: string | null;
   source: "request" | "admin_invite";
+  request_kind: "existing_conversation" | "new_interview";
   status: PodcastParticipationStatus;
   created_at: string;
   updated_at: string;

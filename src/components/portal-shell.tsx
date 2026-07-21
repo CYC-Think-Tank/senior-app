@@ -10,7 +10,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
         className={styles.sky}
       />
       <div className={styles.atmosphere} aria-hidden="true" />
-      <div className={styles.frame}>{children}</div>
+      <div className={styles.frame} data-portal-frame>{children}</div>
     </div>
   );
 }

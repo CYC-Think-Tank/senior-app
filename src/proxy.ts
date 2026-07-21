@@ -37,7 +37,9 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
+  // Verify locally against the project's cached JWKS when asymmetric signing
+  // is enabled; this avoids an Auth server round trip on most navigations.
+  await supabase.auth.getClaims();
 
   return response;
 }

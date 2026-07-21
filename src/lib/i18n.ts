@@ -73,6 +73,45 @@ const en = {
   landingCardFamilyBody:
     "Episodes arrive on a private feed for invited family only — a growing archive of a life, told in their own voice.",
   landingFooter: "Fireside — private by design. Stories belong to the family.",
+  landingLogin: "Log in",
+  landingGetStarted: "Get started",
+  landingHeroLine: "Your stories are worth keeping",
+  landingHeroForever: "forever.",
+  landingStartConversation: "Start a conversation",
+  landingCompanionKicker: "Daily companionship",
+  landingCompanionTitleOne: "A warm hello,",
+  landingCompanionTitleTwo: "whenever it’s needed.",
+  landingCompanionBody:
+    "Loneliness fades when someone checks in. Fireside starts gentle conversations, listens with endless patience, and always has time for one more story.",
+  landingFeatureGentleTitle: "Gentle conversations",
+  landingFeatureGentleBody:
+    "Friendly questions that are easy to answer, at whatever pace feels right.",
+  landingFeatureMemoryTitle: "Company that remembers",
+  landingFeatureMemoryBody:
+    "A patient listener who recalls favorite topics and asks about them next time.",
+  landingFeaturePrivateTitle: "Private by default",
+  landingFeaturePrivateBody:
+    "Conversations stay in the family. Nothing is shared without a say-so.",
+  landingHowKicker: "How it works",
+  landingHowTitleOne: "From hello to heirloom,",
+  landingHowTitleTwo: "in three easy steps.",
+  landingStepTalkTitle: "Talk naturally",
+  landingStepTalkBody:
+    "The AI host asks gentle questions and lets the storyteller answer in their own voice.",
+  landingStepShapeTitle: "Shape the memory",
+  landingStepShapeBody:
+    "Each conversation becomes a polished private episode, ready for review before anyone else hears it.",
+  landingStepKeepTitle: "Keep it close",
+  landingStepKeepBody:
+    "Family listens through a private feed, building an archive of a life told first-hand.",
+  landingCtaTitle: "Pull up a chair.",
+  landingCtaBody:
+    "The kettle’s on and someone is ready to listen. Start the first conversation tonight.",
+  landingFooterNote: "Every life is worth the telling.",
+  landingWelcomeAria: "Welcome",
+  landingHomeAria: "Fireside home",
+  landingAccountAria: "Account",
+  landingStartAria: "Start a conversation with the AI",
   loginSubtitle: "Sign in to listen to your family's stories.",
   loginEmailLabel: "Email address",
   loginEmailPlaceholder: "you@example.com",
@@ -219,6 +258,44 @@ const zhHans: typeof en = {
   landingCardFamilyBody:
     "节目会出现在仅受邀家人可见的私密订阅中，慢慢累积成一生故事的声音档案。",
   landingFooter: "Fireside — 为私密而设计。故事属于家人。",
+  landingLogin: "登录",
+  landingGetStarted: "开始体验",
+  landingHeroLine: "你的故事，值得",
+  landingHeroForever: "永远珍藏。",
+  landingStartConversation: "开始对话",
+  landingCompanionKicker: "日常陪伴",
+  landingCompanionTitleOne: "一声温暖的问候，",
+  landingCompanionTitleTwo: "在需要的时候到来。",
+  landingCompanionBody:
+    "有人问候时，孤独便会慢慢淡去。Fireside 用温和的对话陪伴，耐心倾听，并始终愿意再听一个故事。",
+  landingFeatureGentleTitle: "温和的对话",
+  landingFeatureGentleBody: "轻松友好的问题，按最舒适的节奏回答就好。",
+  landingFeatureMemoryTitle: "记得你的陪伴",
+  landingFeatureMemoryBody:
+    "耐心的倾听者会记住喜欢的话题，并在下次继续聊起。",
+  landingFeaturePrivateTitle: "默认私密",
+  landingFeaturePrivateBody:
+    "对话只留在家人之间。未经同意，绝不会分享。",
+  landingHowKicker: "如何运作",
+  landingHowTitleOne: "从一句问候，",
+  landingHowTitleTwo: "到一份传家记忆。",
+  landingStepTalkTitle: "自然地聊",
+  landingStepTalkBody:
+    "AI 主持人会温和地提问，让讲述者用自己的声音自在回答。",
+  landingStepShapeTitle: "整理回忆",
+  landingStepShapeBody:
+    "每次对话都会成为精心整理的私密节目，并在分享前交由讲述者确认。",
+  landingStepKeepTitle: "珍藏在身边",
+  landingStepKeepBody:
+    "家人通过私密订阅收听，一点点珍藏由本人讲述的一生。",
+  landingCtaTitle: "坐下来聊聊吧。",
+  landingCtaBody:
+    "水已经烧开，也有人准备好倾听。今晚，就开始第一场对话。",
+  landingFooterNote: "每段人生，都值得被讲述。",
+  landingWelcomeAria: "欢迎",
+  landingHomeAria: "Fireside 首页",
+  landingAccountAria: "账户",
+  landingStartAria: "开始与 AI 对话",
   loginSubtitle: "登录以收听家人的故事。",
   loginEmailLabel: "电子邮箱",
   loginEmailPlaceholder: "you@example.com",

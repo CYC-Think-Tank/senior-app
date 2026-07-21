@@ -1,136 +1,62 @@
-import { cookies, headers } from "next/headers";
-import { Mic } from "lucide-react";
-import { requireUser } from "@/lib/auth";
-import { startMyConversation } from "@/app/family/actions";
-import { Card, formatDuration } from "@/components/ui";
-import { ConversationRow } from "@/components/conversation-row";
-import { portalStyles } from "@/components/portal-shell";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
-import { conversationNames } from "@/lib/names";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { InterviewSession } from "@/lib/types";
-import { PodcastInvitation } from "./podcast-invitation";
+import Link from "next/link";
+import { ArrowRight, Mic } from "lucide-react";
+import { cookies } from "next/headers";
+import { startMyConversation } from "./actions";
+import { ConversationList } from "./conversation-list";
+import { getFamilyConversations } from "./family-data";
+import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import styles from "./senior-dashboard.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function FamilyPage() {
-  const { supabase, user } = await requireUser();
-  const admin = createSupabaseAdminClient();
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
-  const t = (key: Parameters<typeof translate>[1], values = {}) =>
-    translate(locale, key, values);
-
-  // Absolute origin for building shareable links, derived from the request.
-  const h = await headers();
-  const host = h.get("x-forwarded-host")?.split(",")[0]?.trim() || h.get("host");
-  const proto =
-    h.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
-    (host?.startsWith("localhost") ? "http" : "https");
-  const origin = host ? `${proto}://${host}` : "";
-
-  // RLS limits this to finished conversations of the family's storyteller(s).
-  const [{ data: sessions }, { data: participation }] = await Promise.all([
-    supabase
-      .from("sessions")
-      .select("*, guests(name)")
-      .eq("status", "ready")
-      .order("created_at", { ascending: false }),
-    admin
-      .from("podcast_participation")
-      .select("status, sessions(token)")
-      .eq("user_id", user.id)
-      .maybeSingle(),
+  const [{ conversations, origin }, cookieStore] = await Promise.all([
+    getFamilyConversations(),
+    cookies(),
   ]);
-
-  type SessionRow = InterviewSession & { guests: { name: string } };
-  const rows = (sessions ?? []) as unknown as SessionRow[];
-  const names = conversationNames(rows, (number) =>
-    t("familyConversationNumbered", { number })
-  );
-  const participationSession = participation?.sessions as unknown as { token: string } | null;
-  const podcastCopy = locale === "en" ? {
-    title: "The public Fireside podcast",
-    body: "Share your story with the wider Fireside community.",
-    request: "Request to join",
-    requested: "Request sent",
-    invitedTitle: "You’ve been invited to the podcast.",
-    invitedBody: "Your interview link is ready. Accept the invitation whenever you feel comfortable beginning.",
-    start: "Accept and start",
-    later: "Maybe later",
-    continue: "Continue interview",
-    complete: "Interview complete",
-  } : {
-    title: "Fireside 公开播客",
-    body: "与更广泛的 Fireside 社区分享您的故事。",
-    request: "申请参加",
-    requested: "申请已发送",
-    invitedTitle: "您已受邀参加播客。",
-    invitedBody: "您的采访链接已准备好。您可以在准备好后接受邀请并开始。",
-    start: "接受并开始",
-    later: "稍后再说",
-    continue: "继续采访",
-    complete: "采访已完成",
-  };
+  const locale = normalizeLocale(cookieStore.get(localeCookieName)?.value);
+  const chinese = locale !== "en";
 
   return (
-    <div>
-      <header className={portalStyles.dashboardHeader}>
+    <div className={styles.page}>
+      <header className={styles.pageHeader}>
         <div>
-          <p className={portalStyles.kicker}>{t("commonFamily")}</p>
-          <h1 className={portalStyles.pageTitle}>
-            {t("familyTitle")}
-          </h1>
-          <p className={portalStyles.pageIntro}>{t("familyIntro")}</p>
+          <p className={styles.eyebrow}>{chinese ? "欢迎回来" : "Welcome home"}</p>
+          <h1 className={styles.title}>{chinese ? "您的故事" : "Your stories"}</h1>
+          <p className={styles.intro}>
+            {chinese
+              ? "开始新的温暖对话，或再次聆听您已经保存的回忆。"
+              : "Start a warm new conversation, or return to the memories you have already saved."}
+          </p>
         </div>
-        <form action={startMyConversation}>
-          <button
-            type="submit"
-            className={portalStyles.primaryButton}
-          >
-            <Mic className="h-4 w-4" /> {t("familyStartConversation")}
-          </button>
-        </form>
       </header>
 
-      <PodcastInvitation
-        status={(participation?.status as string | undefined) ?? null}
-        interviewToken={participationSession?.token ?? null}
-        copy={podcastCopy}
-      />
-
-      <section className={portalStyles.section}>
-        <div className={portalStyles.sectionHeader}>
-          <h2 className={portalStyles.sectionTitle}>
-            <span className={portalStyles.sectionNumber}>01</span>
-            {t("familyTitle")}
+      <section className={styles.startCard} aria-labelledby="start-conversation-title">
+        <div>
+          <h2 id="start-conversation-title">
+            {chinese ? "准备好聊一聊了吗？" : "Ready for a conversation?"}
           </h2>
+          <p>
+            {chinese
+              ? "Rosie 会耐心地提问。您只需要自然地说话，不需要打字。"
+              : "Rosie will gently guide the conversation. Just speak naturally—there is nothing to type."}
+          </p>
         </div>
-        {rows.length === 0 ? (
-          <Card className="p-12 text-center">
-            <p className="font-serif text-2xl text-ink-soft">
-              {t("familyNoConversations")}
-            </p>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {rows.map((s) => (
-              <ConversationRow
-                key={s.id}
-                sessionId={s.id}
-                guestName={s.guests.name}
-                name={names.get(s.id) ?? ""}
-                title={s.title}
-                meta={`${new Date(s.created_at).toLocaleDateString(locale, {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })} · ${formatDuration(s.duration_ms)}`}
-                shareToken={s.share_token}
-                origin={origin}
-              />
-            ))}
-          </div>
-        )}
+        <form action={startMyConversation}>
+          <button className={styles.startButton} type="submit">
+            <Mic aria-hidden="true" /> {chinese ? "开始新对话" : "Start a new conversation"}
+          </button>
+        </form>
+      </section>
+
+      <section className={styles.section} aria-labelledby="past-conversations-title">
+        <div className={styles.sectionHeader}>
+          <h2 id="past-conversations-title">{chinese ? "过去的对话" : "Past conversations"}</h2>
+          <Link className={styles.viewAll} href="/family/conversations">
+            {chinese ? "查看全部" : "View all"} <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+        <ConversationList conversations={conversations.slice(0, 5)} origin={origin} />
       </section>
     </div>
   );

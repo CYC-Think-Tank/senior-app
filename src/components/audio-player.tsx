@@ -51,7 +51,7 @@ export function AudioPlayer({
   }
 
   return (
-    <div className="rounded-2xl border border-line bg-cream p-5">
+    <div className="portal-audio-player rounded-xl border border-line bg-cream p-5">
       <audio
         ref={audioRef}
         src={src}

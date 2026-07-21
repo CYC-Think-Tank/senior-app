@@ -215,6 +215,16 @@
   text-align: center;
 }
 
+.localizedSlogan .sloganLine,
+.localizedSlogan .flipSlot {
+  display: block;
+}
+
+.localizedSlogan .flipSlot {
+  margin-top: 0.08em;
+  margin-left: 0;
+}
+
 .heroCtas {
   display: flex;
   flex-wrap: wrap;

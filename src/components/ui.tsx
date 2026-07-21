@@ -2,15 +2,13 @@ import Link from "next/link";
 import { APP_NAME } from "@/lib/constants";
 
 export function Wordmark({
-  href = "/",
   tone = "ink",
 }: {
-  href?: string;
   tone?: "ink" | "light";
 }) {
   return (
     <Link
-      href={href}
+      href="/"
       className={`font-serif text-2xl font-semibold tracking-tight ${
         tone === "light" ? "text-cream" : "text-ink"
       }`}
@@ -32,7 +30,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`portal-card rounded-xl border border-line bg-cream/95 shadow-[0_1px_3px_rgba(42,32,24,0.05)] ${className}`}
+      className={`portal-card rounded-xl border border-line bg-cream/95 shadow-[0_1px_3px_rgba(42,32,24,0.05)] transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out ${className}`}
     >
       {children}
     </div>
@@ -62,11 +60,11 @@ export function Badge({
 
 export const buttonStyles = {
   primary:
-    "portal-button-primary inline-flex items-center justify-center gap-2 rounded-lg bg-ember px-5 py-2.5 font-medium text-cream transition-colors hover:bg-ember-deep disabled:opacity-50 disabled:pointer-events-none",
+    "portal-button-primary inline-flex items-center justify-center gap-2 rounded-lg bg-ember px-5 py-2.5 font-medium text-cream transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-px hover:bg-ember-deep disabled:opacity-50 disabled:pointer-events-none",
   secondary:
-    "portal-button-secondary inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-cream px-5 py-2.5 font-medium text-ink transition-colors hover:bg-paper-deep disabled:opacity-50 disabled:pointer-events-none",
+    "portal-button-secondary inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-cream px-5 py-2.5 font-medium text-ink transition-[background-color,color,border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-px hover:bg-paper-deep disabled:opacity-50 disabled:pointer-events-none",
   ghost:
-    "portal-button-ghost inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium text-ink-soft transition-colors hover:bg-paper-deep hover:text-ink disabled:opacity-50 disabled:pointer-events-none",
+    "portal-button-ghost inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium text-ink-soft transition-[background-color,color,transform] duration-200 ease-out hover:-translate-y-px hover:bg-paper-deep hover:text-ink disabled:opacity-50 disabled:pointer-events-none",
 };
 
 export const inputStyles =

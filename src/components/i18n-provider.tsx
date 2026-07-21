@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import {
   dictionaries,
   type I18nKey,
@@ -11,6 +11,7 @@ import {
 const I18nContext = createContext<{
   locale: Locale;
   t: (key: I18nKey, values?: Record<string, string | number>) => string;
+  setLocale: (locale: Locale) => void;
 } | null>(null);
 
 export function I18nProvider({
@@ -20,13 +21,16 @@ export function I18nProvider({
   locale: Locale;
   children: React.ReactNode;
 }) {
+  const [activeLocale, setActiveLocale] = useState(locale);
+
   const value = useMemo(
     () => ({
-      locale,
+      locale: activeLocale,
       t: (key: I18nKey, values?: Record<string, string | number>) =>
-        translate(locale, key, values),
+        translate(activeLocale, key, values),
+      setLocale: setActiveLocale,
     }),
-    [locale]
+    [activeLocale]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
@@ -41,6 +45,7 @@ export function useI18n() {
         dictionaries.en[key].replace(/\{(\w+)\}/g, (_, name: string) =>
           String(values?.[name] ?? "")
         ),
+      setLocale: () => undefined,
     };
   }
   return context;

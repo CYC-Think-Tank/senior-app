@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { LogIn } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { signInWithEmail } from "@/app/login/actions";
 import { useI18n } from "@/components/i18n-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { Wordmark, inputStyles } from "@/components/ui";
+import { Wordmark } from "@/components/ui";
 import {
   PortalShell,
   portalStyles,
 } from "@/components/portal-shell";
+import styles from "./login.module.css";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -53,17 +54,18 @@ export default function LoginPage() {
           </div>
         </div>
       </header>
-      <main className={portalStyles.loginMain}>
-        <div className={portalStyles.loginWrap}>
-          <div className={portalStyles.loginPanel}>
-            <h1 className={portalStyles.loginHeading}>{t("commonSignIn")}</h1>
-            <p className={portalStyles.loginCopy}>{t("loginSubtitle")}</p>
+      <main className={styles.main}>
+        <div className={styles.wrap}>
+          <div className={styles.panel}>
+            <p className={styles.eyebrow}>Fireside</p>
+            <h1 className={styles.heading}>{t("commonSignIn")}</h1>
+            <p className={styles.copy}>{t("loginSubtitle")}</p>
 
-            <form onSubmit={signIn} className="space-y-4">
-              <div>
+            <form onSubmit={signIn} className={styles.form}>
+              <div className={styles.field}>
                 <label
                   htmlFor="email"
-                  className="mb-1.5 block text-sm font-medium text-ink-soft"
+                  className={styles.label}
                 >
                   {t("loginEmailLabel")}
                 </label>
@@ -75,23 +77,22 @@ export default function LoginPage() {
                   placeholder={t("loginEmailPlaceholder")}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className={inputStyles}
+                  className={styles.input}
                 />
               </div>
-              {error && <p className="text-sm text-ember-deep">{error}</p>}
+              {error && <p className={styles.error}>{error}</p>}
               <button
                 type="submit"
                 disabled={busy}
-                className={`${portalStyles.primaryButton} w-full`}
+                className={styles.submit}
               >
-                <LogIn className="h-4 w-4" />
-                {busy ? t("loginBusy") : t("commonSignIn")}
+                <span>{busy ? t("loginBusy") : t("commonSignIn")}</span>
+                <ArrowRight aria-hidden="true" />
               </button>
-              <p className="text-center text-sm text-ink-faint">
+              <p className={styles.note}>
                 {t("loginDevNote")}
               </p>
             </form>
-
           </div>
         </div>
       </main>

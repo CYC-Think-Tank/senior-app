@@ -1,15 +1,12 @@
-import Link from "next/link";
-import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { Wordmark } from "@/components/ui";
-import { LanguageSwitcher } from "@/components/language-switcher";
-import { UserMenu } from "@/components/user-menu";
 import {
   PortalShell,
   portalStyles,
 } from "@/components/portal-shell";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import { personName } from "@/lib/names";
+import { RouteContentEntrance } from "@/components/page-entrance";
+import { SeniorSidebar } from "./senior-sidebar";
+import styles from "./senior-dashboard.module.css";
 
 export default async function FamilyLayout({
   children,
@@ -17,8 +14,6 @@ export default async function FamilyLayout({
   children: React.ReactNode;
 }) {
   const { supabase, user } = await requireUser();
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
-  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const { data: profile } = await supabase
     .from("profiles")
     .select("role, display_name, email")
@@ -28,38 +23,16 @@ export default async function FamilyLayout({
 
   return (
     <PortalShell>
-      <header className={portalStyles.header}>
-        <div
-          className={`${portalStyles.headerInner} ${portalStyles.headerInnerNarrow}`}
-        >
-          <div className={portalStyles.headerBrand}>
-            <Wordmark href="/family" tone="light" />
-          </div>
-          <nav className={portalStyles.nav} aria-label="Family navigation">
-            <Link
-              href="/feed"
-              className={portalStyles.navLink}
-            >
-              {t("commonViewFeed")}
-            </Link>
-            {profile?.role === "admin" && (
-              <Link
-                href="/admin"
-                className={portalStyles.navLink}
-              >
-                {t("commonAdmin")}
-              </Link>
-            )}
-          </nav>
-          <div className={portalStyles.headerTools}>
-            <LanguageSwitcher tone="bare" />
-            <UserMenu name={name} tone="dark" />
-          </div>
+      <div className={`${portalStyles.adminApp} ${styles.shell}`}>
+        <SeniorSidebar name={name} />
+        <div className={styles.content}>
+          <main className={styles.main}>
+            <div className={portalStyles.surface}>
+              <RouteContentEntrance>{children}</RouteContentEntrance>
+            </div>
+          </main>
         </div>
-      </header>
-      <main className={`${portalStyles.main} ${portalStyles.mainNarrow}`}>
-        <div className={portalStyles.surface}>{children}</div>
-      </main>
+      </div>
     </PortalShell>
   );
 }

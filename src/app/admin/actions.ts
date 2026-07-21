@@ -96,9 +96,15 @@ export async function invitePodcastUser(userId: string) {
 
   const { data: existingParticipation } = await admin
     .from("podcast_participation")
-    .select("session_id, status")
+    .select("session_id, status, source, request_kind")
     .eq("user_id", userId)
     .maybeSingle();
+  if (
+    existingParticipation?.status === "requested" &&
+    existingParticipation.request_kind === "existing_conversation"
+  ) {
+    throw new Error("This request already includes a finished conversation. Review it from the requests page.");
+  }
   let sessionId = existingParticipation?.session_id as string | null | undefined;
 
   if (!sessionId || existingParticipation?.status === "interview_done") {
@@ -115,7 +121,8 @@ export async function invitePodcastUser(userId: string) {
     {
       user_id: userId,
       session_id: sessionId,
-      source: "admin_invite",
+      source: existingParticipation?.source ?? "admin_invite",
+      request_kind: existingParticipation?.request_kind ?? "new_interview",
       status: "invited",
       updated_at: new Date().toISOString(),
     },
@@ -129,6 +136,7 @@ export async function invitePodcastUser(userId: string) {
   revalidatePath("/admin/users");
   revalidatePath("/admin/participation");
   revalidatePath("/family");
+  revalidatePath("/family/requests");
 }
 
 export async function deletePodcastUser(userId: string) {

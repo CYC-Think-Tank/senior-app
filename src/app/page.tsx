@@ -1,13 +1,20 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import { cookies } from "next/headers";
 import { HeroSky } from "@/components/hero-sky";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import styles from "./page.module.css";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const locale = normalizeLocale(
+    (await cookies()).get(localeCookieName)?.value,
+  );
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+
   return (
     <main className={styles.page} data-landing-page>
       <HeroSky
@@ -15,39 +22,43 @@ export default function LandingPage() {
         shaderRevision="mirrored-page-shader-v4"
         className={styles.pageSky}
       />
-      <section className={styles.heroPanel} aria-label="Welcome">
+      <section className={styles.heroPanel} aria-label={t("landingWelcomeAria")}>
         <div className={styles.heroTop}>
-          <Link href="/" className={styles.wordmark} aria-label="Fireside home">
+          <Link href="/" className={styles.wordmark} aria-label={t("landingHomeAria")}>
             Fireside.
           </Link>
-          <nav className={styles.authNav} aria-label="Account">
+          <nav className={styles.authNav} aria-label={t("landingAccountAria")}>
             <LanguageSwitcher tone="bare" />
             <Link href="/login" className={styles.navGhost}>
-              Log in
+              {t("landingLogin")}
             </Link>
             <PageTransitionLink href="/interview" className={styles.navPrimary}>
-              Get started
+              {t("landingGetStarted")}
             </PageTransitionLink>
           </nav>
         </div>
 
         <div className={styles.heroGrid}>
           <div className={styles.heroCopy}>
-            <h1 className={styles.slogan}>
+            <h1
+              className={`${styles.slogan} ${
+                locale === "en" ? "" : styles.localizedSlogan
+              }`}
+            >
               <span className={styles.sloganLine}>
-                Your stories are worth keeping
+                {t("landingHeroLine")}
               </span>
               <span className={styles.flipSlot}>
-                <span className={styles.flipWord}>forever.</span>
+                <span className={styles.flipWord}>{t("landingHeroForever")}</span>
               </span>
             </h1>
             <div className={styles.heroCtas}>
               <PageTransitionLink
                 href="/interview"
                 className={styles.btnPrimary}
-                aria-label="Start a conversation with the AI"
+                aria-label={t("landingStartAria")}
               >
-                Start a conversation
+                {t("landingStartConversation")}
                 <ArrowRight className={styles.btnIcon} aria-hidden="true" />
               </PageTransitionLink>
             </div>
@@ -61,48 +72,33 @@ export default function LandingPage() {
       >
         <ScrollReveal className={styles.companionInner} distance={36}>
           <div className={styles.companionCopy}>
-            <p className={styles.sectionKicker}>Daily companionship</p>
+            <p className={styles.sectionKicker}>{t("landingCompanionKicker")}</p>
             <h2 id="companion-title" className={styles.sectionTitle}>
-              <span className={styles.titleLine}>A warm hello,</span>
-              <span className={styles.titleLine}>
-                whenever it&rsquo;s needed.
-              </span>
+              <span className={styles.titleLine}>{t("landingCompanionTitleOne")}</span>
+              <span className={styles.titleLine}>{t("landingCompanionTitleTwo")}</span>
             </h2>
-            <p className={styles.sectionLead}>
-              Loneliness fades when someone checks in. Fireside starts gentle
-              conversations, listens with endless patience, and always has time
-              for one more story.
-            </p>
+            <p className={styles.sectionLead}>{t("landingCompanionBody")}</p>
           </div>
           <ul className={styles.featureList}>
             <li className={styles.featureItem}>
               <span className={styles.featureNumber}>01</span>
               <div>
-                <h3>Gentle conversations</h3>
-                <p>
-                  Friendly questions that are easy to answer, at whatever pace
-                  feels right.
-                </p>
+                <h3>{t("landingFeatureGentleTitle")}</h3>
+                <p>{t("landingFeatureGentleBody")}</p>
               </div>
             </li>
             <li className={styles.featureItem}>
               <span className={styles.featureNumber}>02</span>
               <div>
-                <h3>Company that remembers</h3>
-                <p>
-                  A patient listener who recalls favorite topics and asks about
-                  them next time.
-                </p>
+                <h3>{t("landingFeatureMemoryTitle")}</h3>
+                <p>{t("landingFeatureMemoryBody")}</p>
               </div>
             </li>
             <li className={styles.featureItem}>
               <span className={styles.featureNumber}>03</span>
               <div>
-                <h3>Private by default</h3>
-                <p>
-                  Conversations stay in the family. Nothing is shared without a
-                  say-so.
-                </p>
+                <h3>{t("landingFeaturePrivateTitle")}</h3>
+                <p>{t("landingFeaturePrivateBody")}</p>
               </div>
             </li>
           </ul>
@@ -119,35 +115,26 @@ export default function LandingPage() {
           delay={0.05}
           distance={32}
         >
-          <p className={styles.sectionKicker}>How it works</p>
+          <p className={styles.sectionKicker}>{t("landingHowKicker")}</p>
           <h2 id="how-it-works-title" className={styles.sectionTitle}>
-            <span className={styles.titleLine}>From hello to heirloom,</span>
-            <span className={styles.titleLine}>in three easy steps.</span>
+            <span className={styles.titleLine}>{t("landingHowTitleOne")}</span>
+            <span className={styles.titleLine}>{t("landingHowTitleTwo")}</span>
           </h2>
           <div className={styles.infoGrid}>
             <article className={styles.infoItem}>
               <span className={styles.infoNumber}>01</span>
-              <h3>Talk naturally</h3>
-              <p>
-                The AI host asks gentle questions and lets the storyteller
-                answer in their own voice.
-              </p>
+              <h3>{t("landingStepTalkTitle")}</h3>
+              <p>{t("landingStepTalkBody")}</p>
             </article>
             <article className={styles.infoItem}>
               <span className={styles.infoNumber}>02</span>
-              <h3>Shape the memory</h3>
-              <p>
-                Each conversation becomes a polished private episode, ready for
-                review before anyone else hears it.
-              </p>
+              <h3>{t("landingStepShapeTitle")}</h3>
+              <p>{t("landingStepShapeBody")}</p>
             </article>
             <article className={styles.infoItem}>
               <span className={styles.infoNumber}>03</span>
-              <h3>Keep it close</h3>
-              <p>
-                Family listens through a private feed, building an archive of a
-                life told first-hand.
-              </p>
+              <h3>{t("landingStepKeepTitle")}</h3>
+              <p>{t("landingStepKeepBody")}</p>
             </article>
           </div>
         </ScrollReveal>
@@ -160,21 +147,18 @@ export default function LandingPage() {
           distance={28}
         >
           <h2 id="cta-title" className={styles.ctaTitle}>
-            Pull up a chair.
+            {t("landingCtaTitle")}
           </h2>
-          <p className={styles.ctaSub}>
-            The kettle&rsquo;s on and someone is ready to listen. Start the
-            first conversation tonight.
-          </p>
+          <p className={styles.ctaSub}>{t("landingCtaBody")}</p>
         <PageTransitionLink href="/interview" className={styles.btnLight}>
-          Start a conversation
+          {t("landingStartConversation")}
           <ArrowRight className={styles.btnIcon} aria-hidden="true" />
         </PageTransitionLink>
         </ScrollReveal>
       </section>
 
       <footer className={styles.footer}>
-        <Link href="/" className={styles.brand} aria-label="Fireside home">
+        <Link href="/" className={styles.brand} aria-label={t("landingHomeAria")}>
           <span className={styles.logoChip}>
             <Image
               src="/firesidelogo.png"
@@ -188,7 +172,7 @@ export default function LandingPage() {
             Fireside<span className={styles.brandDot}>.</span>
           </span>
         </Link>
-        <p className={styles.footerNote}>Every life is worth the telling.</p>
+        <p className={styles.footerNote}>{t("landingFooterNote")}</p>
       </footer>
     </main>
   );

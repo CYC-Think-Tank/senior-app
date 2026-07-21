@@ -2,19 +2,16 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Play } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { Card, Monogram, formatDuration } from "@/components/ui";
+import { formatDuration } from "@/components/ui";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import type { Episode } from "@/lib/types";
+import styles from "./feed.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
   const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
-  const t = (key: Parameters<typeof translate>[1], values = {}) =>
-    translate(locale, key, values);
-
-  // Public feed: only released (approved/published, past publish_at) episodes,
-  // across every storyteller. Served via the service role so no login is needed.
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const admin = createSupabaseAdminClient();
   const { data: episodes } = await admin
     .from("episodes")
@@ -22,58 +19,36 @@ export default async function FeedPage() {
     .in("status", ["approved", "published"])
     .lte("publish_at", new Date().toISOString())
     .order("publish_at", { ascending: false });
-
   type EpisodeRow = Episode & { guests: { name: string } };
   const rows = (episodes ?? []) as unknown as EpisodeRow[];
+  const intro = locale === "en"
+    ? "A growing archive of memories, laughter, and the stories that deserve to travel further."
+    : "一个不断丰富的记忆、欢笑和珍贵故事档案。";
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-serif text-4xl font-semibold">
-          {t("feedTitle")}
-        </h1>
-      </div>
+    <div className={styles.feed}>
+      <header className={styles.hero}>
+        <p className={styles.eyebrow}>The Fireside archive</p>
+        <h1 className={styles.title}>{t("feedTitle")}</h1>
+        <p className={styles.intro}>{intro}</p>
+      </header>
 
       {rows.length === 0 ? (
-        <Card className="p-12 text-center">
-          <p className="font-serif text-2xl text-ink-soft">
-            {t("feedNoEpisodes")}
-          </p>
-          <p className="mt-2 text-ink-faint">{t("feedWait")}</p>
-        </Card>
+        <section className={styles.empty}>
+          <div><p className={styles.emptyNumber}>01</p><h2>{t("feedNoEpisodes")}</h2><p>{t("feedWait")}</p></div>
+        </section>
       ) : (
-        <div className="space-y-4">
-          {rows.map((e) => (
-            <Link key={e.id} href={`/feed/${e.id}`} className="block">
-              <Card className="flex items-center gap-5 p-6 transition-shadow hover:shadow-md">
-                <Monogram name={e.guests.name} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium uppercase tracking-wide text-ember">
-                    {e.guests.name} · {t("commonEpisode")} {e.episode_number}
-                  </p>
-                  <h2 className="mt-0.5 truncate font-serif text-2xl font-semibold">
-                    {e.title}
-                  </h2>
-                  {e.description && (
-                    <p className="mt-1 line-clamp-2 text-ink-soft">
-                      {e.description}
-                    </p>
-                  )}
-                  <p className="mt-1.5 text-sm text-ink-faint">
-                    {e.publish_at
-                      ? new Date(e.publish_at).toLocaleDateString(locale, {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })
-                      : ""}{" "}
-                    · {formatDuration(e.duration_ms)}
-                  </p>
-                </div>
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-ember text-cream">
-                  <Play className="ml-0.5 h-6 w-6" />
-                </div>
-              </Card>
+        <div className={styles.episodeList}>
+          {rows.map((episode, index) => (
+            <Link key={episode.id} href={`/feed/${episode.id}`} className={styles.episodeCard}>
+              <span className={styles.episodeNumber}>{String(index + 1).padStart(2, "0")}</span>
+              <div>
+                <p className={styles.episodeMeta}>{episode.guests.name} · {t("commonEpisode")} {episode.episode_number}</p>
+                <h2 className={styles.episodeTitle}>{episode.title}</h2>
+                {episode.description ? <p className={styles.description}>{episode.description}</p> : null}
+                <p className={styles.date}>{episode.publish_at ? new Date(episode.publish_at).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }) : ""} · {formatDuration(episode.duration_ms)}</p>
+              </div>
+              <span className={styles.play}><Play aria-hidden="true" /></span>
             </Link>
           ))}
         </div>

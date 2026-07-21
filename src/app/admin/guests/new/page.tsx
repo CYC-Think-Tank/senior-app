@@ -1,11 +1,11 @@
-import { cookies } from "next/headers";
+"use client";
+
 import { createGuest } from "@/app/admin/actions";
 import { Card, buttonStyles, inputStyles } from "@/components/ui";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n-provider";
 
-export default async function NewGuestPage() {
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
-  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+export default function NewGuestPage() {
+  const { t } = useI18n();
 
   return (
     <div className="mx-auto max-w-xl">

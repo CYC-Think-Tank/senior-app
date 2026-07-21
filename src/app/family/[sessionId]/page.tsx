@@ -54,7 +54,7 @@ export default async function FamilyConversationPage({
   return (
     <div className="space-y-6">
       <Link
-        href="/family"
+        href="/family/conversations"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-ink"
       >
         <ArrowLeft className="h-4 w-4" /> {t("familyAllConversations")}

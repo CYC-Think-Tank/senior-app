@@ -1,23 +1,20 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AudioPlayer } from "@/components/audio-player";
-import { Card, Monogram, formatDuration } from "@/components/ui";
+import { formatDuration } from "@/components/ui";
 import { EPISODES_BUCKET } from "@/lib/constants";
+import { localeCookieName, normalizeLocale } from "@/lib/i18n";
 import type { Episode } from "@/lib/types";
+import styles from "../feed.module.css";
 
 export const dynamic = "force-dynamic";
 
-export default async function EpisodePlayerPage({
-  params,
-}: {
-  params: Promise<{ episodeId: string }>;
-}) {
+export default async function EpisodePlayerPage({ params }: { params: Promise<{ episodeId: string }> }) {
   const { episodeId } = await params;
-
-  // Public page: only released episodes are visible. The status/publish_at
-  // filter is the gate (no login), then the service role signs the audio URL.
+  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
   const admin = createSupabaseAdminClient();
   const { data: episode } = await admin
     .from("episodes")
@@ -29,77 +26,37 @@ export default async function EpisodePlayerPage({
   if (!episode) notFound();
 
   const e = episode as unknown as Episode & { guests: { name: string } };
-  const { data: signed } = await admin.storage
-    .from(EPISODES_BUCKET)
-    .createSignedUrl(e.audio_path, 60 * 60 * 6);
-
-  const noteLines = (e.show_notes ?? "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const { data: signed } = await admin.storage.from(EPISODES_BUCKET).createSignedUrl(e.audio_path, 60 * 60 * 6);
+  const noteLines = (e.show_notes ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
+  const copy = locale === "en"
+    ? { back: "All episodes", archive: "From the Fireside archive", notes: "In this episode", unavailable: "The audio isn’t available right now." }
+    : { back: "全部节目", archive: "来自 Fireside 档案", notes: "本期内容", unavailable: "音频暂时无法播放。" };
 
   return (
-    <div className="space-y-6">
-      <Link
-        href="/feed"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-ink"
-      >
-        <ArrowLeft className="h-4 w-4" /> All episodes
-      </Link>
+    <article className={styles.detail}>
+      <Link href="/feed" className={styles.back}><ArrowLeft aria-hidden="true" /> {copy.back}</Link>
+      <header className={styles.detailHeader}>
+        <p className={styles.eyebrow}>{copy.archive}</p>
+        <p className={styles.episodeMeta}>{e.guests.name} · Episode {e.episode_number}</p>
+        <h1 className={styles.detailTitle}>{e.title}</h1>
+        <p className={styles.detailMeta}>
+          {e.publish_at ? new Date(e.publish_at).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }) : ""} · {formatDuration(e.duration_ms)}
+        </p>
+      </header>
 
-      <div className="flex items-center gap-5">
-        <Monogram name={e.guests.name} size="lg" />
-        <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-ember">
-            {e.guests.name} · Episode {e.episode_number}
-          </p>
-          <h1 className="mt-1 font-serif text-3xl font-semibold sm:text-4xl">
-            {e.title}
-          </h1>
-          <p className="mt-1 text-sm text-ink-faint">
-            {e.publish_at
-              ? new Date(e.publish_at).toLocaleDateString(undefined, {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })
-              : ""}{" "}
-            · {formatDuration(e.duration_ms)}
-          </p>
+      {signed?.signedUrl ? <AudioPlayer src={signed.signedUrl} durationMs={e.duration_ms} /> : <p className={styles.intro}>{copy.unavailable}</p>}
+
+      {e.description || noteLines.length ? (
+        <div className={`${styles.bodyGrid} ${noteLines.length ? "" : styles.bodyGridSingle}`}>
+          {e.description ? <p className={styles.bodyCopy}>{e.description}</p> : <div />}
+          {noteLines.length ? (
+            <section className={styles.notes}>
+              <h2>{copy.notes}</h2>
+              <ul>{noteLines.map((line, index) => <li key={`${line}-${index}`}>{line.startsWith("- ") ? <><span className={styles.noteBullet}>• </span>{line.slice(2)}</> : line}</li>)}</ul>
+            </section>
+          ) : null}
         </div>
-      </div>
-
-      {signed?.signedUrl ? (
-        <AudioPlayer src={signed.signedUrl} durationMs={e.duration_ms} />
-      ) : (
-        <Card className="p-6 text-ink-soft">
-          The audio isn&apos;t available right now.
-        </Card>
-      )}
-
-      {e.description && (
-        <p className="text-lg leading-relaxed text-ink-soft">{e.description}</p>
-      )}
-
-      {noteLines.length > 0 && (
-        <Card className="p-6">
-          <h2 className="mb-3 font-serif text-xl font-semibold">
-            In this episode
-          </h2>
-          <ul className="space-y-2 text-ink-soft">
-            {noteLines.map((line, i) =>
-              line.startsWith("- ") ? (
-                <li key={i} className="flex gap-2">
-                  <span className="text-ember">•</span>
-                  <span>{line.slice(2)}</span>
-                </li>
-              ) : (
-                <li key={i}>{line}</li>
-              )
-            )}
-          </ul>
-        </Card>
-      )}
-    </div>
+      ) : null}
+    </article>
   );
 }

@@ -8,29 +8,57 @@ import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { localeCookieName, normalizeLocale } from "@/lib/i18n";
 import { personName } from "@/lib/names";
+import { EPISODES_BUCKET, RAW_BUCKET } from "@/lib/constants";
 
 export type ShareLinkResult =
   | { ok: true; token: string }
   | { ok: false };
 
-export async function requestPodcastInvitation() {
-  const { user } = await requireUser();
+export async function requestPodcastParticipation(
+  requestKind: "existing_conversation" | "new_interview",
+  sessionId?: string,
+) {
+  const { supabase, user } = await requireUser();
   const admin = createSupabaseAdminClient();
   const { data: existing } = await admin
     .from("podcast_participation")
     .select("status")
     .eq("user_id", user.id)
     .maybeSingle();
-  if (existing) return;
+  if (existing && existing.status !== "interview_done") {
+    return { ok: false as const, reason: "existing_request" as const };
+  }
 
-  const { error } = await admin.from("podcast_participation").insert({
-    user_id: user.id,
-    source: "request",
-    status: "requested",
-  });
+  let selectedSessionId: string | null = null;
+  if (requestKind === "existing_conversation") {
+    if (!sessionId) return { ok: false as const, reason: "invalid_session" as const };
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("id, guests!inner(user_id)")
+      .eq("id", sessionId)
+      .eq("status", "ready")
+      .eq("guests.user_id", user.id)
+      .single();
+    if (!session) return { ok: false as const, reason: "invalid_session" as const };
+    selectedSessionId = session.id;
+  }
+
+  const { error } = await admin.from("podcast_participation").upsert(
+    {
+      user_id: user.id,
+      session_id: selectedSessionId,
+      source: "request",
+      request_kind: requestKind,
+      status: "requested",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
   if (error) throw new Error("Could not send your request.");
   revalidatePath("/family");
+  revalidatePath("/family/requests");
   revalidatePath("/admin/participation");
+  return { ok: true as const };
 }
 
 export async function acceptPodcastInvitation() {
@@ -51,6 +79,7 @@ export async function acceptPodcastInvitation() {
     .eq("id", participation.id);
   if (error) throw new Error("Could not accept the invitation.");
   revalidatePath("/family");
+  revalidatePath("/family/requests");
   revalidatePath("/admin/participation");
   redirect(`/interview/${session.token}`);
 }
@@ -64,14 +93,15 @@ export async function acceptPodcastInvitation() {
 export async function generateShareLink(
   sessionId: string
 ): Promise<ShareLinkResult> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   // RLS: this returns a row only if the user may see this ready conversation.
   const { data: session } = await supabase
     .from("sessions")
-    .select("id, share_token, status")
+    .select("id, share_token, status, guests!inner(user_id)")
     .eq("id", sessionId)
     .eq("status", "ready")
+    .eq("guests.user_id", user.id)
     .single();
 
   if (!session) return { ok: false };
@@ -91,6 +121,7 @@ export async function generateShareLink(
   }
 
   revalidatePath("/family");
+  revalidatePath("/family/conversations");
   return { ok: true, token };
 }
 
@@ -100,14 +131,15 @@ export async function generateShareLink(
  * Passing an empty name clears it, returning the conversation to numbering.
  */
 export async function renameConversation(sessionId: string, name: string) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   // RLS: only returns a row the caller's family is allowed to see.
   const { data: session } = await supabase
     .from("sessions")
-    .select("id")
+    .select("id, guests!inner(user_id)")
     .eq("id", sessionId)
     .eq("status", "ready")
+    .eq("guests.user_id", user.id)
     .single();
   if (!session) return { ok: false as const };
 
@@ -124,7 +156,56 @@ export async function renameConversation(sessionId: string, name: string) {
   }
 
   revalidatePath("/family");
+  revalidatePath("/family/conversations");
   revalidatePath(`/family/${sessionId}`);
+  return { ok: true as const };
+}
+
+/** Permanently removes a conversation after confirming the caller can read it. */
+export async function deleteConversation(sessionId: string) {
+  const { supabase, user } = await requireUser();
+  const { data: visibleSession } = await supabase
+    .from("sessions")
+    .select("id, guests!inner(user_id)")
+    .eq("id", sessionId)
+    .eq("status", "ready")
+    .eq("guests.user_id", user.id)
+    .single();
+  if (!visibleSession) return { ok: false as const };
+
+  const admin = createSupabaseAdminClient();
+  const [{ data: session }, { data: episode }] = await Promise.all([
+    admin
+      .from("sessions")
+      .select("raw_audio_path")
+      .eq("id", sessionId)
+      .single(),
+    admin
+      .from("episodes")
+      .select("audio_path")
+      .eq("session_id", sessionId)
+      .maybeSingle(),
+  ]);
+
+  const removals: Promise<unknown>[] = [];
+  if (session?.raw_audio_path) {
+    removals.push(admin.storage.from(RAW_BUCKET).remove([session.raw_audio_path]));
+  }
+  if (episode?.audio_path) {
+    removals.push(admin.storage.from(EPISODES_BUCKET).remove([episode.audio_path]));
+  }
+  await Promise.all(removals);
+
+  const { error } = await admin.from("sessions").delete().eq("id", sessionId);
+  if (error) {
+    console.error("Could not delete the conversation:", error);
+    return { ok: false as const };
+  }
+
+  revalidatePath("/family");
+  revalidatePath("/family/conversations");
+  revalidatePath("/family/requests");
+  revalidatePath("/admin");
   return { ok: true as const };
 }
 
@@ -186,5 +267,6 @@ export async function startMyConversation() {
   }
 
   revalidatePath("/family");
+  revalidatePath("/family/conversations");
   redirect(`/interview/${session.token}`);
 }

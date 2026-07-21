@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { deletePodcastUser, invitePodcastUser } from "@/app/admin/actions";
 import styles from "../admin-management.module.css";
 
@@ -8,6 +9,7 @@ export type ManagedUser = {
   id: string;
   name: string;
   participationStatus: string | null;
+  requestKind: string | null;
 };
 
 export function UserManagement({ users }: { users: ManagedUser[] }) {
@@ -25,11 +27,15 @@ export function UserManagement({ users }: { users: ManagedUser[] }) {
                 <span className={styles.name}>{user.name}</span>
               </div>
               <div className={styles.actions}>
-                <form action={invitePodcastUser.bind(null, user.id)}>
-                  <button className={styles.inviteButton} disabled={alreadyInvited}>
-                    {alreadyInvited ? "Invited" : user.participationStatus === "requested" ? "Approve request" : "Invite to podcast"}
-                  </button>
-                </form>
+                {user.participationStatus === "requested" && user.requestKind === "existing_conversation" ? (
+                  <Link className={styles.inviteButton} href="/admin/participation">Review request</Link>
+                ) : (
+                  <form action={invitePodcastUser.bind(null, user.id)}>
+                    <button className={styles.inviteButton} disabled={alreadyInvited}>
+                      {alreadyInvited ? "Invited" : user.participationStatus === "requested" ? "Approve request" : "Invite to podcast"}
+                    </button>
+                  </form>
+                )}
                 <button className={styles.deleteButton} onClick={() => setDeleteTarget(user)}>Delete</button>
               </div>
             </div>

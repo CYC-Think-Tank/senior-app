@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowUpRight, Clock3, Mic2, Plus, Users } from "lucide-react";
 import { formatDuration } from "@/components/ui";
+import { useI18n } from "@/components/i18n-provider";
 import styles from "./admin-dashboard.module.css";
 
 export type AdminDashboardCopy = {
@@ -32,7 +35,7 @@ export type AdminDashboardCopy = {
   openGuest: string;
 };
 
-export type UsagePoint = { key: string; label: string; value: number };
+export type UsagePoint = { key: string; value: number };
 export type GuestDirectoryItem = {
   id: string;
   name: string;
@@ -60,8 +63,7 @@ export type GuestDirectoryCopy = Pick<
 >;
 
 type Props = {
-  locale: string;
-  copy: AdminDashboardCopy;
+  copies: Record<string, AdminDashboardCopy>;
   totalUsers: number;
   recordingsToday: number;
   averageDurationMs: number;
@@ -72,7 +74,9 @@ type Props = {
   guests: GuestDirectoryItem[];
 };
 
-function ActivityChart({ usage }: { usage: UsagePoint[] }) {
+type LabeledUsagePoint = UsagePoint & { label: string };
+
+function ActivityChart({ usage }: { usage: LabeledUsagePoint[] }) {
   const width = 760;
   const height = 250;
   const left = 34;
@@ -137,46 +141,48 @@ function CategoryRow({ label, value, total, tone }: { label: string; value: numb
 }
 
 export function GuestDirectory({
-  locale,
   copy,
+  copies,
   guests,
   standalone = false,
 }: {
-  locale: string;
-  copy: GuestDirectoryCopy;
+  copy?: GuestDirectoryCopy;
+  copies?: Record<string, GuestDirectoryCopy>;
   guests: GuestDirectoryItem[];
   standalone?: boolean;
 }) {
+  const { locale } = useI18n();
+  const activeCopy = copy ?? copies?.[locale] ?? copies?.en;
+  if (!activeCopy) return null;
   const numberFormatter = new Intl.NumberFormat(locale);
 
   return (
     <section className={standalone ? styles.guestSectionStandalone : styles.guestSection}>
       <div className={styles.guestHeader}>
-        <div><p className={styles.sectionNumber}>02</p><h2>{copy.guestDirectory}</h2><p>{copy.guestDirectoryIntro}</p></div>
-        <Link href="/admin/guests/new">{copy.newGuest} <ArrowUpRight aria-hidden="true" /></Link>
+        <div><p className={styles.sectionNumber}>02</p><h2>{activeCopy.guestDirectory}</h2><p>{activeCopy.guestDirectoryIntro}</p></div>
+        <Link href="/admin/guests/new">{activeCopy.newGuest} <ArrowUpRight aria-hidden="true" /></Link>
       </div>
       <div className={styles.guestList}>
         <div className={styles.tableHeader}>
-          <span>{copy.guest}</span><span>{copy.account}</span><span>{copy.conversations}</span><span>{copy.language}</span><span>{copy.lastActive}</span><span />
+          <span>{activeCopy.guest}</span><span>{activeCopy.account}</span><span>{activeCopy.conversations}</span><span>{activeCopy.language}</span><span>{activeCopy.lastActive}</span><span />
         </div>
         {guests.length ? guests.map((guest) => (
-          <Link href={`/admin/guests/${guest.id}`} className={styles.guestRow} key={guest.id} aria-label={`${copy.openGuest}: ${guest.name}`}>
+          <Link href={`/admin/guests/${guest.id}`} className={styles.guestRow} key={guest.id} aria-label={`${activeCopy.openGuest}: ${guest.name}`}>
             <span className={styles.guestIdentity}><span className={styles.avatar}>{guest.name.trim().charAt(0).toUpperCase()}</span><strong>{guest.name}</strong></span>
-            <span><span className={guest.registered ? styles.statusRegistered : styles.statusGuest}>{guest.registered ? copy.registered : copy.notRegistered}</span></span>
+            <span><span className={guest.registered ? styles.statusRegistered : styles.statusGuest}>{guest.registered ? activeCopy.registered : activeCopy.notRegistered}</span></span>
             <span className={styles.numeric}>{numberFormatter.format(guest.conversationCount)}</span>
             <span>{guest.language}</span>
-            <span>{guest.lastActive ? new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(new Date(guest.lastActive)) : copy.never}</span>
+            <span>{guest.lastActive ? new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(new Date(guest.lastActive)) : activeCopy.never}</span>
             <ArrowUpRight className={styles.rowArrow} aria-hidden="true" />
           </Link>
-        )) : <p className={styles.empty}>{copy.noGuests}</p>}
+        )) : <p className={styles.empty}>{activeCopy.noGuests}</p>}
       </div>
     </section>
   );
 }
 
 export function AdminDashboardView({
-  locale,
-  copy,
+  copies,
   totalUsers,
   recordingsToday,
   averageDurationMs,
@@ -186,6 +192,15 @@ export function AdminDashboardView({
   usage,
   guests,
 }: Props) {
+  const { locale } = useI18n();
+  const copy = copies[locale] ?? copies.en;
+  const localizedUsage = usage.map((point) => ({
+    ...point,
+    label: new Intl.DateTimeFormat(locale, {
+      weekday: "short",
+      timeZone: "UTC",
+    }).format(new Date(`${point.key}T12:00:00Z`)),
+  }));
   const totalConversations = Object.values(conversationCategories).reduce((total, value) => total + value, 0);
   const numberFormatter = new Intl.NumberFormat(locale);
 
@@ -226,9 +241,9 @@ export function AdminDashboardView({
               <h2>{copy.usage}</h2>
               <p>{copy.lastSevenDays}</p>
             </div>
-            <strong>{numberFormatter.format(usage.reduce((total, point) => total + point.value, 0))}</strong>
+            <strong>{numberFormatter.format(localizedUsage.reduce((total, point) => total + point.value, 0))}</strong>
           </div>
-          <ActivityChart usage={usage} />
+          <ActivityChart usage={localizedUsage} />
         </article>
 
         <div className={styles.breakdowns}>
@@ -254,7 +269,7 @@ export function AdminDashboardView({
         </div>
       </section>
 
-      <GuestDirectory locale={locale} copy={copy} guests={guests} />
+      <GuestDirectory copy={copy} guests={guests} />
     </div>
   );
 }

@@ -66,6 +66,8 @@ html {
   /* One consistent warm light theme — no dark mode; senior-facing screens
      depend on stable high contrast. */
   color-scheme: light;
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
 }
 
 body {
@@ -75,20 +77,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-html::after {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #462117;
-  opacity: 0;
-  transition: opacity 360ms cubic-bezier(0.45, 0, 0.55, 1);
-  content: "";
-  pointer-events: none;
+/* Language changes animate copy only. Page surfaces and shader backgrounds
+   remain fully opaque and stationary while the server-rendered text refreshes. */
+[data-language-page] :where(h1, h2, h3, h4, p, li) {
+  transition:
+    opacity 420ms var(--motion-ease),
+    transform 420ms var(--motion-ease);
 }
 
-html[data-page-transition]::after {
-  opacity: 1;
-  transition-duration: 260ms;
+html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li) {
+  opacity: 0.18;
+  transform: translateY(0.45rem);
 }
 
 ::selection {
@@ -101,6 +100,11 @@ html[data-page-transition]::after {
 }
 
 :root {
+  --motion-fast: 160ms;
+  --motion-base: 220ms;
+  --motion-slow: 420ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --background: #faf5ec;
   --foreground: #2a2018;
   --card: #fffdf8;
@@ -133,6 +137,49 @@ html[data-page-transition]::after {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Route entrances are deliberately small and quick: the interface should feel
+   settled, while each new page and its major surfaces arrive in a clear order. */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes route-content-enter {
+  from {
+    opacity: 0.72;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-page-content] > * {
+  animation: route-content-enter 220ms var(--motion-ease) both;
+}
+
+[data-page-entrance] > :where(main, article):not([data-landing-page]),
+[data-page-entrance] > [data-landing-page] > :where(section, footer) {
+  animation: page-enter 360ms var(--motion-ease) both;
+}
+
+[data-page-entrance] > [data-landing-page] > :where(section, footer):nth-child(2) {
+  animation-delay: 60ms;
+}
+
+[data-page-entrance] > [data-landing-page] > :where(section, footer):nth-child(n + 3) {
+  animation-delay: 140ms;
 }
 
 .dark {
@@ -178,5 +225,37 @@ html[data-page-transition]::after {
   }
   html {
     @apply font-sans;
+  }
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+  button:not(:disabled),
+  a[href] {
+    cursor: pointer;
+  }
+  button:not(:disabled):active,
+  a[href]:active {
+    transform: scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  * {
+    scroll-behavior: auto !important;
+  }
+
+  [data-language-page] :where(h1, h2, h3, h4, p, li),
+  html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li),
+  [data-page-entrance] > :where(main, article):not([data-landing-page]),
+  [data-page-content] > *,
+  [data-page-entrance] > [data-landing-page] > :where(section, footer) {
+    opacity: 1;
+    transform: none;
+    animation: none;
+    transition: none;
   }
 }

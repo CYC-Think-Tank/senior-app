@@ -9,13 +9,14 @@ export default async function UsersPage() {
   const { supabase } = await requireAdmin();
   const [{ data: profiles }, { data: participation }] = await Promise.all([
     supabase.from("profiles").select("id, display_name, email").eq("role", "family").order("created_at", { ascending: false }),
-    supabase.from("podcast_participation").select("user_id, status"),
+    supabase.from("podcast_participation").select("user_id, status, request_kind"),
   ]);
-  const statusByUser = new Map((participation ?? []).map((row) => [row.user_id as string, row.status as string]));
+  const participationByUser = new Map((participation ?? []).map((row) => [row.user_id as string, row]));
   const users: ManagedUser[] = (profiles ?? []).map((profile) => ({
     id: profile.id as string,
     name: personName(profile.display_name as string | null, profile.email as string),
-    participationStatus: statusByUser.get(profile.id as string) ?? null,
+    participationStatus: (participationByUser.get(profile.id as string)?.status as string | undefined) ?? null,
+    requestKind: (participationByUser.get(profile.id as string)?.request_kind as string | undefined) ?? null,
   }));
 
   return (
