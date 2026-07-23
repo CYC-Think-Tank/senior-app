@@ -41,3 +41,22 @@ export const requireUser = cache(async function requireUser() {
   };
   return { supabase, user };
 });
+
+/**
+ * Keeps returning users out of the auth forms when their browser still has a
+ * valid refreshable session.
+ */
+export async function redirectSignedInUser() {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims.sub;
+  if (!userId) return;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  redirect(profile?.role === "admin" ? "/admin" : "/family");
+}

@@ -9,7 +9,14 @@ import {
   useState,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, Mic, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Copy,
+  ExternalLink,
+  Mic,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import {
   InterviewClient,
@@ -27,6 +34,7 @@ type Props = {
   token: string;
   guestName: string;
   topic: string | null;
+  initialShareToken: string | null;
   alreadyRecorded: boolean;
   isLoggedIn: boolean;
   /** Set when this conversation ended early and is being picked back up. */
@@ -37,6 +45,7 @@ export default function InterviewRoom({
   token,
   guestName,
   topic,
+  initialShareToken,
   alreadyRecorded,
   isLoggedIn,
   resume,
@@ -52,6 +61,7 @@ export default function InterviewRoom({
   const [greetingStarted, setGreetingStarted] = useState(false);
   const [userSpeaking, setUserSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
+  const [shareToken, setShareToken] = useState(initialShareToken);
   const clientRef = useRef<InterviewClient | null>(null);
   const micLevelRef = useRef(0);
   const aiLevelRef = useRef(0);
@@ -59,6 +69,10 @@ export default function InterviewRoom({
   const userSpeakingTimeoutRef = useRef<number | null>(null);
 
   const begin = useCallback(() => {
+    // React state updates after the click handler returns. The ref closes the
+    // brief window where a double-click could otherwise start two calls.
+    if (clientRef.current) return;
+
     setErrorDetail(null);
     setGreetingStarted(false);
     document.documentElement.dataset.interviewLive = "true";
@@ -66,7 +80,11 @@ export default function InterviewRoom({
       onPhase: (p, detail) => {
         setPhase(p);
         if (detail) setErrorDetail(detail);
+        if (p === "error") {
+          clientRef.current = null;
+        }
       },
+      onComplete: setShareToken,
       onTurns: (nextTurns) => {
         setTurns(nextTurns);
         if (nextTurns.some((turn) => turn.speaker === "ai")) {
@@ -118,6 +136,7 @@ export default function InterviewRoom({
 
   useEffect(() => {
     return () => {
+      clientRef.current?.dispose();
       clientRef.current = null;
       if (userSpeakingTimeoutRef.current !== null) {
         window.clearTimeout(userSpeakingTimeoutRef.current);
@@ -170,6 +189,7 @@ export default function InterviewRoom({
         <p className={`${theme.body} mx-auto mt-4 max-w-xl text-xl leading-relaxed`}>
           {t("interviewAlreadyBody", { guestName })}
         </p>
+        {shareToken && <CompletionShareLink shareToken={shareToken} />}
       </InterviewShell>
     );
   }
@@ -305,6 +325,7 @@ export default function InterviewRoom({
             <p className={`${theme.body} mx-auto mt-4 max-w-xl text-xl leading-relaxed`}>
               {t(isLoggedIn ? "interviewDone" : "interviewDoneAnonymous")}
             </p>
+            {shareToken && <CompletionShareLink shareToken={shareToken} />}
             {!isLoggedIn && (
               <Link href="/login" className={`${theme.primaryAction} mt-6`}>
                 {t("interviewLogInToSave")}
@@ -339,6 +360,54 @@ export default function InterviewRoom({
         </AnimatePresence>
       </>
     </InterviewShell>
+  );
+}
+
+function CompletionShareLink({ shareToken }: { shareToken: string }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const sharePath = `/share/${shareToken}`;
+
+  async function copyShareLink() {
+    await navigator.clipboard.writeText(
+      new URL(sharePath, window.location.origin).toString(),
+    );
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className={theme.completionShare}>
+      <h2 className={theme.completionShareTitle}>
+        {t("interviewShareTitle")}
+      </h2>
+      <p className={theme.completionShareBody}>
+        {t("interviewShareBody")}
+      </p>
+      <div className={theme.completionShareActions}>
+        <Link
+          href={sharePath}
+          target="_blank"
+          rel="noreferrer"
+          className={theme.primaryAction}
+        >
+          <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          {t("interviewOpenShareLink")}
+        </Link>
+        <button
+          type="button"
+          onClick={copyShareLink}
+          className={theme.secondaryAction}
+        >
+          {copied ? (
+            <Check className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Copy className="h-4 w-4" aria-hidden="true" />
+          )}
+          {t(copied ? "commonCopied" : "interviewCopyShareLink")}
+        </button>
+      </div>
+    </div>
   );
 }
 

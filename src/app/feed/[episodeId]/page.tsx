@@ -21,7 +21,6 @@ export default async function EpisodePlayerPage({ params }: { params: Promise<{ 
     .select("*, guests(name)")
     .eq("id", episodeId)
     .in("status", ["approved", "published"])
-    .lte("publish_at", new Date().toISOString())
     .single();
   if (!episode) notFound();
 
@@ -40,7 +39,7 @@ export default async function EpisodePlayerPage({ params }: { params: Promise<{ 
         <p className={styles.episodeMeta}>{e.guests.name} · Episode {e.episode_number}</p>
         <h1 className={styles.detailTitle}>{e.title}</h1>
         <p className={styles.detailMeta}>
-          {e.publish_at ? new Date(e.publish_at).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }) : ""} · {formatDuration(e.duration_ms)}
+          {new Date(e.publish_at ?? e.created_at).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" })} · {formatDuration(e.duration_ms)}
         </p>
       </header>
 

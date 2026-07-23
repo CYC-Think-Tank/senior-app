@@ -30,6 +30,7 @@ export type InterviewResume = {
 
 export type InterviewCallbacks = {
   onPhase: (phase: InterviewPhase, detail?: string) => void;
+  onComplete: (shareToken: string) => void;
   /** All completed turns so far, sorted by start time. */
   onTurns: (turns: TurnDraft[]) => void;
   /** Streaming text of the AI's in-progress reply ("" when none). */
@@ -45,6 +46,10 @@ export type InterviewCallbacks = {
 // slightly behind the actual speech they describe.
 const SPEECH_START_LEAD_MS = 400; // VAD detection + network lag behind true onset
 const SPEECH_END_TRIM_MS = 250; // speech_stopped fires shortly after true end
+const WRAP_UP_SILENCE_RMS = 0.003;
+const WRAP_UP_SILENCE_MS = 3_000;
+const WRAP_UP_PLAYBACK_TIMEOUT_MS = 60_000;
+const WRAP_UP_WATCHDOG_POLL_MS = 200;
 
 const MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
@@ -156,11 +161,14 @@ export class InterviewClient {
   private guestTimings = new Map<string, { start: number; end?: number }>();
   private pendingAi = new Map<string, PendingAi>();
   private rafId: number | null = null;
+  private starting = false;
   private stopped = false;
   private wrapUpRequested = false;
   private wrapUpResponseSent = false;
   private wrapUpResponseId: string | null = null;
   private wrapUpStopTimer: number | null = null;
+  private wrapUpPlaybackWatchdogTimer: number | null = null;
+  private wrapUpAudioStarted = false;
   private aiOutputPlaying = false;
   private activeResponseIds = new Set<string>();
 
@@ -184,6 +192,9 @@ export class InterviewClient {
   }
 
   async start() {
+    if (this.starting || this.pc || this.stopped) return;
+    this.starting = true;
+
     try {
       this.cb.onPhase("mic");
       const KrispSDK = await this.loadKrispSDK();
@@ -204,16 +215,7 @@ export class InterviewClient {
       });
 
       this.cb.onPhase("connecting");
-      const res = await fetch("/api/realtime/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: this.token }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Could not start the interview session.");
-      }
-      const { clientSecret } = await res.json();
+      let clientSecret = await this.createClientSecret();
 
       // Mix mic + AI into one stream for recording.
       // RNNoise processes 10ms frames at 48kHz, so keep the analyser source
@@ -284,25 +286,21 @@ export class InterviewClient {
 
       // Model + session config are baked into the ephemeral secret; no
       // query params needed (and none that a stale page could get wrong).
-      const sdpRes = await fetch(
-        "https://api.openai.com/v1/realtime/calls",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${clientSecret}`,
-            "Content-Type": "application/sdp",
-          },
-          body: offer.sdp,
-        }
-      );
+      let sdpRes = await this.exchangeSdp(offer.sdp, clientSecret);
+
+      // A Realtime client secret is tied to its session/call and cannot be
+      // reused once a live call exists. If a duplicate or replayed request
+      // consumes it first, mint one fresh secret and retry exactly once.
+      if (sdpRes.status === 409) {
+        console.warn(
+          "Realtime client secret was already consumed; retrying with a fresh secret.",
+        );
+        clientSecret = await this.createClientSecret();
+        sdpRes = await this.exchangeSdp(offer.sdp, clientSecret);
+      }
+
       if (!sdpRes.ok) {
-        let apiMessage = "";
-        try {
-          const body = JSON.parse(await sdpRes.text());
-          apiMessage = body?.error?.message ?? "";
-        } catch {
-          // Non-JSON error body; fall through to the generic message.
-        }
+        const apiMessage = await this.readApiError(sdpRes);
         console.error("Realtime SDP exchange failed:", sdpRes.status, apiMessage);
         throw new Error(
           apiMessage ||
@@ -319,7 +317,60 @@ export class InterviewClient {
         "error",
         err instanceof Error ? err.message : "Something went wrong."
       );
+    } finally {
+      this.starting = false;
     }
+  }
+
+  /** Every WebRTC attempt gets a newly minted, uncached ephemeral secret. */
+  private async createClientSecret() {
+    const res = await fetch("/api/realtime/session", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: this.token }),
+    });
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      throw new Error(
+        body?.error ?? "Could not start the interview session.",
+      );
+    }
+    if (typeof body?.clientSecret !== "string" || !body.clientSecret) {
+      throw new Error("The voice service returned an invalid session.");
+    }
+
+    return body.clientSecret;
+  }
+
+  private exchangeSdp(sdp: string | undefined, clientSecret: string) {
+    return fetch("https://api.openai.com/v1/realtime/calls", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${clientSecret}`,
+        "Content-Type": "application/sdp",
+      },
+      body: sdp,
+    });
+  }
+
+  private async readApiError(response: Response) {
+    try {
+      const body = JSON.parse(await response.text());
+      return (body?.error?.message as string | undefined) ?? "";
+    } catch {
+      return "";
+    }
+  }
+
+  /** Close an unfinished connection without uploading a partial interview. */
+  dispose() {
+    if (this.stopped) return;
+    this.stopped = true;
+    if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+    this.cleanup();
   }
 
   private startRecorder(stream: MediaStream) {
@@ -601,8 +652,12 @@ export class InterviewClient {
         break;
       }
       case "output_audio_buffer.started": {
-        const p = this.getPendingAi(e.response_id as string);
+        const responseId = e.response_id as string;
+        const p = this.getPendingAi(responseId);
         p.start = this.now();
+        if (responseId === this.wrapUpResponseId) {
+          this.wrapUpAudioStarted = true;
+        }
         this.aiOutputPlaying = true;
         this.cb.onAiSpeaking(true);
         break;
@@ -618,6 +673,7 @@ export class InterviewClient {
         if (responseId === this.wrapUpResponseId) {
           // This is the authoritative WebRTC silence signal: the tagged
           // closing response has fully drained and no more audio is coming.
+          this.clearWrapUpPlaybackWatchdog();
           this.scheduleWrapUpStop(900);
         } else {
           this.maybeSendWrapUpResponse();
@@ -634,8 +690,10 @@ export class InterviewClient {
         // A cleared buffer was interrupted, not completed. Never treat it as
         // a successful closing; queue a fresh closing response instead.
         if (responseId === this.wrapUpResponseId) {
+          this.clearWrapUpPlaybackWatchdog();
           this.wrapUpResponseId = null;
           this.wrapUpResponseSent = false;
+          this.wrapUpAudioStarted = false;
         }
         this.maybeSendWrapUpResponse();
         break;
@@ -668,6 +726,15 @@ export class InterviewClient {
             !this.wrapUpResponseId
           ) {
             this.wrapUpResponseId = responseId;
+          }
+          if (
+            responseId === this.wrapUpResponseId &&
+            response.status === "completed"
+          ) {
+            // `output_audio_buffer.stopped` is the primary completion event.
+            // Keep an analyser-based fallback because losing that one event
+            // would otherwise leave the interview live forever.
+            this.startWrapUpPlaybackWatchdog();
           }
         }
         // response.done precedes WebRTC playback completion. It may allow a
@@ -815,6 +882,7 @@ export class InterviewClient {
   requestWrapUp() {
     if (this.stopped || this.wrapUpRequested) return;
     this.wrapUpRequested = true;
+    this.wrapUpAudioStarted = false;
 
     // Prevent a new guest turn from interrupting or racing Rosie's closing.
     this.processedMicStream?.getAudioTracks().forEach((track) => {
@@ -852,6 +920,7 @@ export class InterviewClient {
   async stop() {
     if (this.stopped) return;
     this.clearWrapUpStopTimer();
+    this.clearWrapUpPlaybackWatchdog();
     this.stopped = true;
     this.cb.onPhase("uploading");
     this.cb.onAiSpeaking(false);
@@ -891,8 +960,15 @@ export class InterviewClient {
           turns: this.turns,
         }),
       });
-      if (!finRes.ok) throw new Error("Saving the transcript failed.");
+      const result = await finRes.json().catch(() => null);
+      if (!finRes.ok) {
+        throw new Error(result?.error ?? "Saving the transcript failed.");
+      }
+      if (typeof result?.shareToken !== "string" || !result.shareToken) {
+        throw new Error("The conversation was saved without a share link.");
+      }
 
+      this.cb.onComplete(result.shareToken);
       this.cb.onPhase("done");
     } catch (err) {
       this.cb.onPhase(
@@ -905,6 +981,7 @@ export class InterviewClient {
   private cleanup() {
     this.clearWrapUpStopTimer();
     this.stopCheckpoints();
+    this.clearWrapUpPlaybackWatchdog();
     this.dc?.close();
     this.pc?.close();
     this.krispFilterNode?.dispose?.();
@@ -931,6 +1008,59 @@ export class InterviewClient {
       window.clearTimeout(this.wrapUpStopTimer);
       this.wrapUpStopTimer = null;
     }
+  }
+
+  private clearWrapUpPlaybackWatchdog() {
+    if (this.wrapUpPlaybackWatchdogTimer !== null) {
+      window.clearTimeout(this.wrapUpPlaybackWatchdogTimer);
+      this.wrapUpPlaybackWatchdogTimer = null;
+    }
+  }
+
+  private startWrapUpPlaybackWatchdog() {
+    if (this.wrapUpPlaybackWatchdogTimer !== null || this.stopped) return;
+
+    const startedAt = performance.now();
+    let silentSince: number | null = null;
+    const samples = new Float32Array(512);
+
+    const poll = () => {
+      if (this.stopped || !this.wrapUpResponseId) {
+        this.wrapUpPlaybackWatchdogTimer = null;
+        return;
+      }
+
+      const now = performance.now();
+      if (now - startedAt >= WRAP_UP_PLAYBACK_TIMEOUT_MS) {
+        this.wrapUpPlaybackWatchdogTimer = null;
+        this.scheduleWrapUpStop(0);
+        return;
+      }
+
+      if (this.aiMeterAnalyser && this.wrapUpAudioStarted) {
+        this.aiMeterAnalyser.getFloatTimeDomainData(samples);
+        if (this.calculateRms(samples) > WRAP_UP_SILENCE_RMS) {
+          silentSince = null;
+        } else {
+          silentSince ??= now;
+          if (now - silentSince >= WRAP_UP_SILENCE_MS) {
+            this.wrapUpPlaybackWatchdogTimer = null;
+            this.scheduleWrapUpStop(300);
+            return;
+          }
+        }
+      }
+
+      this.wrapUpPlaybackWatchdogTimer = window.setTimeout(
+        poll,
+        WRAP_UP_WATCHDOG_POLL_MS
+      );
+    };
+
+    this.wrapUpPlaybackWatchdogTimer = window.setTimeout(
+      poll,
+      WRAP_UP_WATCHDOG_POLL_MS
+    );
   }
 
   private scheduleWrapUpStop(delayMs: number) {

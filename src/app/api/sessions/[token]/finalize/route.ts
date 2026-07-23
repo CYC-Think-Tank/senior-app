@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { finalizeSessionAudio } from "@/lib/sessions/finalize";
@@ -27,7 +28,7 @@ export async function POST(
   const admin = createSupabaseAdminClient();
   const { data: session } = await admin
     .from("sessions")
-    .select("id, duration_ms")
+    .select("id, duration_ms, share_token")
     .eq("token", token)
     .single();
 
@@ -45,5 +46,19 @@ export async function POST(
     return NextResponse.json({ error }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  const shareToken = session.share_token ?? randomBytes(24).toString("hex");
+  const { error: updateError } = await admin
+    .from("sessions")
+    .update({ share_token: shareToken })
+    .eq("id", session.id);
+
+  if (updateError) {
+    console.error("session finalize failed:", updateError);
+    return NextResponse.json(
+      { error: "Could not finalize the session." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ ok: true, shareToken });
 }

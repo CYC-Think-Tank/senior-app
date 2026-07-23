@@ -262,6 +262,65 @@
   height: 1.15em;
 }
 
+/* ----------------------------- Demo video ------------------------ */
+
+.demoCard {
+  width: min(46rem, 100%);
+  margin: clamp(2.25rem, 5vh, 3.25rem) auto 0;
+  animation: riseIn 900ms 300ms ease both;
+}
+
+.demoMedia {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 7 / 5;
+  background: #29140e;
+  border-radius: 0.8rem;
+}
+
+.demoVideo,
+.demoPoster {
+  width: 100%;
+  height: 100%;
+}
+
+.demoVideo {
+  display: block;
+  object-fit: cover;
+  background: #29140e;
+}
+
+.demoPoster {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.demoPosterImage {
+  object-fit: cover;
+}
+
+.demoPlay {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  color: var(--color-air-ink);
+  background: rgb(255 250 241 / 0.94);
+  border: 1px solid rgb(255 255 255 / 0.8);
+  border-radius: 999px;
+  box-shadow: 0 0.75rem 2rem rgb(25 8 4 / 0.3);
+}
+
+.demoPlayIcon {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-left: 0.16rem;
+}
+
 /* ----------------------------- Companion -------------------------- */
 
 .companionSection {
@@ -628,6 +687,7 @@
 @media (prefers-reduced-motion: reduce) {
   .heroCopy,
   .btnPrimary,
+  .demoCard,
   .companionInner,
   .infoInner,
   .ctaPanel {
@@ -666,7 +726,7 @@
   }
 
   .heroGrid {
-    padding: 2rem 1.25rem 3rem;
+    padding: 2rem 1.25rem 4rem;
   }
 
   .slogan {
@@ -681,6 +741,14 @@
   .btnPrimary {
     justify-content: center;
     width: min(100%, 20rem);
+  }
+
+  .demoCard {
+    margin-top: 2rem;
+  }
+
+  .demoMedia {
+    border-radius: 0.65rem;
   }
 
   .companionSection,

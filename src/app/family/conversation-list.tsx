@@ -77,10 +77,7 @@ function ConversationItem({
         </form>
       ) : (
         <Link className={styles.conversationMain} href={`/family/${conversation.id}`}>
-          <span className={styles.conversationAvatar} aria-hidden="true">
-            {conversation.guestName.trim().charAt(0).toUpperCase()}
-          </span>
-          <span className="min-w-0">
+          <span className={styles.conversationDetails}>
             <span className={styles.conversationNameRow}>
               <span className={styles.conversationName}>{conversation.name}</span>
               {conversation.unfinished ? (

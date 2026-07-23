@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
 import { cookies } from "next/headers";
 import { HeroSky } from "@/components/hero-sky";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -14,6 +14,7 @@ export default async function LandingPage() {
     (await cookies()).get(localeCookieName)?.value,
   );
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL;
 
   return (
     <main className={styles.page} data-landing-page>
@@ -29,10 +30,13 @@ export default async function LandingPage() {
           </Link>
           <nav className={styles.authNav} aria-label={t("landingAccountAria")}>
             <LanguageSwitcher tone="bare" />
+            <Link href="/feed" className={styles.navGhost}>
+              {t("commonEpisodes")}
+            </Link>
             <Link href="/login" className={styles.navGhost}>
               {t("landingLogin")}
             </Link>
-            <PageTransitionLink href="/interview" className={styles.navPrimary}>
+            <PageTransitionLink href="/signup" className={styles.navPrimary}>
               {t("landingGetStarted")}
             </PageTransitionLink>
           </nav>
@@ -61,6 +65,40 @@ export default async function LandingPage() {
                 {t("landingStartConversation")}
                 <ArrowRight className={styles.btnIcon} aria-hidden="true" />
               </PageTransitionLink>
+            </div>
+
+            <div className={styles.demoCard}>
+              <div className={styles.demoMedia}>
+                {demoVideoUrl ? (
+                  <video
+                    className={styles.demoVideo}
+                    controls
+                    preload="none"
+                    poster="/oldschool.webp"
+                    aria-label={t("landingDemoAria")}
+                  >
+                    <source src={demoVideoUrl} />
+                    {t("landingDemoFallback")}
+                  </video>
+                ) : (
+                  <div
+                    className={styles.demoPoster}
+                    role="img"
+                    aria-label={t("landingDemoPreviewAria")}
+                  >
+                    <Image
+                      src="/oldschool.webp"
+                      alt=""
+                      fill
+                      sizes="(max-width: 640px) 88vw, 736px"
+                      className={styles.demoPosterImage}
+                    />
+                    <span className={styles.demoPlay} aria-hidden="true">
+                      <Play className={styles.demoPlayIcon} fill="currentColor" />
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -99,18 +99,28 @@ export async function invitePodcastUser(userId: string) {
 
   const { data: existingGuest } = await admin
     .from("guests")
-    .select("id")
+    .select("id, name")
     .eq("user_id", userId)
     .maybeSingle();
-  let guestId = existingGuest?.id as string | undefined;
+  let guestId: string;
+  const currentName = personName(profile.display_name, profile.email);
 
-  if (!guestId) {
+  if (existingGuest) {
+    guestId = existingGuest.id;
+    if (existingGuest.name !== currentName) {
+      const { error: guestError } = await admin
+        .from("guests")
+        .update({ name: currentName })
+        .eq("id", guestId);
+      if (guestError) throw new Error("Could not prepare the invitation.");
+    }
+  } else {
     const { data: guest, error: guestError } = await admin
       .from("guests")
       .insert({
         user_id: userId,
         family_id: profile.family_id,
-        name: personName(profile.display_name, profile.email),
+        name: currentName,
         language: "English",
       })
       .select("id")
@@ -273,8 +283,6 @@ export async function updateEpisodeMeta(episodeId: string, formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const showNotes = String(formData.get("show_notes") ?? "").trim() || null;
-  const publishAtRaw = String(formData.get("publish_at") ?? "").trim();
-  const publishAt = publishAtRaw ? new Date(publishAtRaw).toISOString() : null;
 
   const { error } = await supabase
     .from("episodes")
@@ -282,11 +290,12 @@ export async function updateEpisodeMeta(episodeId: string, formData: FormData) {
       ...(title ? { title } : {}),
       description,
       show_notes: showNotes,
-      publish_at: publishAt,
     })
     .eq("id", episodeId);
   if (error) throw new Error("Could not update the episode.");
   revalidatePath(`/admin/episodes/${episodeId}`);
+  revalidatePath("/feed");
+  revalidatePath(`/feed/${episodeId}`);
 }
 
 export async function sendForApproval(episodeId: string) {
@@ -304,8 +313,14 @@ export async function markApproved(episodeId: string) {
   const { supabase } = await requireAdmin();
   const { error } = await supabase
     .from("episodes")
-    .update({ status: "approved" })
+    .update({
+      status: "approved",
+      change_note: null,
+      publish_at: new Date().toISOString(),
+    })
     .eq("id", episodeId);
   if (error) throw new Error("Could not update the episode.");
   revalidatePath(`/admin/episodes/${episodeId}`);
+  revalidatePath("/feed");
+  revalidatePath(`/feed/${episodeId}`);
 }

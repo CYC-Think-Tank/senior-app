@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
 import { REALTIME_MODEL, REALTIME_VOICE } from "@/lib/constants";
@@ -45,8 +46,9 @@ export async function POST(request: NextRequest) {
     .order("idx", { ascending: true });
 
   const guest = session.guests as unknown as Guest;
+  const guestName = await resolveCurrentGuestName(admin, guest);
   const instructions = buildInterviewerInstructions({
-    guestName: guest.name,
+    guestName,
     bio: guest.bio,
     topics: guest.topics,
     language: guest.language,
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
 
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",
@@ -104,5 +107,8 @@ export async function POST(request: NextRequest) {
     })
     .eq("id", session.id);
 
-  return NextResponse.json({ clientSecret: data.value });
+  return NextResponse.json(
+    { clientSecret: data.value },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   dictionaries,
   type I18nKey,
@@ -22,6 +29,18 @@ export function I18nProvider({
   children: React.ReactNode;
 }) {
   const [activeLocale, setActiveLocale] = useState(locale);
+  const previousServerLocale = useRef(locale);
+
+  useEffect(() => {
+    if (previousServerLocale.current === locale) return;
+    previousServerLocale.current = locale;
+
+    const frame = window.requestAnimationFrame(() => {
+      document.documentElement.removeAttribute("data-language-transition");
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [locale]);
 
   const value = useMemo(
     () => ({

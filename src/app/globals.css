@@ -79,15 +79,17 @@ body {
 
 /* Language changes animate copy only. Page surfaces and shader backgrounds
    remain fully opaque and stationary while the server-rendered text refreshes. */
-[data-language-page] :where(h1, h2, h3, h4, p, li) {
+[data-language-page] :where(h1, h2, h3, h4, p, li, a, button, label, dt, dd, th, td) {
   transition:
-    opacity 420ms var(--motion-ease),
-    transform 420ms var(--motion-ease);
+    opacity 280ms var(--motion-ease),
+    filter 280ms var(--motion-ease),
+    transform 280ms var(--motion-ease);
 }
 
-html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li) {
-  opacity: 0.18;
-  transform: translateY(0.45rem);
+html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li, a, button, label, dt, dd, th, td) {
+  opacity: 0.12;
+  filter: blur(2px);
+  transform: translateY(0.35rem);
 }
 
 ::selection {
@@ -248,8 +250,8 @@ html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li
     scroll-behavior: auto !important;
   }
 
-  [data-language-page] :where(h1, h2, h3, h4, p, li),
-  html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li),
+  [data-language-page] :where(h1, h2, h3, h4, p, li, a, button, label, dt, dd, th, td),
+  html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li, a, button, label, dt, dd, th, td),
   [data-page-entrance] > :where(main, article):not([data-landing-page]),
   [data-page-content] > *,
   [data-page-entrance] > [data-landing-page] > :where(section, footer) {
