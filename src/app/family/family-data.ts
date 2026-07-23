@@ -13,6 +13,9 @@ export type FamilyConversation = {
   createdAt: string;
   durationMs: number | null;
   shareToken: string | null;
+  // Ended early and still resumable — the checkpoints saved most of what was
+  // said. These have no finished recording to listen to yet.
+  unfinished: boolean;
 };
 
 export const getFamilyConversations = cache(async () => {
@@ -22,14 +25,14 @@ export const getFamilyConversations = cache(async () => {
     translate(locale, key, values);
   const { data } = await supabase
     .from("sessions")
-    .select("id, title, created_at, duration_ms, share_token, guests!inner(name, user_id)")
-    .eq("status", "ready")
+    .select("id, title, status, created_at, duration_ms, share_token, guests!inner(name, user_id)")
+    .in("status", ["ready", "recording"])
     .eq("guests.user_id", user.id)
     .order("created_at", { ascending: false });
 
   type SessionRow = Pick<
     InterviewSession,
-    "id" | "title" | "created_at" | "duration_ms" | "share_token"
+    "id" | "title" | "status" | "created_at" | "duration_ms" | "share_token"
   > & { guests: { name: string; user_id: string } };
   const rows = (data ?? []) as unknown as SessionRow[];
   const names = conversationNames(rows, (number) =>
@@ -43,6 +46,7 @@ export const getFamilyConversations = cache(async () => {
     createdAt: row.created_at,
     durationMs: row.duration_ms,
     shareToken: row.share_token,
+    unfinished: row.status !== "ready",
   }));
 
   const headerStore = await headers();

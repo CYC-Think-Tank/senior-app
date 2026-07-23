@@ -313,6 +313,24 @@
   white-space: nowrap;
 }
 
+.conversationNameRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.statusPill {
+  flex: none;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: rgb(255 250 241 / 0.14);
+  color: rgb(255 250 241 / 0.86);
+  font-size: 0.72rem;
+  font-weight: 640;
+  letter-spacing: 0.02em;
+}
+
 .conversationMeta {
   margin: 0.35rem 0 0;
   color: rgb(255 250 241 / 0.56);

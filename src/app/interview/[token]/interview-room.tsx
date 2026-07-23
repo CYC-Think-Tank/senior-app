@@ -14,6 +14,7 @@ import Link from "next/link";
 import {
   InterviewClient,
   type InterviewPhase,
+  type InterviewResume,
 } from "@/lib/realtime/interview-client";
 import type { TurnDraft } from "@/lib/types";
 import { formatTimestamp } from "@/components/ui";
@@ -28,6 +29,8 @@ type Props = {
   topic: string | null;
   alreadyRecorded: boolean;
   isLoggedIn: boolean;
+  /** Set when this conversation ended early and is being picked back up. */
+  resume?: InterviewResume;
 };
 
 export default function InterviewRoom({
@@ -36,18 +39,19 @@ export default function InterviewRoom({
   topic,
   alreadyRecorded,
   isLoggedIn,
+  resume,
 }: Props) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<InterviewPhase>("idle");
   const [showWelcome, setShowWelcome] = useState(true);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
-  const [turns, setTurns] = useState<TurnDraft[]>([]);
+  const [turns, setTurns] = useState<TurnDraft[]>(resume?.turns ?? []);
+  const [elapsedMs, setElapsedMs] = useState(resume?.offsetMs ?? 0);
   const [liveAiText, setLiveAiText] = useState("");
   const [aiSpeaking, setAiSpeaking] = useState(false);
   const [greetingStarted, setGreetingStarted] = useState(false);
   const [userSpeaking, setUserSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
   const clientRef = useRef<InterviewClient | null>(null);
   const micLevelRef = useRef(0);
   const aiLevelRef = useRef(0);
@@ -107,10 +111,10 @@ export default function InterviewRoom({
           }, 180);
         }
       },
-    });
+    }, resume);
     clientRef.current = client;
     void client.start();
-  }, [token]);
+  }, [token, resume]);
 
   useEffect(() => {
     return () => {
@@ -183,25 +187,30 @@ export default function InterviewRoom({
           {!showWelcome && phase === "idle" && (
             <IntroScreen key="idle">
               <p className={theme.eyebrow}>
-                {t("interviewHello", { guestName })}
+                {resume
+                  ? t("interviewWelcomeBack", { guestName })
+                  : t("interviewHello", { guestName })}
               </p>
               <h1 className={`${theme.heading} mt-3 text-4xl sm:text-6xl`}>
-                {t("interviewReady")} {t("interviewSomeStories")}
+                {resume
+                  ? t("interviewCarryOn")
+                  : `${t("interviewReady")} ${t("interviewSomeStories")}`}
               </h1>
-              {topic && (
+              {/* The subject was announced when the conversation began. */}
+              {topic && !resume && (
                 <p className={theme.topic}>
                   {t("interviewTopic", { topic })}
                 </p>
               )}
               <p className={`${theme.body} mx-auto mt-6 max-w-xl text-lg leading-relaxed`}>
-                {t("interviewIntro")}
+                {t(resume ? "interviewResumeIntro" : "interviewIntro")}
               </p>
               <button
                 onClick={begin}
                 className={theme.beginButton}
               >
                 <Mic />
-                <span>{t("interviewBegin")}</span>
+                <span>{t(resume ? "interviewContinue" : "interviewBegin")}</span>
               </button>
             </IntroScreen>
           )}
@@ -317,7 +326,7 @@ export default function InterviewRoom({
               onClick={() => {
                 setShowWelcome(false);
                 setPhase("idle");
-                setTurns([]);
+                setTurns(resume?.turns ?? []);
                 setGreetingStarted(false);
                 setWrappingUp(false);
               }}

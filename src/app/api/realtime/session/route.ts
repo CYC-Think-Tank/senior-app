@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const admin = createSupabaseAdminClient();
   const { data: session } = await admin
     .from("sessions")
-    .select("id, status, topic, guests(*)")
+    .select("id, status, topic, started_at, guests(*)")
     .eq("token", token)
     .single();
 
@@ -35,6 +35,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Whatever the live checkpoints saved before the tab closed. Handing it to
+  // the interviewer is what turns reopening the link into carrying on rather
+  // than starting the conversation again.
+  const { data: priorTurns } = await admin
+    .from("transcript_turns")
+    .select("speaker, text")
+    .eq("session_id", session.id)
+    .order("idx", { ascending: true });
+
   const guest = session.guests as unknown as Guest;
   const instructions = buildInterviewerInstructions({
     guestName: guest.name,
@@ -42,6 +51,7 @@ export async function POST(request: NextRequest) {
     topics: guest.topics,
     language: guest.language,
     topic: session.topic,
+    priorTurns: priorTurns ?? undefined,
   });
 
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
@@ -84,9 +94,14 @@ export async function POST(request: NextRequest) {
 
   const data = await res.json();
 
+  // `started_at` marks when the conversation began, not this sitting, so a
+  // resumed one leaves it alone.
   await admin
     .from("sessions")
-    .update({ status: "recording", started_at: new Date().toISOString() })
+    .update({
+      status: "recording",
+      started_at: session.started_at ?? new Date().toISOString(),
+    })
     .eq("id", session.id);
 
   return NextResponse.json({ clientSecret: data.value });

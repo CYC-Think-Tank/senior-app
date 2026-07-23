@@ -1,97 +1,49 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { TurnDraft } from "@/lib/types";
+import { finalizeSessionAudio } from "@/lib/sessions/finalize";
+import { isTurnDraftArray, saveTurns } from "@/lib/transcript/save-turns";
 
-const MAX_TURNS = 1000;
+// Stitching an hour-long interview means fetching every chunk back and
+// remuxing it, which outlasts the default request budget.
+export const maxDuration = 300;
 
-/** Persists the transcript turns and marks the session ready for editing. */
+/**
+ * Ends an interview: writes the final transcript, assembles the recording
+ * from the chunks uploaded along the way, and marks the session ready.
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
   const body = await request.json().catch(() => null);
-  const audioPath = body?.audioPath;
   const durationMs = body?.durationMs;
   const turns = body?.turns;
 
-  if (
-    typeof audioPath !== "string" ||
-    typeof durationMs !== "number" ||
-    !Array.isArray(turns) ||
-    turns.length > MAX_TURNS
-  ) {
+  if (typeof durationMs !== "number" || !isTurnDraftArray(turns)) {
     return NextResponse.json({ error: "Invalid payload." }, { status: 400 });
   }
 
   const admin = createSupabaseAdminClient();
   const { data: session } = await admin
     .from("sessions")
-    .select("id")
+    .select("id, duration_ms")
     .eq("token", token)
     .single();
 
   if (!session) {
     return NextResponse.json({ error: "Invalid link." }, { status: 404 });
   }
-  if (!audioPath.startsWith(`${session.id}/`)) {
-    return NextResponse.json({ error: "Invalid audio path." }, { status: 400 });
+
+  const { error: turnsError } = await saveTurns(admin, session.id, turns);
+  if (turnsError) {
+    return NextResponse.json({ error: turnsError }, { status: 500 });
   }
 
-  const rows = (turns as TurnDraft[])
-    .filter(
-      (t) =>
-        (t.speaker === "ai" || t.speaker === "guest") &&
-        typeof t.text === "string" &&
-        t.text.trim().length > 0
-    )
-    .sort((a, b) => a.startMs - b.startMs)
-    .map((t, idx) => {
-      const start = Math.max(0, Math.round(Number(t.startMs) || 0));
-      return {
-        session_id: session.id,
-        idx,
-        speaker: t.speaker,
-        text: t.text.trim().slice(0, 10_000),
-        start_ms: start,
-        end_ms: Math.max(start + 100, Math.round(Number(t.endMs) || 0)),
-      };
-    });
-
-  // Replace any turns from a previous partial attempt on this session.
-  await admin.from("transcript_turns").delete().eq("session_id", session.id);
-  if (rows.length > 0) {
-    const { error } = await admin.from("transcript_turns").insert(rows);
-    if (error) {
-      console.error("transcript insert failed:", error);
-      return NextResponse.json(
-        { error: "Could not save the transcript." },
-        { status: 500 }
-      );
-    }
+  const { error } = await finalizeSessionAudio(admin, session, durationMs);
+  if (error) {
+    return NextResponse.json({ error }, { status: 500 });
   }
-
-  const { error: updateError } = await admin
-    .from("sessions")
-    .update({
-      status: "ready",
-      raw_audio_path: audioPath,
-      duration_ms: Math.max(0, Math.round(durationMs)),
-    })
-    .eq("id", session.id);
-
-  if (updateError) {
-    console.error("session finalize failed:", updateError);
-    return NextResponse.json(
-      { error: "Could not finalize the session." },
-      { status: 500 }
-    );
-  }
-
-  await admin
-    .from("podcast_participation")
-    .update({ status: "interview_done", updated_at: new Date().toISOString() })
-    .eq("session_id", session.id);
 
   return NextResponse.json({ ok: true });
 }

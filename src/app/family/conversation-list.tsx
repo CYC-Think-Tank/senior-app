@@ -81,9 +81,18 @@ function ConversationItem({
             {conversation.guestName.trim().charAt(0).toUpperCase()}
           </span>
           <span className="min-w-0">
-            <span className={styles.conversationName}>{conversation.name}</span>
+            <span className={styles.conversationNameRow}>
+              <span className={styles.conversationName}>{conversation.name}</span>
+              {conversation.unfinished ? (
+                <span className={styles.statusPill}>{chinese ? "进行中" : "In progress"}</span>
+              ) : null}
+            </span>
             <span className={styles.conversationMeta}>
-              {formatDuration(conversation.durationMs)} · {chinese ? "点击收听" : "Select to listen"}
+              {conversation.unfinished
+                ? chinese
+                  ? "尚未完成 · 点击继续"
+                  : "Not finished yet · Select to continue"
+                : `${formatDuration(conversation.durationMs)} · ${chinese ? "点击收听" : "Select to listen"}`}
             </span>
           </span>
         </Link>
@@ -100,13 +109,15 @@ function ConversationItem({
           <button className={styles.rowButton} type="button" onClick={() => setEditing(true)}>
             <Pencil aria-hidden="true" /> {chinese ? "重命名" : "Rename"}
           </button>
-          <ShareConversation
-            sessionId={conversation.id}
-            initialToken={conversation.shareToken}
-            origin={origin}
-            buttonClassName={styles.rowButton}
-            label={chinese ? "分享" : "Share"}
-          />
+          {conversation.unfinished ? null : (
+            <ShareConversation
+              sessionId={conversation.id}
+              initialToken={conversation.shareToken}
+              origin={origin}
+              buttonClassName={styles.rowButton}
+              label={chinese ? "分享" : "Share"}
+            />
+          )}
           <button
             className={`${styles.rowButton} ${styles.rowButtonDanger}`}
             type="button"

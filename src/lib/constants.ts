@@ -10,6 +10,17 @@ export const CHAT_MODEL = "gpt-5-mini";
 export const RAW_BUCKET = "raw-audio";
 export const EPISODES_BUCKET = "episodes";
 
+// A live interview heartbeats every 15s, so a session still marked
+// 'recording' after this long lost its tab. Kept in step with the family
+// sessions RLS policy in migration 005 — change both together.
+export const ABANDONED_AFTER_MS = 1 * 60 * 1000;
+
+// How long an unfinished conversation from the public /interview flow is kept
+// before it is trashed. Its guest belongs to no family and no account, so
+// nothing will ever surface it — but a day's grace means someone who walks
+// away mid-conversation can still reopen their link and pick it back up.
+export const ANON_RETENTION_MS = 24 * 60 * 60 * 1000;
+
 // Padding applied around kept transcript turns when rendering the edited cut,
 // to absorb timestamp imprecision from the live event stream.
 export const CUT_PADDING_MS = 250;

@@ -126,6 +126,33 @@ export async function generateShareLink(
 }
 
 /**
+ * Picks a conversation that ended before it was wrapped up back up, at the
+ * interview link it was recorded on. The transcript its live checkpoints saved
+ * is handed to the AI host, and the new recording is appended to the old one.
+ *
+ * Access is enforced the same way as sharing: the session is read through the
+ * caller's RLS-scoped client first, so this only ever runs on a conversation
+ * their family owns. That read is also what keeps a *live* interview safe —
+ * the policy only exposes one whose checkpoints have gone stale, so this
+ * cannot walk in on a conversation already in progress.
+ */
+export async function resumeConversation(sessionId: string) {
+  const { supabase } = await requireUser();
+
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("token")
+    .eq("id", sessionId)
+    .eq("status", "recording")
+    .single();
+  if (!session) {
+    throw new Error("This conversation can no longer be continued.");
+  }
+
+  redirect(`/interview/${session.token}`);
+}
+
+/**
  * Renames a conversation. Writes to `title`, never `topic` — the latter feeds
  * the AI host and episode metadata, so it must keep describing the interview.
  * Passing an empty name clears it, returning the conversation to numbering.
@@ -133,12 +160,13 @@ export async function generateShareLink(
 export async function renameConversation(sessionId: string, name: string) {
   const { supabase, user } = await requireUser();
 
-  // RLS: only returns a row the caller's family is allowed to see.
+  // RLS: only returns a row the caller's family is allowed to see. Unfinished
+  // conversations are nameable too — they show up in the same list.
   const { data: session } = await supabase
     .from("sessions")
     .select("id, guests!inner(user_id)")
     .eq("id", sessionId)
-    .eq("status", "ready")
+    .in("status", ["ready", "recording"])
     .eq("guests.user_id", user.id)
     .single();
   if (!session) return { ok: false as const };
