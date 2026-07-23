@@ -19,12 +19,24 @@
   border-radius: 14px;
   box-shadow: 0 1.75rem 6rem rgb(35 9 4 / 0.16);
   backdrop-filter: blur(16px) saturate(1.05);
+  transform-origin: 50% 35%;
+  animation: authPanelIn 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.panelTop {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: -0.45rem -0.7rem 0.65rem 0;
+  gap: 1rem;
+  animation: authElementIn 480ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .eyebrow {
   display: flex;
   align-items: center;
-  margin: 0 0 1.1rem;
+  margin: 0;
   gap: 0.65rem;
   color: rgb(255 250 241 / 0.48);
   font-size: 0.64rem;
@@ -47,6 +59,7 @@
   font-weight: 400;
   line-height: 0.92;
   letter-spacing: -0.05em;
+  animation: authHeadingIn 560ms 170ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .copy {
@@ -55,12 +68,37 @@
   color: rgb(255 250 241 / 0.61);
   font-size: 0.86rem;
   line-height: 1.6;
+  animation: authElementIn 500ms 230ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .form {
   display: grid;
   margin-top: 2.1rem;
   gap: 1rem;
+}
+
+.form > * {
+  animation: authElementIn 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.form > :nth-child(1) {
+  animation-delay: 300ms;
+}
+
+.form > :nth-child(2) {
+  animation-delay: 360ms;
+}
+
+.form > :nth-child(3) {
+  animation-delay: 420ms;
+}
+
+.form > :nth-child(4) {
+  animation-delay: 480ms;
+}
+
+.form > :nth-child(5) {
+  animation-delay: 540ms;
 }
 
 .field {
@@ -161,6 +199,64 @@
   text-align: center;
 }
 
+.accountPrompt {
+  margin: 0;
+  color: rgb(255 250 241 / 0.56);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.accountPrompt a {
+  color: #fffaf1;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 250 241 / 0.38);
+  text-underline-offset: 0.2em;
+}
+
+.accountPrompt a:hover {
+  text-decoration-color: currentColor;
+}
+
+@keyframes authPanelIn {
+  from {
+    opacity: 0;
+    box-shadow: 0 0.75rem 2rem rgb(35 9 4 / 0.05);
+    transform: translateY(24px) scale(0.975);
+  }
+
+  to {
+    opacity: 1;
+    box-shadow: 0 1.75rem 6rem rgb(35 9 4 / 0.16);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes authHeadingIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authElementIn {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 520px) {
   .main {
     align-items: start;
@@ -173,6 +269,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .panel,
+  .panelTop,
+  .heading,
+  .copy,
+  .form > * {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
   .input,
   .submit,
   .submit svg {

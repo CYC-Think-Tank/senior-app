@@ -4,29 +4,31 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signInWithEmail } from "@/app/login/actions";
-import { useI18n } from "@/components/i18n-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { Wordmark } from "@/components/ui";
+import { useI18n } from "@/components/i18n-provider";
 import {
   PortalShell,
   portalStyles,
 } from "@/components/portal-shell";
-import styles from "./login.module.css";
+import { Wordmark } from "@/components/ui";
+import { signUpWithEmail } from "./actions";
+import styles from "../login/login.module.css";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const { t } = useI18n();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function signIn(e: React.FormEvent) {
+  async function signUp(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+
     try {
-      const result = await signInWithEmail(email);
+      const result = await signUpWithEmail(name, email);
       if (result.ok) {
         router.replace(result.redirectTo);
         router.refresh();
@@ -34,7 +36,7 @@ export default function LoginPage() {
         setError(result.error);
       }
     } catch {
-      setError(t("loginError"));
+      setError(t("signupError"));
     } finally {
       setBusy(false);
     }
@@ -59,15 +61,28 @@ export default function LoginPage() {
               <p className={styles.eyebrow}>Fireside</p>
               <LanguageSwitcher tone="bare" />
             </div>
-            <h1 className={styles.heading}>{t("commonSignIn")}</h1>
-            <p className={styles.copy}>{t("loginSubtitle")}</p>
+            <h1 className={styles.heading}>{t("signupTitle")}</h1>
+            <p className={styles.copy}>{t("signupSubtitle")}</p>
 
-            <form onSubmit={signIn} className={styles.form}>
+            <form onSubmit={signUp} className={styles.form}>
               <div className={styles.field}>
-                <label
-                  htmlFor="email"
-                  className={styles.label}
-                >
+                <label htmlFor="name" className={styles.label}>
+                  {t("signupNameLabel")}
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  required
+                  autoComplete="name"
+                  maxLength={80}
+                  placeholder={t("signupNamePlaceholder")}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={styles.input}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="email" className={styles.label}>
                   {t("loginEmailLabel")}
                 </label>
                 <input
@@ -87,15 +102,13 @@ export default function LoginPage() {
                 disabled={busy}
                 className={styles.submit}
               >
-                <span>{busy ? t("loginBusy") : t("commonSignIn")}</span>
+                <span>{busy ? t("signupBusy") : t("signupTitle")}</span>
                 <ArrowRight aria-hidden="true" />
               </button>
-              <p className={styles.note}>
-                {t("loginDevNote")}
-              </p>
+              <p className={styles.note}>{t("signupDevNote")}</p>
               <p className={styles.accountPrompt}>
-                {t("loginNoAccount")}{" "}
-                <Link href="/signup">{t("loginSignUpLink")}</Link>
+                {t("signupHasAccount")}{" "}
+                <Link href="/login">{t("signupLoginLink")}</Link>
               </p>
             </form>
           </div>

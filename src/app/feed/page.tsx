@@ -17,8 +17,8 @@ export default async function FeedPage() {
     .from("episodes")
     .select("*, guests(name)")
     .in("status", ["approved", "published"])
-    .lte("publish_at", new Date().toISOString())
-    .order("publish_at", { ascending: false });
+    .order("publish_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
   type EpisodeRow = Episode & { guests: { name: string } };
   const rows = (episodes ?? []) as unknown as EpisodeRow[];
   const intro = locale === "en"
@@ -46,7 +46,7 @@ export default async function FeedPage() {
                 <p className={styles.episodeMeta}>{episode.guests.name} · {t("commonEpisode")} {episode.episode_number}</p>
                 <h2 className={styles.episodeTitle}>{episode.title}</h2>
                 {episode.description ? <p className={styles.description}>{episode.description}</p> : null}
-                <p className={styles.date}>{episode.publish_at ? new Date(episode.publish_at).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }) : ""} · {formatDuration(episode.duration_ms)}</p>
+                <p className={styles.date}>{new Date(episode.publish_at ?? episode.created_at).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" })} · {formatDuration(episode.duration_ms)}</p>
               </div>
               <span className={styles.play}><Play aria-hidden="true" /></span>
             </Link>

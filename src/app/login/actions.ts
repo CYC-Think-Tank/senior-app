@@ -1,7 +1,7 @@
 "use server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { verifyGeneratedEmailLink } from "@/lib/supabase/email-link-session";
 
 export type EmailSignInResult =
   | { ok: true; redirectTo: string }
@@ -60,14 +60,12 @@ export async function signInWithEmail(
     return { ok: false, error: SIGN_IN_ERROR };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error: verifyError } = await supabase.auth.verifyOtp({
-    token_hash: data.properties.hashed_token,
-    type: "magiclink",
-  });
-
-  if (verifyError) {
-    console.error("Could not verify the Supabase sign-in token:", verifyError);
+  const sessionResult = await verifyGeneratedEmailLink(data.properties);
+  if (!sessionResult.ok) {
+    console.error(
+      "Could not verify the Supabase sign-in token:",
+      sessionResult.error
+    );
     return { ok: false, error: SIGN_IN_ERROR };
   }
 

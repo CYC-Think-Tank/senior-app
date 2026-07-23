@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 // These actions are token-gated rather than auth-gated: the unguessable
@@ -7,12 +8,21 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function approveEpisode(reviewToken: string) {
   const admin = createSupabaseAdminClient();
-  const { error } = await admin
+  const { data: episode, error } = await admin
     .from("episodes")
-    .update({ status: "approved", change_note: null })
+    .update({
+      status: "approved",
+      change_note: null,
+      publish_at: new Date().toISOString(),
+    })
     .eq("review_token", reviewToken)
-    .neq("status", "published");
-  if (error) throw new Error("Could not save the approval.");
+    .neq("status", "published")
+    .select("id")
+    .single();
+  if (error || !episode) throw new Error("Could not save the approval.");
+
+  revalidatePath("/feed");
+  revalidatePath(`/feed/${episode.id}`);
 }
 
 export async function requestChanges(reviewToken: string, note: string) {

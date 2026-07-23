@@ -247,22 +247,37 @@ export async function startMyConversation() {
   const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
   const admin = createSupabaseAdminClient();
 
-  const { data: existing } = await admin
-    .from("guests")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  let guestId = existing?.id as string | undefined;
-
-  if (!guestId) {
-    const { data: profile } = await admin
+  const [{ data: existing }, { data: profile }] = await Promise.all([
+    admin
+      .from("guests")
+      .select("id, name")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    admin
       .from("profiles")
       .select("display_name, email, family_id")
       .eq("id", user.id)
-      .single();
+      .single(),
+  ]);
 
-    const email = profile?.email ?? user.email ?? "";
+  let guestId: string;
+  const email = profile?.email ?? user.email ?? "";
+  const currentName = personName(profile?.display_name, email);
+
+  if (existing) {
+    guestId = existing.id;
+    if (existing.name !== currentName) {
+      const { error: guestError } = await admin
+        .from("guests")
+        .update({ name: currentName })
+        .eq("id", guestId);
+
+      if (guestError) {
+        console.error("Could not update the self guest's name:", guestError);
+        throw new Error("Could not start the conversation.");
+      }
+    }
+  } else {
     // Stamping the user's family on the guest is what makes the finished
     // recording visible to the rest of their family (and to them).
     const { data: guest, error: guestError } = await admin
@@ -270,7 +285,7 @@ export async function startMyConversation() {
       .insert({
         user_id: user.id,
         family_id: profile?.family_id ?? null,
-        name: personName(profile?.display_name, email),
+        name: currentName,
         language: locale === "en" ? "English" : "Chinese",
       })
       .select("id")

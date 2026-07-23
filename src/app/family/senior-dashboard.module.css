@@ -287,24 +287,17 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 1rem;
   color: #fffaf1;
 }
 
-.conversationAvatar {
+.conversationDetails {
   display: grid;
-  width: 3rem;
-  height: 3rem;
-  flex: none;
-  place-items: center;
-  color: #3b2118;
-  background: #fffaf1;
-  border-radius: 50%;
-  font-family: var(--font-serif);
-  font-size: 1.3rem;
+  min-width: 0;
+  gap: 0.35rem;
 }
 
 .conversationName {
+  display: block;
   overflow: hidden;
   margin: 0;
   font-size: 1.08rem;
@@ -332,7 +325,8 @@
 }
 
 .conversationMeta {
-  margin: 0.35rem 0 0;
+  display: block;
+  margin: 0;
   color: rgb(255 250 241 / 0.56);
   font-size: 0.88rem;
 }

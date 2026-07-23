@@ -52,10 +52,7 @@ export default async function EpisodePage({
 
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const status = statusCopy[e.status] ?? statusCopy.draft;
-  const isLive =
-    (e.status === "approved" || e.status === "published") &&
-    e.publish_at &&
-    new Date(e.publish_at) <= new Date();
+  const isLive = e.status === "approved" || e.status === "published";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -133,25 +130,6 @@ export default async function EpisodePage({
               className={inputStyles}
             />
           </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-soft">
-              Release date &amp; time
-            </label>
-            <input
-              type="datetime-local"
-              name="publish_at"
-              defaultValue={
-                e.publish_at
-                  ? new Date(e.publish_at).toISOString().slice(0, 16)
-                  : ""
-              }
-              className={inputStyles}
-            />
-            <p className="mt-1 text-xs text-ink-faint">
-              Approved episodes appear in the family feed at this time.
-              Suggested cadence: one episode a week.
-            </p>
-          </div>
           <button type="submit" className={buttonStyles.secondary}>
             Save changes
           </button>
@@ -162,7 +140,8 @@ export default async function EpisodePage({
         <h2 className="font-serif text-xl font-semibold">Guest approval</h2>
         <p className="text-sm text-ink-soft">
           Send {e.guests.name} the review link — they can listen and approve
-          with one big button, no sign-in needed.
+          the episode for the public Episodes page with one big button, no
+          sign-in needed.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <form action={sendForApproval.bind(null, e.id)}>

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { InterviewResume } from "@/lib/realtime/interview-client";
@@ -16,13 +17,19 @@ export default async function InterviewPage({
 
   const { data: session } = await admin
     .from("sessions")
-    .select("id, status, topic, duration_ms, guests(name)")
+    .select(
+      "id, status, topic, duration_ms, share_token, guests(name, user_id)"
+    )
     .eq("token", token)
     .single();
 
   if (!session) notFound();
 
-  const guest = session.guests as unknown as { name: string };
+  const guest = session.guests as unknown as {
+    name: string;
+    user_id: string | null;
+  };
+  const guestName = await resolveCurrentGuestName(admin, guest);
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -61,8 +68,9 @@ export default async function InterviewPage({
   return (
     <InterviewRoom
       token={token}
-      guestName={guest.name}
+      guestName={guestName}
       topic={session.topic}
+      initialShareToken={session.share_token}
       alreadyRecorded={session.status === "ready"}
       isLoggedIn={Boolean(user)}
       resume={resume}
