@@ -23,6 +23,8 @@ export type InterviewCallbacks = {
   onAiSpeaking: (speaking: boolean) => void;
   /** ~60fps: mic input level (0..1), elapsed recording ms, and RNNoise VAD. */
   onMeter: (level: number, elapsedMs: number, voiceActivity?: number) => void;
+  /** ~60fps: the RMS level of Rosie's output audio (0..1). */
+  onAiMeter: (level: number) => void;
 };
 
 // Wall-clock corrections for the realtime session's semantic VAD: events lag
@@ -86,6 +88,7 @@ export class InterviewClient {
   private processedMicStream: MediaStream | null = null;
   private audioCtx: AudioContext | null = null;
   private meterAnalyser: AnalyserNode | null = null;
+  private aiMeterAnalyser: AnalyserNode | null = null;
   private rnnoiseState: DenoiseState | null = null;
   private krispSdk: KrispSdkInstance | null = null;
   private krispFilterNode: KrispFilterNode | null = null;
@@ -103,7 +106,11 @@ export class InterviewClient {
   private rafId: number | null = null;
   private stopped = false;
   private wrapUpRequested = false;
+  private wrapUpResponseSent = false;
+  private wrapUpResponseId: string | null = null;
   private wrapUpStopTimer: number | null = null;
+  private aiOutputPlaying = false;
+  private activeResponseIds = new Set<string>();
 
   constructor(token: string, callbacks: InterviewCallbacks) {
     this.token = token;
@@ -174,7 +181,11 @@ export class InterviewClient {
         this.remoteAudioEl.srcObject = remote;
         this.remoteAudioEl.autoplay = true;
         // …and mix it into the recording.
-        this.audioCtx!.createMediaStreamSource(remote).connect(recordingDest);
+        const remoteSource = this.audioCtx!.createMediaStreamSource(remote);
+        remoteSource.connect(recordingDest);
+        this.aiMeterAnalyser = this.audioCtx!.createAnalyser();
+        this.aiMeterAnalyser.fftSize = 512;
+        remoteSource.connect(this.aiMeterAnalyser);
       };
 
       this.pc.onconnectionstatechange = () => {
@@ -281,6 +292,7 @@ export class InterviewClient {
     }
 
     const meterData = new Float32Array(this.meterAnalyser!.fftSize);
+    const aiMeterData = new Float32Array(512);
     const rnnoiseFrame = new Float32Array(rnnoiseFrameSize);
     let lastVoiceActivity = 0;
     let lastProcessedAt = 0;
@@ -292,6 +304,10 @@ export class InterviewClient {
       this.meterAnalyser.getFloatTimeDomainData(meterData);
       const rms = this.calculateRms(meterData);
       const level = Math.min(1, rms * 4);
+      if (this.aiMeterAnalyser) {
+        this.aiMeterAnalyser.getFloatTimeDomainData(aiMeterData);
+        this.cb.onAiMeter(Math.min(1, this.calculateRms(aiMeterData) * 6));
+      }
       const now = performance.now();
 
       // RNNoise expects one 10ms, 48kHz mono frame in 16-bit PCM units.
@@ -448,30 +464,59 @@ export class InterviewClient {
         const end = t?.end ?? this.now();
         const start = t?.start ?? Math.max(0, end - 3000);
         this.pushTurn({ speaker: "guest", text, startMs: start, endMs: end });
-        if (this.wrapUpRequested) {
-          this.wrapUpStopTimer = window.setTimeout(() => {
-            void this.stop();
-          }, 500);
+        break;
+      }
+      case "response.created": {
+        const response = e.response as
+          | { id?: string; metadata?: Record<string, string> | null }
+          | undefined;
+        const responseId = response?.id;
+        if (responseId) {
+          this.activeResponseIds.add(responseId);
+          if (response.metadata?.purpose === "interview_wrap_up") {
+            this.wrapUpResponseId = responseId;
+          }
         }
         break;
       }
       case "output_audio_buffer.started": {
         const p = this.getPendingAi(e.response_id as string);
         p.start = this.now();
+        this.aiOutputPlaying = true;
         this.cb.onAiSpeaking(true);
         break;
       }
-      case "output_audio_buffer.stopped":
-      case "output_audio_buffer.cleared": {
-        const p = this.getPendingAi(e.response_id as string);
+      case "output_audio_buffer.stopped": {
+        const responseId = e.response_id as string;
+        const p = this.getPendingAi(responseId);
         p.end = this.now();
+        this.aiOutputPlaying = false;
         this.cb.onAiSpeaking(false);
-        this.tryFinalizeAi(e.response_id as string);
-        if (this.wrapUpRequested) {
-          // The audio has finished playing; end without waiting for another
-          // user turn. Keep a short buffer so the final phonemes are audible.
-          this.scheduleWrapUpStop(750);
+        this.tryFinalizeAi(responseId);
+
+        if (responseId === this.wrapUpResponseId) {
+          // This is the authoritative WebRTC silence signal: the tagged
+          // closing response has fully drained and no more audio is coming.
+          this.scheduleWrapUpStop(900);
+        } else {
+          this.maybeSendWrapUpResponse();
         }
+        break;
+      }
+      case "output_audio_buffer.cleared": {
+        const responseId = e.response_id as string;
+        const p = this.getPendingAi(responseId);
+        p.end = this.now();
+        this.aiOutputPlaying = false;
+        this.cb.onAiSpeaking(false);
+        this.tryFinalizeAi(responseId);
+        // A cleared buffer was interrupted, not completed. Never treat it as
+        // a successful closing; queue a fresh closing response instead.
+        if (responseId === this.wrapUpResponseId) {
+          this.wrapUpResponseId = null;
+          this.wrapUpResponseSent = false;
+        }
+        this.maybeSendWrapUpResponse();
         break;
       }
       // GA event name, with the beta name kept as a fallback.
@@ -490,14 +535,29 @@ export class InterviewClient {
         this.tryFinalizeAi(e.response_id as string);
         break;
       }
-      case "response.output_audio.done":
-      case "response.audio.done":
       case "response.done": {
-        if (this.wrapUpRequested) {
-          // Fallback for transports/models that do not emit the output buffer
-          // lifecycle event used above.
-          this.scheduleWrapUpStop(1500);
+        const response = e.response as
+          | { id?: string; status?: string; metadata?: Record<string, string> | null }
+          | undefined;
+        const responseId = response?.id;
+        if (responseId) {
+          this.activeResponseIds.delete(responseId);
+          if (
+            response.metadata?.purpose === "interview_wrap_up" &&
+            !this.wrapUpResponseId
+          ) {
+            this.wrapUpResponseId = responseId;
+          }
         }
+        // response.done precedes WebRTC playback completion. It may allow a
+        // queued closing to start, but it must never end the interview.
+        this.maybeSendWrapUpResponse();
+        break;
+      }
+      case "response.output_audio.done":
+      case "response.audio.done": {
+        // Audio generation is complete, but the browser may still be playing
+        // buffered speech. Wait for output_audio_buffer.stopped instead.
         break;
       }
       case "error": {
@@ -539,10 +599,32 @@ export class InterviewClient {
   requestWrapUp() {
     if (this.stopped || this.wrapUpRequested) return;
     this.wrapUpRequested = true;
+
+    // Prevent a new guest turn from interrupting or racing Rosie's closing.
+    this.processedMicStream?.getAudioTracks().forEach((track) => {
+      track.enabled = false;
+    });
+    this.maybeSendWrapUpResponse();
+  }
+
+  private maybeSendWrapUpResponse() {
+    if (
+      !this.wrapUpRequested ||
+      this.wrapUpResponseSent ||
+      this.stopped ||
+      this.aiOutputPlaying ||
+      this.activeResponseIds.size > 0 ||
+      this.dc?.readyState !== "open"
+    ) {
+      return;
+    }
+
+    this.wrapUpResponseSent = true;
     this.dc?.send(
       JSON.stringify({
         type: "response.create",
         response: {
+          metadata: { purpose: "interview_wrap_up" },
           instructions:
             "The conversation is ending now. Deliver your warm closing: reflect back one or two highlights from today in the guest's own words, thank them by name, and say goodbye. Keep it under 45 seconds.",
         },
@@ -629,6 +711,7 @@ export class InterviewClient {
     this.processedMicStream = null;
     this.audioCtx = null;
     this.meterAnalyser = null;
+    this.aiMeterAnalyser = null;
     this.rnnoiseState?.destroy();
     this.rnnoiseState = null;
     this.krispFilterNode = null;

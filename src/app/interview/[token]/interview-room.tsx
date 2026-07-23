@@ -18,6 +18,7 @@ import {
 import type { TurnDraft } from "@/lib/types";
 import { formatTimestamp } from "@/components/ui";
 import { InterviewShell } from "@/components/interview-shell";
+import { GradientOrb } from "@/components/ui/gradient-orb";
 import theme from "@/components/interview-theme.module.css";
 import { useI18n } from "@/components/i18n-provider";
 
@@ -49,6 +50,7 @@ export default function InterviewRoom({
   const [elapsedMs, setElapsedMs] = useState(0);
   const clientRef = useRef<InterviewClient | null>(null);
   const micLevelRef = useRef(0);
+  const aiLevelRef = useRef(0);
   const userSpeakingRef = useRef(false);
   const userSpeakingTimeoutRef = useRef<number | null>(null);
 
@@ -74,6 +76,11 @@ export default function InterviewRoom({
       onAiSpeaking: (speaking) => {
         setAiSpeaking(speaking);
         if (speaking) setGreetingStarted(true);
+      },
+      onAiMeter: (level) => {
+        // Keep this in a ref so the orb can follow every audio frame without
+        // forcing the entire interview screen to re-render at 60fps.
+        aiLevelRef.current = level;
       },
       onMeter: (level, elapsed, voiceActivity) => {
         micLevelRef.current = level;
@@ -204,6 +211,7 @@ export default function InterviewRoom({
               aiSpeaking={false}
               userSpeaking={false}
               levelRef={micLevelRef}
+              aiLevelRef={aiLevelRef}
             />
             <h1 className={`${theme.heading} mt-10 text-3xl sm:text-4xl`}>
               {phase === "mic"
@@ -225,10 +233,9 @@ export default function InterviewRoom({
             <div className="my-10">
               <BreathingCircle
                 aiSpeaking={aiSpeaking}
-                // When Rosie is quiet, the guest owns the turn—even during
-                // the short pause before RNNoise has classified new speech.
-                userSpeaking={!aiSpeaking}
+                userSpeaking={userSpeaking}
                 levelRef={micLevelRef}
+                aiLevelRef={aiLevelRef}
               />
             </div>
 
@@ -541,32 +548,39 @@ function RotatingCaption({
 
 /**
  * Rosie becomes a five-bar microphone visualizer while the guest is speaking.
+ * During her turn, the fluid orb follows the realtime speaking callback.
  */
 function BreathingCircle({
   aiSpeaking,
   userSpeaking,
   levelRef,
+  aiLevelRef,
 }: {
   aiSpeaking: boolean;
   userSpeaking: boolean;
   levelRef: React.RefObject<number>;
+  aiLevelRef: React.RefObject<number>;
 }) {
+  const showMicVisualizer = userSpeaking && !aiSpeaking;
+
   return (
     <div className={theme.orbStage}>
-      <AnimatePresence initial={false} mode="wait">
-        {userSpeaking ? (
+      <motion.div
+        className={theme.rosieOrb}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: showMicVisualizer ? 0 : 1 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <GradientOrb
+          activity={aiSpeaking ? 0.15 : 0}
+          activityRef={aiLevelRef}
+        />
+      </motion.div>
+
+      <AnimatePresence initial={false}>
+        {showMicVisualizer ? (
           <MicVisualizer key="visualizer" levelRef={levelRef} />
-        ) : (
-          <motion.div
-            key="orb"
-            initial={{ opacity: 0, scale: 0.72 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scaleX: 0.3, scaleY: 1.12 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className={`${theme.orbCore} ${aiSpeaking ? theme.orbSpeaking : ""}`} />
-          </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
     </div>
   );
