@@ -61,10 +61,10 @@ const PART_UPLOAD_RETRIES = 3;
 // fixed timer: turns land every 10-30s, so a timer would mostly send nothing.
 const CHECKPOINT_DEBOUNCE_MS = 2_000;
 // Heartbeat in between, so an abandoned session is distinguishable from a
-// live one by how stale its last checkpoint is. Matched to the chunk interval
-// because the duration it carries is where a resumed sitting picks up the
-// timeline: a staler heartbeat means a wronger offset.
-const CHECKPOINT_HEARTBEAT_MS = PART_INTERVAL_MS;
+// live one by how stale its last checkpoint is. The duration it carries is
+// where a resumed sitting picks up the timeline, so a staler heartbeat means a
+// wronger offset — kept well inside the staleness threshold (ABANDONED_AFTER_MS).
+const CHECKPOINT_HEARTBEAT_MS = 15_000;
 
 const KRISP_SDK_URL = "/krisp/krispsdk.mjs";
 const KRISP_MODEL_BVC_URL = "/krisp/models/model_bvc.kef";
