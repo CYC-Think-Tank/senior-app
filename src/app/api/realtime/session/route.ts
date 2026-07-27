@@ -3,6 +3,7 @@ import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
+import { GUEST_FINISH_TOOL } from "@/lib/realtime/interview-ending";
 import {
   isRealtimeVoice,
   REALTIME_MODEL,
@@ -77,6 +78,8 @@ export async function POST(request: NextRequest) {
         type: "realtime",
         model: REALTIME_MODEL,
         instructions,
+        tools: [GUEST_FINISH_TOOL],
+        tool_choice: "auto",
         audio: {
           input: {
             transcription: { model: "gpt-4o-transcribe" },
