@@ -8,6 +8,7 @@ import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { AutoLoopVideo } from "@/components/auto-loop-video";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import styles from "./page.module.css";
 
 export default async function LandingPage() {
@@ -16,6 +17,25 @@ export default async function LandingPage() {
   );
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? "/demo.mp4";
+  let dashboardHref: string | null = null;
+
+  if (
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    const supabase = await createSupabaseServerClient();
+    const { data: claims } = await supabase.auth.getClaims();
+    const userId = claims?.claims.sub;
+
+    if (userId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+      dashboardHref = profile?.role === "admin" ? "/admin" : "/family";
+    }
+  }
 
   return (
     <main className={styles.page} data-landing-page>
@@ -34,12 +54,20 @@ export default async function LandingPage() {
             <Link href="/feed" className={styles.navGhost}>
               {t("commonEpisodes")}
             </Link>
-            <Link href="/login" className={styles.navGhost}>
-              {t("landingLogin")}
-            </Link>
-            <PageTransitionLink href="/signup" className={styles.navPrimary}>
-              {t("landingGetStarted")}
-            </PageTransitionLink>
+            {dashboardHref ? (
+              <Link href={dashboardHref} className={styles.navPrimary}>
+                {t("commonDashboard")}
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className={styles.navGhost}>
+                  {t("landingLogin")}
+                </Link>
+                <PageTransitionLink href="/signup" className={styles.navPrimary}>
+                  {t("landingGetStarted")}
+                </PageTransitionLink>
+              </>
+            )}
           </nav>
         </div>
 
