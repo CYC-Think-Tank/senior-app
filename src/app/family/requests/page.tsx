@@ -34,11 +34,11 @@ export default async function PodcastRequestsPage() {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>{chinese ? "Fireside 公共播客" : "The public Fireside podcast"}</p>
+          <p className={styles.eyebrow}>{chinese ? "炉边夜话公共播客" : "The public Fireside podcast"}</p>
           <h1 className={styles.title}>{chinese ? "播客申请" : "Podcast requests"}</h1>
           <p className={styles.intro}>
             {chinese
-              ? "如果您愿意，可以选择一个故事与更多 Fireside 听众分享。"
+              ? "如果您愿意，可以选择一个故事与更多炉边夜话听众分享。"
               : "If you would like, choose a story to share with the wider Fireside community."}
           </p>
         </div>

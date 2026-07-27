@@ -3,8 +3,10 @@ import { APP_NAME } from "@/lib/constants";
 
 export function Wordmark({
   tone = "ink",
+  name = APP_NAME,
 }: {
   tone?: "ink" | "light";
+  name?: string;
 }) {
   return (
     <Link
@@ -13,7 +15,7 @@ export function Wordmark({
         tone === "light" ? "text-cream" : "text-ink"
       }`}
     >
-      {APP_NAME}
+      {name}
       <span className={tone === "light" ? "text-[#ffd19c]" : "text-ember"}>
         .
       </span>

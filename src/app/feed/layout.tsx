@@ -22,7 +22,7 @@ export default async function FeedLayout({ children }: { children: React.ReactNo
     <PortalShell>
       <header className={portalStyles.header}>
         <div className={portalStyles.headerInner}>
-          <div className={portalStyles.headerBrand}><Wordmark tone="light" /></div>
+          <div className={portalStyles.headerBrand}><Wordmark tone="light" name={locale === "en" ? undefined : "炉边夜话"} /></div>
           <nav className={portalStyles.nav} aria-label="Episode navigation">
             {user ? <Link href="/family" className={portalStyles.navLink}>{t("commonFamily")}</Link> : null}
             {profile?.role === "admin" ? <Link href="/admin" className={portalStyles.navLink}>{t("commonAdmin")}</Link> : null}

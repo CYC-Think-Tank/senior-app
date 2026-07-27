@@ -41,9 +41,9 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
     openGuest: "Open guest",
   },
   "zh-Hans": {
-    eyebrow: "Fireside 概览",
+    eyebrow: "炉边夜话概览",
     title: "欢迎回来。",
-    intro: "清晰了解 Fireside 中不断增长的用户、故事和对话。",
+    intro: "清晰了解炉边夜话中不断增长的用户、故事和对话。",
     newGuest: "添加访客",
     totalUsers: "用户总数",
     recordingsToday: "今日录音",
@@ -69,9 +69,9 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
     openGuest: "打开访客",
   },
   "zh-Hant": {
-    eyebrow: "Fireside 概覽",
+    eyebrow: "炉边夜话概覽",
     title: "歡迎回來。",
-    intro: "清楚掌握 Fireside 中持續成長的使用者、故事和對話。",
+    intro: "清楚掌握炉边夜话中持續成長的使用者、故事和對話。",
     newGuest: "新增訪客",
     totalUsers: "使用者總數",
     recordingsToday: "今日錄音",

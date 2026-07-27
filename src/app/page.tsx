@@ -27,7 +27,7 @@ export default async function LandingPage() {
       <section className={styles.heroPanel} aria-label={t("landingWelcomeAria")}>
         <div className={styles.heroTop}>
           <Link href="/" className={styles.wordmark} aria-label={t("landingHomeAria")}>
-            Fireside.
+            {locale === "en" ? "Fireside." : "炉边夜话."}
           </Link>
           <nav className={styles.authNav} aria-label={t("landingAccountAria")}>
             <LanguageSwitcher tone="bare" />
@@ -193,7 +193,7 @@ export default async function LandingPage() {
             />
           </span>
           <span className={styles.brandName}>
-            Fireside<span className={styles.brandDot}>.</span>
+            {locale === "en" ? "Fireside" : "炉边夜话"}<span className={styles.brandDot}>.</span>
           </span>
         </Link>
         <p className={styles.footerNote}>{t("landingFooterNote")}</p>

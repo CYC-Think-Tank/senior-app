@@ -16,7 +16,7 @@ import styles from "../login/login.module.css";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export default function SignupPage() {
         >
           <span className={portalStyles.navSpacer} aria-hidden="true" />
           <div className={portalStyles.headerBrand}>
-            <Wordmark tone="light" />
+            <Wordmark tone="light" name={locale === "en" ? undefined : "炉边夜话"} />
           </div>
         </div>
       </header>

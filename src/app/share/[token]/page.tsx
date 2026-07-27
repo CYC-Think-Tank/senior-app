@@ -42,7 +42,7 @@ const copy = {
   "zh-Hans": {
     home: "首页",
     episodes: "节目",
-    eyebrow: "来自 Fireside 的分享",
+    eyebrow: "来自炉边夜话的分享",
     defaultTitle: (name: string) => `与${name}的对话`,
     intro: (name: string) =>
       `${name}与你分享了一段珍贵的录音。慢慢听，在故事里坐一会儿。`,
@@ -57,7 +57,7 @@ const copy = {
   "zh-Hant": {
     home: "首頁",
     episodes: "節目",
-    eyebrow: "來自 Fireside 的分享",
+    eyebrow: "來自炉边夜话的分享",
     defaultTitle: (name: string) => `與${name}的對話`,
     intro: (name: string) =>
       `${name}與你分享了一段珍貴的錄音。慢慢聽，在故事裡坐一會兒。`,
@@ -115,7 +115,7 @@ export default async function SharedConversationPage({
     <PortalShell>
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <Wordmark tone="light" />
+          <Wordmark tone="light" name={locale === "en" ? undefined : "炉边夜话"} />
           <nav className={styles.nav} aria-label="Public navigation">
             <Link href="/">{pageCopy.home}</Link>
             <Link href="/feed">{pageCopy.episodes}</Link>

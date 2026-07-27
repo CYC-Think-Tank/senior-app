@@ -16,7 +16,7 @@ import styles from "./login.module.css";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,7 +48,7 @@ export default function LoginPage() {
         >
           <span className={portalStyles.navSpacer} aria-hidden="true" />
           <div className={portalStyles.headerBrand}>
-            <Wordmark tone="light" />
+            <Wordmark tone="light" name={locale === "en" ? undefined : "炉边夜话"} />
           </div>
         </div>
       </header>
