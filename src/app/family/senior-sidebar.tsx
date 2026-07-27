@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { Headphones, Home, MessageSquareText } from "lucide-react";
+import { Headphones, Home, MessageSquareText, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { UserMenu } from "@/components/user-menu";
@@ -14,11 +14,16 @@ function PendingIndicator() {
   return pending ? <span className={styles.navPending} aria-hidden="true" /> : null;
 }
 
+/** Sibling pages under /family that are not a conversation's id. */
+const namedRoutes = ["/family/requests", "/family/settings"];
+
 export function SeniorSidebar({ name }: { name: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { locale } = useI18n();
   const chinese = locale !== "en";
+  const conversationDetail =
+    /^\/family\/[^/]+$/.test(pathname) && !namedRoutes.includes(pathname);
   const items = [
     {
       href: "/family",
@@ -30,15 +35,19 @@ export function SeniorSidebar({ name }: { name: string }) {
       href: "/family/conversations",
       label: chinese ? "我的对话" : "Conversations",
       icon: Headphones,
-      active:
-        pathname.startsWith("/family/conversations") ||
-        (/^\/family\/[^/]+$/.test(pathname) && pathname !== "/family/requests"),
+      active: pathname.startsWith("/family/conversations") || conversationDetail,
     },
     {
       href: "/family/requests",
       label: chinese ? "播客申请" : "Podcast requests",
       icon: MessageSquareText,
       active: pathname.startsWith("/family/requests"),
+    },
+    {
+      href: "/family/settings",
+      label: chinese ? "设置" : "Settings",
+      icon: Settings,
+      active: pathname.startsWith("/family/settings"),
     },
   ];
 

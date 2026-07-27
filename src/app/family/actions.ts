@@ -238,6 +238,77 @@ export async function deleteConversation(sessionId: string) {
 }
 
 /**
+ * Saves the signed-in person's own name and bio.
+ *
+ * The name lives on their profile — it is what the portal greets them by. The
+ * bio lives on their "self" guest row, because that is the record the AI host
+ * reads before an interview. Their guest name is kept in step here so the host
+ * does not greet them by a name they just changed; `startMyConversation` does
+ * the same sync for accounts that were renamed before this page existed.
+ *
+ * Both writes go through the service role: family accounts have read-only
+ * policies on `profiles` and `guests`, and the rows are pinned to the verified
+ * user id from the session claims.
+ */
+export async function updateMyProfile(name: string, bio: string) {
+  const { user } = await requireUser();
+  const admin = createSupabaseAdminClient();
+
+  const displayName = name.trim().slice(0, 80) || null;
+  const about = bio.trim().slice(0, 1000) || null;
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("email, family_id")
+    .eq("id", user.id)
+    .single();
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ display_name: displayName })
+    .eq("id", user.id);
+  if (error) {
+    console.error("Could not save the profile:", error);
+    return { ok: false as const };
+  }
+
+  const guestFields = {
+    name: personName(displayName, profile?.email ?? user.email),
+    bio: about,
+  };
+  const { data: guest } = await admin
+    .from("guests")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  // No guest row yet means they have not recorded anything. Creating it now
+  // (stamped with their family, as in `startMyConversation`) means the bio is
+  // already waiting for the host when they do.
+  const { error: guestError } = guest
+    ? await admin.from("guests").update(guestFields).eq("id", guest.id)
+    : await admin.from("guests").insert({
+        ...guestFields,
+        user_id: user.id,
+        family_id: profile?.family_id ?? null,
+        language:
+          normalizeLocale((await cookies()).get(localeCookieName)?.value) === "en"
+            ? "English"
+            : "Chinese",
+      });
+
+  if (guestError) {
+    console.error("Could not save the storyteller details:", guestError);
+    return { ok: false as const };
+  }
+
+  // The sidebar greets them by name from the family layout, so refresh the
+  // whole segment rather than just the settings page.
+  revalidatePath("/family", "layout");
+  return { ok: true as const };
+}
+
+/**
  * Starts a new conversation spoken by the signed-in user. Each account gets a
  * single reusable "self" guest (plus family access to it, so the finished
  * recording shows up on their own dashboard), then a fresh session per run.
