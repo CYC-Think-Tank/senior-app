@@ -1,17 +1,37 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { Headphones, Home, MessageSquareText, Settings } from "lucide-react";
+import { Headphones, Home, LogOut, MessageSquareText, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { UserMenu } from "@/components/user-menu";
 import { Wordmark } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
+import { signOut } from "@/app/auth/actions";
 import styles from "./senior-dashboard.module.css";
 
 function PendingIndicator() {
   const { pending } = useLinkStatus();
   return pending ? <span className={styles.navPending} aria-hidden="true" /> : null;
+}
+
+function AccountActions({ name }: { name: string }) {
+  const { t } = useI18n();
+
+  return (
+    <div className={styles.accountActions}>
+      <span className={styles.accountName}>{name}</span>
+      <form action={signOut}>
+        <button
+          type="submit"
+          className={styles.signOutButton}
+          aria-label={t("commonSignOut")}
+          title={t("commonSignOut")}
+        >
+          <LogOut aria-hidden="true" />
+        </button>
+      </form>
+    </div>
+  );
 }
 
 /** Sibling pages under /family that are not a conversation's id. */
@@ -58,7 +78,7 @@ export function SeniorSidebar({ name }: { name: string }) {
       </div>
       <div className={styles.mobileTools}>
         <LanguageSwitcher tone="bare" />
-        <UserMenu name={name} tone="dark" />
+        <AccountActions name={name} />
       </div>
       <p className={styles.sidebarLabel}>{chinese ? "我的空间" : "My space"}</p>
       <nav className={styles.sidebarNav} aria-label={chinese ? "长辈导航" : "Senior navigation"}>
@@ -79,7 +99,7 @@ export function SeniorSidebar({ name }: { name: string }) {
       </nav>
       <div className={styles.sidebarFooter}>
         <LanguageSwitcher tone="bare" />
-        <UserMenu name={name} tone="dark" />
+        <AccountActions name={name} />
       </div>
     </aside>
   );

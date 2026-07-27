@@ -89,13 +89,62 @@
 
 .mobileTools { display: none; }
 
-.sidebarFooter > button,
-.sidebarFooter > div > button {
+.sidebarFooter > button {
   width: 100%;
   min-height: 3.25rem;
   justify-content: flex-start;
   padding-inline: 0.8rem;
   font-size: 0.95rem;
+}
+
+.accountActions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: 0 0.35rem 0 0.8rem;
+  color: rgb(255 250 241 / 0.8);
+}
+
+.accountName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountActions form {
+  margin-left: auto;
+}
+
+.signOutButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.6rem;
+  color: rgb(255 250 241 / 0.72);
+  transition: color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.signOutButton:hover {
+  color: #fff;
+  background: rgb(255 250 241 / 0.1);
+  transform: translateX(1px);
+}
+
+.signOutButton:focus-visible {
+  outline: 2px solid #fffaf1;
+  outline-offset: 2px;
+}
+
+.signOutButton svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke-width: 1.8;
 }
 
 .content {
@@ -736,8 +785,10 @@
     border-bottom: 1px solid rgb(255 250 241 / 0.13);
   }
   .sidebarBrand { min-height: 3rem; margin: 0; padding: 0 0.35rem; }
-  .mobileTools { position: absolute; top: 0.9rem; right: 1rem; display: flex; align-items: center; }
+  .mobileTools { position: absolute; top: 0.9rem; right: 1rem; display: flex; align-items: center; gap: 0.15rem; }
   .mobileTools > button { min-height: 2.75rem; }
+  .mobileTools .accountActions { min-height: 2.75rem; max-width: 10rem; padding-left: 0.3rem; }
+  .mobileTools .signOutButton { width: 2.5rem; height: 2.5rem; }
   .sidebarLabel { display: none; }
   .sidebarNav { grid-template-columns: repeat(4, 1fr); margin-top: 0.75rem; }
   .navLink { min-height: 3.2rem; justify-content: center; padding: 0 0.5rem; font-size: 0.82rem; }

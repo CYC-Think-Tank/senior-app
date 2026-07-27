@@ -3,24 +3,57 @@ import { ArrowRight, Mic } from "lucide-react";
 import { startMyConversation } from "./actions";
 import { ConversationList } from "./conversation-list";
 import { getFamilyConversations } from "./family-data";
+import { requireUser } from "@/lib/auth";
+import { personName } from "@/lib/names";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import styles from "./senior-dashboard.module.css";
 
 export const dynamic = "force-dynamic";
 
+function timeGreeting(name: string, chinese: boolean) {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      hourCycle: "h23",
+      timeZone: "America/Toronto",
+    }).format(new Date()),
+  );
+
+  if (hour < 5 || hour >= 23) {
+    return chinese ? `还没休息吗，${name}？` : `Still up, ${name}?`;
+  }
+  if (hour < 12) {
+    return chinese ? `早上好，${name}。` : `Good morning, ${name}.`;
+  }
+  if (hour < 17) {
+    return chinese ? `下午好，${name}。` : `Good afternoon, ${name}.`;
+  }
+  return chinese ? `晚上好，${name}。` : `Good evening, ${name}.`;
+}
+
 export default async function FamilyPage() {
-  const [{ conversations, origin }, locale] = await Promise.all([
+  const [{ conversations, origin }, locale, { supabase, user }] = await Promise.all([
     getFamilyConversations(),
     getPreferredLocale(),
+    requireUser(),
   ]);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name, email")
+    .eq("id", user.id)
+    .maybeSingle();
+  const name = personName(profile?.display_name, profile?.email ?? user.email);
   const chinese = locale !== "en";
+  const greeting = timeGreeting(name, chinese);
 
   return (
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <p className={styles.eyebrow}>{chinese ? "欢迎回来" : "Welcome home"}</p>
-          <h1 className={styles.title}>{chinese ? "您的故事" : "Your stories"}</h1>
+          <p className={styles.eyebrow}>{chinese ? "您的炉边夜话空间" : "Your Fireside space"}</p>
+          <h1 className={styles.title}>
+            {greeting}
+          </h1>
           <p className={styles.intro}>
             {chinese
               ? "开始新的温暖对话，或再次聆听您已经保存的回忆。"
