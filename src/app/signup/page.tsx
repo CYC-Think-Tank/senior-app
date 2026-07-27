@@ -11,7 +11,7 @@ import {
   portalStyles,
 } from "@/components/portal-shell";
 import { Wordmark } from "@/components/ui";
-import { signUpWithEmail } from "./actions";
+import { signUpWithPassword } from "./actions";
 import styles from "../login/login.module.css";
 
 export default function SignupPage() {
@@ -19,6 +19,7 @@ export default function SignupPage() {
   const { locale, t } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -28,7 +29,7 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const result = await signUpWithEmail(name, email);
+      const result = await signUpWithPassword(name, email, password);
       if (result.ok) {
         router.replace(result.redirectTo);
         router.refresh();
@@ -95,6 +96,23 @@ export default function SignupPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className={styles.input}
                 />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="password" className={styles.label}>
+                  {t("loginPasswordLabel")}
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder={t("loginPasswordPlaceholder")}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={styles.input}
+                />
+                <p className={styles.passwordHint}>{t("signupPasswordHint")}</p>
               </div>
               {error && <p className={styles.error}>{error}</p>}
               <button

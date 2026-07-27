@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signInWithEmail } from "@/app/login/actions";
+import { signInWithPassword } from "@/app/login/actions";
 import { useI18n } from "@/components/i18n-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Wordmark } from "@/components/ui";
@@ -18,6 +18,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { locale, t } = useI18n();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -26,7 +27,7 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await signInWithEmail(email);
+      const result = await signInWithPassword(email, password);
       if (result.ok) {
         router.replace(result.redirectTo);
         router.refresh();
@@ -78,6 +79,21 @@ export default function LoginPage() {
                   placeholder={t("loginEmailPlaceholder")}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className={styles.input}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="password" className={styles.label}>
+                  {t("loginPasswordLabel")}
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  placeholder={t("loginPasswordPlaceholder")}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className={styles.input}
                 />
               </div>

@@ -8,6 +8,7 @@ import styles from "../admin-management.module.css";
 export type ManagedUser = {
   id: string;
   name: string;
+  participationSessionId: string | null;
   participationStatus: string | null;
   requestKind: string | null;
 };
@@ -27,7 +28,7 @@ export function UserManagement({ users }: { users: ManagedUser[] }) {
                 <span className={styles.name}>{user.name}</span>
               </div>
               <div className={styles.actions}>
-                {user.participationStatus === "requested" && user.requestKind === "existing_conversation" ? (
+                {user.participationStatus === "requested" && user.requestKind === "existing_conversation" && user.participationSessionId ? (
                   <Link className={styles.inviteButton} href="/admin/participation">Review request</Link>
                 ) : (
                   <form action={invitePodcastUser.bind(null, user.id)}>
