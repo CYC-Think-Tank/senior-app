@@ -288,10 +288,13 @@ export async function inviteFamily(guestId: string, formData: FormData) {
     throw new Error("Could not send the family invitation.");
   }
 
+  // Admins have no family_id — they already reach every guest — so inviting one
+  // just sends the link without moving them into this family.
   const { error: joinError } = await admin
     .from("profiles")
     .update({ family_id: familyId })
-    .ilike("email", email);
+    .ilike("email", email)
+    .neq("role", "admin");
   if (joinError) {
     console.error("Could not add the invitee to the family:", joinError);
     throw new Error("Could not save the invite.");
