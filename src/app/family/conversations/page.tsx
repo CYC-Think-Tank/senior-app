@@ -1,19 +1,17 @@
 import { Mic } from "lucide-react";
-import { cookies } from "next/headers";
 import { startMyConversation } from "../actions";
 import { ConversationList } from "../conversation-list";
 import { getFamilyConversations } from "../family-data";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import styles from "../senior-dashboard.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConversationsPage() {
-  const [{ conversations, origin }, cookieStore] = await Promise.all([
+  const [{ conversations, origin }, locale] = await Promise.all([
     getFamilyConversations(),
-    cookies(),
+    getPreferredLocale(),
   ]);
-  const locale = normalizeLocale(cookieStore.get(localeCookieName)?.value);
   const chinese = locale !== "en";
 
   return (

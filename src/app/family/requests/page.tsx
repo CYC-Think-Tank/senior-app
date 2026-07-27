@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import { getFamilyConversations } from "../family-data";
 import { PodcastRequestPanel } from "./request-panel";
 import styles from "../senior-dashboard.module.css";
@@ -8,12 +7,11 @@ import styles from "../senior-dashboard.module.css";
 export const dynamic = "force-dynamic";
 
 export default async function PodcastRequestsPage() {
-  const [{ supabase, user }, { conversations }, cookieStore] = await Promise.all([
+  const [{ supabase, user }, { conversations }, locale] = await Promise.all([
     requireUser(),
     getFamilyConversations(),
-    cookies(),
+    getPreferredLocale(),
   ]);
-  const locale = normalizeLocale(cookieStore.get(localeCookieName)?.value);
   const chinese = locale !== "en";
   const { data } = await supabase
     .from("podcast_participation")

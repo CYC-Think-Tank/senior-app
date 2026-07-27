@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { Play } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { formatDuration } from "@/components/ui";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import type { Episode } from "@/lib/types";
 import styles from "./feed.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const admin = createSupabaseAdminClient();
   const { data: episodes } = await admin

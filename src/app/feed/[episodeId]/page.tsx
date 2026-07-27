@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AudioPlayer } from "@/components/audio-player";
 import { formatDuration } from "@/components/ui";
 import { EPISODES_BUCKET } from "@/lib/constants";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import type { Episode } from "@/lib/types";
 import styles from "../feed.module.css";
 
@@ -14,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function EpisodePlayerPage({ params }: { params: Promise<{ episodeId: string }> }) {
   const { episodeId } = await params;
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
   const admin = createSupabaseAdminClient();
   const { data: episode } = await admin
     .from("episodes")

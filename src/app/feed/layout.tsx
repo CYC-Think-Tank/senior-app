@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { LogIn, LogOut } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/auth/actions";
@@ -7,10 +6,11 @@ import { Wordmark } from "@/components/ui";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PortalShell, portalStyles } from "@/components/portal-shell";
 import { RouteContentEntrance } from "@/components/page-entrance";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 
 export default async function FeedLayout({ children }: { children: React.ReactNode }) {
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();

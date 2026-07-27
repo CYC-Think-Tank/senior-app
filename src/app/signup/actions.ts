@@ -3,6 +3,8 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validateNewPassword } from "@/lib/password";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { localeCookieName, normalizeLocale } from "@/lib/i18n";
 
 export type SignUpResult =
   | { ok: true; redirectTo: string }
@@ -19,6 +21,9 @@ export async function signUpWithPassword(
 ): Promise<SignUpResult> {
   const name = nameInput.trim().replace(/\s+/g, " ");
   const email = emailInput.trim().toLowerCase();
+  const locale = normalizeLocale(
+    (await cookies()).get(localeCookieName)?.value,
+  );
 
   if (
     name.length < 1 ||
@@ -79,6 +84,7 @@ export async function signUpWithPassword(
       id: data.user.id,
       email,
       display_name: name,
+      locale,
       role,
     },
     { onConflict: "id" }

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
 import { ArrowLeft, Mic } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { resumeConversation } from "@/app/family/actions";
@@ -8,7 +7,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { RAW_BUCKET } from "@/lib/constants";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
 import type { Guest, InterviewSession } from "@/lib/types";
 
@@ -21,7 +21,7 @@ export default async function FamilyConversationPage({
 }) {
   const { sessionId } = await params;
   const { supabase } = await requireUser();
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
 

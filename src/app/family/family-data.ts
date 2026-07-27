@@ -1,7 +1,8 @@
 import { cache } from "react";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
 import type { InterviewSession } from "@/lib/types";
 
@@ -20,7 +21,7 @@ export type FamilyConversation = {
 
 export const getFamilyConversations = cache(async () => {
   const { supabase, user } = await requireUser();
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
   const { data } = await supabase

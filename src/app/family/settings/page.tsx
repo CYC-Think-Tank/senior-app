@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import { isRealtimeVoice, REALTIME_VOICE } from "@/lib/constants";
 import { SettingsForm } from "./settings-form";
 import styles from "../senior-dashboard.module.css";
@@ -8,11 +7,10 @@ import styles from "../senior-dashboard.module.css";
 export const dynamic = "force-dynamic";
 
 export default async function FamilySettingsPage() {
-  const [{ supabase, user }, cookieStore] = await Promise.all([
+  const [{ supabase, user }, locale] = await Promise.all([
     requireUser(),
-    cookies(),
+    getPreferredLocale(),
   ]);
-  const locale = normalizeLocale(cookieStore.get(localeCookieName)?.value);
   const chinese = locale !== "en";
 
   // Both reads go through the caller's RLS client: they may read their own

@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   dictionaries,
+  localeCookieName,
   type I18nKey,
   type Locale,
   translate,
@@ -30,6 +31,14 @@ export function I18nProvider({
 }) {
   const [activeLocale, setActiveLocale] = useState(locale);
   const previousServerLocale = useRef(locale);
+
+  // A database-backed locale may arrive on a new device before it has a local
+  // cookie. Mirror it locally so token-gated and anonymous routes stay in the
+  // same language for the rest of the visit.
+  useEffect(() => {
+    document.cookie = `${localeCookieName}=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   useEffect(() => {
     if (previousServerLocale.current === locale) return;

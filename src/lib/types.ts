@@ -4,6 +4,7 @@ export type Profile = {
   id: string;
   email: string;
   display_name: string | null;
+  locale: "en" | "zh-Hans" | "zh-Hant";
   role: Role;
   family_id: string;
   created_at: string;

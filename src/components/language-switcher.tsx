@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
+import { setLocaleAction } from "@/app/language/actions";
 import { localeCookieName, type Locale } from "@/lib/i18n";
 import styles from "@/components/language-switcher.module.css";
 
@@ -58,6 +59,11 @@ export function LanguageSwitcher({
       setLocale(nextLocale);
       setOptimisticLocale(nextLocale);
       setPreparing(false);
+
+      // Signed-in users also keep this choice in their profile so their next
+      // device starts in the same language. Anonymous visitors still retain
+      // the cookie-only behaviour above.
+      void setLocaleAction(nextLocale);
 
       // Admin overview pages read their copy from the client locale context,
       // so changing language there does not need to rerun auth and data reads.

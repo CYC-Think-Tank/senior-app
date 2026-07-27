@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import {
   Geist,
   Playfair_Display,
@@ -9,10 +9,9 @@ import { I18nProvider } from "@/components/i18n-provider";
 import { InterviewAtmosphere } from "@/components/interview-atmosphere";
 import { PageEntrance } from "@/components/page-entrance";
 import {
-  localeCookieName,
-  normalizeLocale,
   translate,
 } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -72,8 +71,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
-  const locale = normalizeLocale(cookieStore.get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
 
   return (
     <html

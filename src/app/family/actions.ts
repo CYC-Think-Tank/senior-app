@@ -1,12 +1,12 @@
 "use server";
 
 import { randomBytes } from "crypto";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { interviewLanguage, localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { interviewLanguage } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import { personName } from "@/lib/names";
 import {
   EPISODES_BUCKET,
@@ -305,9 +305,7 @@ export async function updateMyProfile(
         user_id: user.id,
         family_id: profile?.family_id ?? null,
         origin: "self_serve",
-        language: interviewLanguage(
-          normalizeLocale((await cookies()).get(localeCookieName)?.value),
-        ),
+        language: interviewLanguage(await getPreferredLocale()),
       });
 
   if (guestError) {
@@ -328,7 +326,7 @@ export async function updateMyProfile(
  */
 export async function startMyConversation() {
   const { user } = await requireUser();
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
   const admin = createSupabaseAdminClient();
 
   const [{ data: existing }, { data: profile }] = await Promise.all([

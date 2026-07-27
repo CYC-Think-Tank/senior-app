@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
 import {
   CalendarDays,
   Clock3,
@@ -16,7 +15,8 @@ import {
   portalStyles,
 } from "@/components/portal-shell";
 import { RAW_BUCKET } from "@/lib/constants";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import type { Guest, InterviewSession } from "@/lib/types";
 import styles from "./share-page.module.css";
 
@@ -79,7 +79,7 @@ export default async function SharedConversationPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
+  const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const pageCopy = copy[locale];
 

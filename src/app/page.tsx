@@ -1,19 +1,17 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { cookies } from "next/headers";
 import { HeroSky } from "@/components/hero-sky";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { AutoLoopVideo } from "@/components/auto-loop-video";
-import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import styles from "./page.module.css";
 
 export default async function LandingPage() {
-  const locale = normalizeLocale(
-    (await cookies()).get(localeCookieName)?.value,
-  );
+  const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? "/demo.mp4";
   let dashboardHref: string | null = null;
