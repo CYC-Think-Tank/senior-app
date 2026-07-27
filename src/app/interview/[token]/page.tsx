@@ -34,6 +34,16 @@ export default async function InterviewPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  let homeHref: "/" | "/admin" | "/family" = "/";
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    homeHref = profile?.role === "admin" ? "/admin" : "/family";
+  }
 
   // A conversation that ended before it was wrapped up is waiting to be picked
   // back up, not started over: the live checkpoints kept its transcript, and
@@ -73,6 +83,7 @@ export default async function InterviewPage({
       initialShareToken={session.share_token}
       alreadyRecorded={session.status === "ready"}
       isLoggedIn={Boolean(user)}
+      homeHref={homeHref}
       resume={resume}
     />
   );

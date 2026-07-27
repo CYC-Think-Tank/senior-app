@@ -35,6 +35,7 @@ type Props = {
   initialShareToken: string | null;
   alreadyRecorded: boolean;
   isLoggedIn: boolean;
+  homeHref: "/" | "/admin" | "/family";
   /** Set when this conversation ended early and is being picked back up. */
   resume?: InterviewResume;
 };
@@ -46,6 +47,7 @@ export default function InterviewRoom({
   initialShareToken,
   alreadyRecorded,
   isLoggedIn,
+  homeHref,
   resume,
 }: Props) {
   const { t } = useI18n();
@@ -167,7 +169,7 @@ export default function InterviewRoom({
 
   if (alreadyRecorded && phase === "idle") {
     return (
-      <InterviewShell>
+      <InterviewShell homeHref={homeHref}>
         <Sparkles className={`${theme.accentIcon} mx-auto mb-6 h-12 w-12`} />
         <h1 className={`${theme.heading} text-4xl sm:text-5xl`}>
           {t("interviewAlreadyTitle")}
@@ -181,7 +183,7 @@ export default function InterviewRoom({
   }
 
   return (
-    <InterviewShell>
+    <InterviewShell homeHref={homeHref}>
       <>
         <AnimatePresence mode="wait">
           {showWelcome && (
