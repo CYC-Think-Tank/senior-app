@@ -9,6 +9,9 @@ export type Profile = {
   created_at: string;
 };
 
+/** How a storyteller got here; only `admin_invite` shows on the admin side. */
+export type GuestOrigin = "admin_invite" | "self_serve" | "public";
+
 export type Guest = {
   id: string;
   user_id: string | null;
@@ -20,6 +23,7 @@ export type Guest = {
   language: string;
   /** Null falls back to REALTIME_VOICE rather than pinning today's default. */
   voice: string | null;
+  origin: GuestOrigin;
   created_at: string;
 };
 
