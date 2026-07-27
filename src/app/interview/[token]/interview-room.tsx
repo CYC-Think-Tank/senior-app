@@ -84,6 +84,7 @@ export default function InterviewRoom({
       onTurns: setTurns,
       onLiveAiText: setLiveAiText,
       onAiSpeaking: setAiSpeaking,
+      onWrapUpStarted: () => setWrappingUp(true),
       onAiMeter: (level) => {
         // Keep this in a ref so the orb can follow every audio frame without
         // forcing the entire interview screen to re-render at 60fps.
@@ -277,7 +278,7 @@ export default function InterviewRoom({
                 className={theme.secondaryAction}
               >
                 <Sparkles className="h-5 w-5" />
-                {t("interviewWrap")}
+                {t(wrappingUp ? "interviewWrapBusy" : "interviewWrap")}
               </button>
             </div>
           </Screen>
