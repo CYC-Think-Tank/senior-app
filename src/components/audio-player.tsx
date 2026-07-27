@@ -66,7 +66,7 @@ export function AudioPlayer({
         onLoadedMetadata={(e) => readDuration(e.currentTarget)}
         onDurationChange={(e) => readDuration(e.currentTarget)}
       />
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap sm:gap-4">
         <button
           onClick={() => skip(-15)}
           className="rounded-full p-2 text-ink-soft hover:bg-paper-deep"
@@ -92,7 +92,7 @@ export function AudioPlayer({
           <RotateCw className="h-5 w-5" />
         </button>
 
-        <div className="flex-1">
+        <div className="order-last w-full flex-[1_0_100%] sm:order-none sm:w-auto sm:flex-1">
           <input
             type="range"
             min={0}

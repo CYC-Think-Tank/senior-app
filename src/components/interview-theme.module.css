@@ -370,11 +370,6 @@
   text-shadow: 0 2px 3px rgb(46 13 7 / 0.5);
 }
 
-.captionWord {
-  display: inline-block;
-  will-change: opacity, transform, filter;
-}
-
 .nameTransitionSkeleton {
   position: absolute;
   inset: 0;

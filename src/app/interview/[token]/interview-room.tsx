@@ -1,10 +1,8 @@
 "use client";
 
 import {
-  Fragment,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -58,7 +56,6 @@ export default function InterviewRoom({
   const [elapsedMs, setElapsedMs] = useState(resume?.offsetMs ?? 0);
   const [liveAiText, setLiveAiText] = useState("");
   const [aiSpeaking, setAiSpeaking] = useState(false);
-  const [greetingStarted, setGreetingStarted] = useState(false);
   const [userSpeaking, setUserSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
   const [shareToken, setShareToken] = useState(initialShareToken);
@@ -74,7 +71,6 @@ export default function InterviewRoom({
     if (clientRef.current) return;
 
     setErrorDetail(null);
-    setGreetingStarted(false);
     document.documentElement.dataset.interviewLive = "true";
     const client = new InterviewClient(token, {
       onPhase: (p, detail) => {
@@ -85,20 +81,9 @@ export default function InterviewRoom({
         }
       },
       onComplete: setShareToken,
-      onTurns: (nextTurns) => {
-        setTurns(nextTurns);
-        if (nextTurns.some((turn) => turn.speaker === "ai")) {
-          setGreetingStarted(true);
-        }
-      },
-      onLiveAiText: (text) => {
-        setLiveAiText(text);
-        if (text) setGreetingStarted(true);
-      },
-      onAiSpeaking: (speaking) => {
-        setAiSpeaking(speaking);
-        if (speaking) setGreetingStarted(true);
-      },
+      onTurns: setTurns,
+      onLiveAiText: setLiveAiText,
+      onAiSpeaking: setAiSpeaking,
       onAiMeter: (level) => {
         // Keep this in a ref so the orb can follow every audio frame without
         // forcing the entire interview screen to re-render at 60fps.
@@ -272,15 +257,15 @@ export default function InterviewRoom({
               {aiSpeaking ? t("interviewAiSpeaking") : t("interviewListening")}
             </p>
 
-            <AnimatePresence initial={false} mode="wait">
-              {greetingStarted && !userSpeaking ? (
-                <RotatingCaption
-                  key="caption"
-                  text={captionText}
-                  speaking={aiSpeaking}
-                />
-              ) : null}
-            </AnimatePresence>
+            <div className={`${theme.caption} mx-auto mt-6 min-h-24 max-w-2xl`}>
+              {captionText && (
+                <p>
+                  {captionText.length > 220
+                    ? `…${captionText.slice(-220)}`
+                    : captionText}
+                </p>
+              )}
+            </div>
 
             <div className={theme.actions}>
               <button
@@ -348,7 +333,6 @@ export default function InterviewRoom({
                 setShowWelcome(false);
                 setPhase("idle");
                 setTurns(resume?.turns ?? []);
-                setGreetingStarted(false);
                 setWrappingUp(false);
               }}
               className={`${theme.retryButton} mx-auto mt-8`}
@@ -469,158 +453,6 @@ function GreetingText({ guestName }: { guestName: string }) {
         ))}
       </span>
     </h1>
-  );
-}
-
-// The AI's transcript streams over the data channel far ahead of her voice, so
-// the caption paces itself: text is wrapped to the lines that actually fit the
-// container, and a window of them rotates forward with the estimated spoken
-// position instead of dumping the whole reply at once.
-const CAPTION_LINES = 2;
-const CAPTION_CHARS_PER_SECOND = 15.5; // ~150 wpm TTS incl. spaces; tune by ear
-const CAPTION_TICK_MS = 250;
-const CAPTION_HEIGHT_REM = CAPTION_LINES * 1.5 * 1.45;
-
-let measureCtx: CanvasRenderingContext2D | null = null;
-
-/** Greedy word-wrap using real text metrics for the container's font. */
-function wrapToLines(text: string, maxWidth: number, font: string): string[] {
-  if (!text || maxWidth <= 0) return [];
-  measureCtx ??= document.createElement("canvas").getContext("2d");
-  if (!measureCtx) return [text];
-  measureCtx.font = font;
-  const lines: string[] = [];
-  let line = "";
-  for (const word of text.split(/\s+/)) {
-    if (!word) continue;
-    const candidate = line ? `${line} ${word}` : word;
-    if (line && measureCtx.measureText(candidate).width > maxWidth) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = candidate;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-function RotatingCaption({
-  text,
-  speaking,
-}: {
-  text: string;
-  speaking: boolean;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [metrics, setMetrics] = useState<{
-    width: number;
-    font: string;
-  } | null>(null);
-  const [bottomLine, setBottomLine] = useState(0);
-  const linesRef = useRef<string[]>([]);
-  const prevLenRef = useRef(0);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const update = () => {
-      const style = getComputedStyle(el);
-      setMetrics({
-        width: el.clientWidth,
-        font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
-      });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const lines = useMemo(
-    () => (metrics ? wrapToLines(text, metrics.width, metrics.font) : []),
-    [text, metrics]
-  );
-  useEffect(() => {
-    linesRef.current = lines;
-  }, [lines]);
-
-  // The text was cleared or replaced (new response) — rewind to its start.
-  useEffect(() => {
-    if (text.length < prevLenRef.current) setBottomLine(0);
-    prevLenRef.current = text.length;
-  }, [text]);
-
-  useEffect(() => {
-    if (!speaking) return;
-    const startedAt = performance.now();
-    const tick = () => {
-      const spokenChars =
-        ((performance.now() - startedAt) / 1000) * CAPTION_CHARS_PER_SECOND;
-      const wrapped = linesRef.current;
-      let consumed = 0;
-      let idx = 0;
-      while (
-        idx < wrapped.length - 1 &&
-        consumed + wrapped[idx].length + 1 <= spokenChars
-      ) {
-        consumed += wrapped[idx].length + 1;
-        idx++;
-      }
-      // Only ever advance, so the window never jumps backward.
-      setBottomLine((prev) => Math.max(prev, idx));
-    };
-    tick();
-    const id = setInterval(tick, CAPTION_TICK_MS);
-    return () => clearInterval(id);
-  }, [speaking]);
-
-  const bottom = speaking
-    ? Math.min(bottomLine, Math.max(0, lines.length - 1))
-    : Math.max(0, lines.length - 1);
-  const start = Math.max(0, bottom - CAPTION_LINES + 1);
-  const visible = lines.slice(start, bottom + 1);
-
-  return (
-    <motion.div
-      ref={containerRef}
-      className={`${theme.caption} mx-auto mt-6 max-w-2xl overflow-hidden`}
-      style={{ height: `${CAPTION_HEIGHT_REM}rem` }}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.25, ease: [0.45, 0, 0.55, 1] }}
-    >
-      {visible.map((line, i) => {
-        const words = line.split(" ");
-        return (
-          <motion.p
-            key={start + i}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            {words.map((word, wordIndex) => (
-              <Fragment key={`${start + i}-${wordIndex}-${word}`}>
-                <motion.span
-                  className={theme.captionWord}
-                  initial={{ opacity: 0, y: 5, filter: "blur(4px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{
-                    duration: 0.5,
-                    delay: Math.min(wordIndex, 14) * 0.08,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
-                >
-                  {word}
-                </motion.span>
-                {wordIndex < words.length - 1 ? " " : null}
-              </Fragment>
-            ))}
-          </motion.p>
-        );
-      })}
-    </motion.div>
   );
 }
 

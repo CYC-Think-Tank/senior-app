@@ -1,13 +1,75 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
+import {
+  CalendarDays,
+  Clock3,
+  Headphones,
+  LockKeyhole,
+} from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AudioPlayer } from "@/components/audio-player";
-import { Card, Monogram, Wordmark, formatDuration } from "@/components/ui";
+import { Card, Wordmark, formatDuration } from "@/components/ui";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import {
+  PortalShell,
+  portalStyles,
+} from "@/components/portal-shell";
 import { RAW_BUCKET } from "@/lib/constants";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import type { Guest, InterviewSession } from "@/lib/types";
+import styles from "./share-page.module.css";
 
 export const dynamic = "force-dynamic";
+
+const copy = {
+  en: {
+    home: "Home",
+    episodes: "Episodes",
+    eyebrow: "Shared from Fireside",
+    defaultTitle: (name: string) => `A conversation with ${name}`,
+    intro: (name: string) =>
+      `A personal recording shared by ${name}. Settle in and listen at your own pace.`,
+    storyteller: "Storyteller",
+    recorded: "Recorded",
+    duration: "Duration",
+    listen: "Listen to the conversation",
+    ready: "Ready when you are",
+    privateLink: "Private link",
+    privacy:
+      "Anyone with this private link can listen. Please share it thoughtfully.",
+  },
+  "zh-Hans": {
+    home: "首页",
+    episodes: "节目",
+    eyebrow: "来自 Fireside 的分享",
+    defaultTitle: (name: string) => `与${name}的对话`,
+    intro: (name: string) =>
+      `${name}与你分享了一段珍贵的录音。慢慢听，在故事里坐一会儿。`,
+    storyteller: "讲述者",
+    recorded: "录制日期",
+    duration: "时长",
+    listen: "收听这段对话",
+    ready: "准备好时即可开始",
+    privateLink: "私密链接",
+    privacy: "任何拥有此私密链接的人都可以收听，请谨慎分享。",
+  },
+  "zh-Hant": {
+    home: "首頁",
+    episodes: "節目",
+    eyebrow: "來自 Fireside 的分享",
+    defaultTitle: (name: string) => `與${name}的對話`,
+    intro: (name: string) =>
+      `${name}與你分享了一段珍貴的錄音。慢慢聽，在故事裡坐一會兒。`,
+    storyteller: "講述者",
+    recorded: "錄製日期",
+    duration: "時長",
+    listen: "收聽這段對話",
+    ready: "準備好時即可開始",
+    privateLink: "私密連結",
+    privacy: "任何擁有此私密連結的人都可以收聽，請謹慎分享。",
+  },
+} as const;
 
 // Token-gated public share page — no login required. The unguessable
 // share_token is the credential; only "ready" conversations are shareable.
@@ -19,6 +81,7 @@ export default async function SharedConversationPage({
   const { token } = await params;
   const locale = normalizeLocale((await cookies()).get(localeCookieName)?.value);
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const pageCopy = copy[locale];
 
   const admin = createSupabaseAdminClient();
   const { data: session } = await admin
@@ -41,39 +104,96 @@ export default async function SharedConversationPage({
     audioUrl = data?.signedUrl ?? null;
   }
 
-  return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-xl space-y-8">
-        <div className="text-center">
-          <Wordmark />
-        </div>
+  const title = s.topic?.trim() || pageCopy.defaultTitle(s.guests.name);
+  const recordedDate = new Date(s.created_at).toLocaleDateString(locale, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
-        <div className="flex items-center gap-5">
-          <Monogram name={s.guests.name} size="lg" />
-          <div>
-            <p className="text-sm font-medium uppercase tracking-wide text-ember">
-              {s.guests.name} · {t("familyConversationLabel")}
-            </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold sm:text-4xl">
-              {s.topic || t("familyConversationLabel")}
-            </h1>
-            <p className="mt-1 text-sm text-ink-faint">
-              {new Date(s.created_at).toLocaleDateString(locale, {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}{" "}
-              · {formatDuration(s.duration_ms)}
-            </p>
+  return (
+    <PortalShell>
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <Wordmark tone="light" />
+          <nav className={styles.nav} aria-label="Public navigation">
+            <Link href="/">{pageCopy.home}</Link>
+            <Link href="/feed">{pageCopy.episodes}</Link>
+          </nav>
+          <div className={styles.headerTools}>
+            <LanguageSwitcher tone="bare" />
           </div>
         </div>
+      </header>
 
-        {audioUrl ? (
-          <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
-        ) : (
-          <Card className="p-6 text-ink-soft">{t("reviewAudioMissing")}</Card>
-        )}
-      </div>
-    </main>
+      <main className={styles.main}>
+        <div className={`${portalStyles.surface} ${styles.content}`}>
+          <section className={styles.hero} aria-labelledby="conversation-title">
+            <p className={styles.eyebrow}>{pageCopy.eyebrow}</p>
+            <h1 className={styles.title} id="conversation-title">
+              {title}
+            </h1>
+            <p className={styles.intro}>{pageCopy.intro(s.guests.name)}</p>
+
+            <div className={styles.details}>
+              <div className={styles.storyteller}>
+                <span className={styles.avatar} aria-hidden="true">
+                  {s.guests.name.trim().charAt(0).toUpperCase()}
+                </span>
+                <span>
+                  <small>{pageCopy.storyteller}</small>
+                  <strong>{s.guests.name}</strong>
+                </span>
+              </div>
+              <div className={styles.detail}>
+                <CalendarDays aria-hidden="true" />
+                <span>
+                  <small>{pageCopy.recorded}</small>
+                  <strong>{recordedDate}</strong>
+                </span>
+              </div>
+              <div className={styles.detail}>
+                <Clock3 aria-hidden="true" />
+                <span>
+                  <small>{pageCopy.duration}</small>
+                  <strong>{formatDuration(s.duration_ms)}</strong>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className={styles.playerPanel} aria-labelledby="listen-title">
+            <div className={styles.playerHeader}>
+              <div>
+                <span className={styles.playerIcon} aria-hidden="true">
+                  <Headphones />
+                </span>
+                <span>
+                  <small>{pageCopy.ready}</small>
+                  <h2 id="listen-title">{pageCopy.listen}</h2>
+                </span>
+              </div>
+              <span className={styles.privateBadge}>
+                <LockKeyhole aria-hidden="true" />
+                {pageCopy.privateLink}
+              </span>
+            </div>
+
+            {audioUrl ? (
+              <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
+            ) : (
+              <Card className={styles.missingAudio}>
+                {t("reviewAudioMissing")}
+              </Card>
+            )}
+
+            <p className={styles.privacyNote}>
+              <LockKeyhole aria-hidden="true" />
+              {pageCopy.privacy}
+            </p>
+          </section>
+        </div>
+      </main>
+    </PortalShell>
   );
 }
