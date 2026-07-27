@@ -76,7 +76,6 @@ export default async function LandingPage() {
                 <AutoLoopVideo
                   className={styles.demoVideo}
                   src={demoVideoUrl}
-                  poster="/oldschool.webp"
                   ariaLabel={t("landingDemoAria")}
                   fallback={t("landingDemoFallback")}
                 />
