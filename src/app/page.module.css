@@ -31,7 +31,7 @@
   --text-subheading: 20px;
   --text-heading: 32px;
   --text-heading-lg: 56px;
-  --page-max-width: 1150px;
+  --page-max-width: 1280px;
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -186,6 +186,8 @@
 }
 
 .slogan {
+  width: min(100%, 58rem);
+  margin-inline: auto;
   color: var(--color-whiteout);
   font-family: var(--font-display);
   font-size: clamp(3rem, 5vw, 4.4rem);
@@ -225,13 +227,26 @@
   margin-left: 0;
 }
 
+.heroDescription {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 42rem;
+  margin: 1.55rem auto 0;
+  color: rgb(255 250 241 / 0.76);
+  font-size: clamp(0.9rem, 1.2vw, 1.05rem);
+  line-height: 1.55;
+  text-shadow: 0 0.15rem 1rem rgb(48 20 12 / 0.16);
+  text-wrap: balance;
+}
+
 .heroCtas {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
   justify-content: center;
-  margin-top: 2.25rem;
+  margin-top: 1.5rem;
 }
 
 .btnPrimary {
@@ -265,68 +280,35 @@
 /* ----------------------------- Demo video ------------------------ */
 
 .demoCard {
-  width: min(46rem, 100%);
-  margin: clamp(2.25rem, 5vh, 3.25rem) auto 0;
+  width: min(72rem, 100%);
+  margin: clamp(3.25rem, 8vh, 5rem) auto 0;
   animation: riseIn 900ms 300ms ease both;
 }
 
 .demoMedia {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 7 / 5;
+  aspect-ratio: 16 / 9;
   background: #29140e;
+  border: 1px solid rgb(255 250 241 / 0.22);
   border-radius: 0.8rem;
-}
-
-.demoVideo,
-.demoPoster {
-  width: 100%;
-  height: 100%;
 }
 
 .demoVideo {
   display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   background: #29140e;
-}
-
-.demoPoster {
-  position: relative;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-}
-
-.demoPosterImage {
-  object-fit: cover;
-}
-
-.demoPlay {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3.25rem;
-  height: 3.25rem;
-  color: var(--color-air-ink);
-  background: rgb(255 250 241 / 0.94);
-  border: 1px solid rgb(255 255 255 / 0.8);
-  border-radius: 999px;
-  box-shadow: 0 0.75rem 2rem rgb(25 8 4 / 0.3);
-}
-
-.demoPlayIcon {
-  width: 1.15rem;
-  height: 1.15rem;
-  margin-left: 0.16rem;
 }
 
 /* ----------------------------- Companion -------------------------- */
 
 .companionSection {
+  --companion-spacer: clamp(20rem, 46vh, 34rem);
   position: relative;
   overflow: hidden;
-  padding: clamp(20rem, 46vh, 34rem) 2rem clamp(6rem, 9vw, 8rem);
+  padding: var(--companion-spacer) 2rem clamp(6rem, 9vw, 8rem);
   color: var(--color-whiteout);
   background: transparent;
 }
@@ -337,6 +319,33 @@
   height: 1px;
   background: rgb(255 250 241 / 0.18);
   content: "";
+}
+
+.companionQuote {
+  position: absolute;
+  top: calc(var(--companion-spacer) * 0.35);
+  left: 50%;
+  width: min(34rem, calc(100% - 3rem));
+  color: rgb(255 250 241 / 0.42);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.companionQuoteKicker {
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.companionQuoteText {
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3.2vw, 2.75rem);
+  font-style: italic;
+  line-height: 1.08;
+  text-wrap: balance;
 }
 
 .companionInner {
@@ -758,7 +767,7 @@
   }
 
   .companionSection {
-    padding-top: clamp(13rem, 38vh, 20rem);
+    --companion-spacer: clamp(13rem, 38vh, 20rem);
   }
 
   .companionSection .sectionTitle {

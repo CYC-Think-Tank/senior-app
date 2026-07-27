@@ -1,11 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { cookies } from "next/headers";
 import { HeroSky } from "@/components/hero-sky";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { AutoLoopVideo } from "@/components/auto-loop-video";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import styles from "./page.module.css";
 
@@ -14,7 +15,7 @@ export default async function LandingPage() {
     (await cookies()).get(localeCookieName)?.value,
   );
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
-  const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL;
+  const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? "/demo.mp4";
 
   return (
     <main className={styles.page} data-landing-page>
@@ -56,6 +57,9 @@ export default async function LandingPage() {
                 <span className={styles.flipWord}>{t("landingHeroForever")}</span>
               </span>
             </h1>
+            <p className={styles.heroDescription}>
+              {t("landingHeroDescription")}
+            </p>
             <div className={styles.heroCtas}>
               <PageTransitionLink
                 href="/interview"
@@ -69,35 +73,13 @@ export default async function LandingPage() {
 
             <div className={styles.demoCard}>
               <div className={styles.demoMedia}>
-                {demoVideoUrl ? (
-                  <video
-                    className={styles.demoVideo}
-                    controls
-                    preload="none"
-                    poster="/oldschool.webp"
-                    aria-label={t("landingDemoAria")}
-                  >
-                    <source src={demoVideoUrl} />
-                    {t("landingDemoFallback")}
-                  </video>
-                ) : (
-                  <div
-                    className={styles.demoPoster}
-                    role="img"
-                    aria-label={t("landingDemoPreviewAria")}
-                  >
-                    <Image
-                      src="/oldschool.webp"
-                      alt=""
-                      fill
-                      sizes="(max-width: 640px) 88vw, 736px"
-                      className={styles.demoPosterImage}
-                    />
-                    <span className={styles.demoPlay} aria-hidden="true">
-                      <Play className={styles.demoPlayIcon} fill="currentColor" />
-                    </span>
-                  </div>
-                )}
+                <AutoLoopVideo
+                  className={styles.demoVideo}
+                  src={demoVideoUrl}
+                  poster="/oldschool.webp"
+                  ariaLabel={t("landingDemoAria")}
+                  fallback={t("landingDemoFallback")}
+                />
               </div>
             </div>
           </div>
@@ -108,6 +90,10 @@ export default async function LandingPage() {
         className={styles.companionSection}
         aria-labelledby="companion-title"
       >
+        <div className={styles.companionQuote} aria-hidden="true">
+          <p className={styles.companionQuoteKicker}>{t("landingQuoteKicker")}</p>
+          <p className={styles.companionQuoteText}>{t("landingQuote")}</p>
+        </div>
         <ScrollReveal className={styles.companionInner} distance={36}>
           <div className={styles.companionCopy}>
             <p className={styles.sectionKicker}>{t("landingCompanionKicker")}</p>

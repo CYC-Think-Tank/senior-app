@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, LogOut } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { useI18n } from "@/components/i18n-provider";
@@ -14,6 +14,10 @@ export function UserMenu({
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,6 +35,38 @@ export function UserMenu({
     return () => {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const updateMenuPosition = () => {
+      const trigger = ref.current?.querySelector("button");
+      if (!trigger) return;
+
+      const triggerRect = trigger.getBoundingClientRect();
+      const menuWidth = Math.min(160, window.innerWidth - 32);
+      const menuHeight = 48;
+      const left = Math.min(
+        Math.max(16, triggerRect.right - menuWidth),
+        window.innerWidth - menuWidth - 16,
+      );
+      const belowTop = triggerRect.bottom + 4;
+      const top =
+        belowTop + menuHeight <= window.innerHeight
+          ? belowTop
+          : Math.max(16, triggerRect.top - menuHeight - 4);
+
+      setMenuPosition({ left, top });
+    };
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
     };
   }, [open]);
 
@@ -57,10 +93,11 @@ export function UserMenu({
         />
       </button>
 
-      {open && (
+      {open && menuPosition && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-line bg-cream py-1 shadow-md"
+          style={menuPosition}
+          className="fixed z-20 min-w-[10rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-line bg-cream py-1 shadow-md"
         >
           <form action={signOut}>
             <button

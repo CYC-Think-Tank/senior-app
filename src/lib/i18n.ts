@@ -86,6 +86,8 @@ const en = {
   landingGetStarted: "Get started",
   landingHeroLine: "Your stories are worth keeping",
   landingHeroForever: "forever.",
+  landingHeroDescription:
+    "Fireside turns warm conversations into lasting stories your family can hear, keep, and share.",
   landingStartConversation: "Start a conversation",
   landingDemoAria: "Fireside product demo video",
   landingDemoPreviewAria: "Preview image for the Fireside product demo video",
@@ -104,6 +106,8 @@ const en = {
   landingFeaturePrivateTitle: "Shared with permission",
   landingFeaturePrivateBody:
     "Raw conversations stay private. Finished episodes become public only after the storyteller approves.",
+  landingQuoteKicker: "A little room for what matters",
+  landingQuote: "The stories we keep become the stories we share.",
   landingHowKicker: "How it works",
   landingHowTitleOne: "From hello to heirloom,",
   landingHowTitleTwo: "in three easy steps.",
@@ -301,6 +305,8 @@ const zhHans: typeof en = {
   landingGetStarted: "开始体验",
   landingHeroLine: "你的故事，值得",
   landingHeroForever: "永远珍藏。",
+  landingHeroDescription:
+    "Fireside 把温暖的对话变成家人可以聆听、珍藏和分享的长久故事。",
   landingStartConversation: "开始对话",
   landingDemoAria: "Fireside 产品演示视频",
   landingDemoPreviewAria: "Fireside 产品演示视频预览图",
@@ -318,6 +324,8 @@ const zhHans: typeof en = {
   landingFeaturePrivateTitle: "经同意后分享",
   landingFeaturePrivateBody:
     "原始对话保持私密。只有讲述者批准后，完成的节目才会公开。",
+  landingQuoteKicker: "给重要的事留一点空间",
+  landingQuote: "我们珍藏的故事，也会成为我们分享的故事。",
   landingHowKicker: "如何运作",
   landingHowTitleOne: "从一句问候，",
   landingHowTitleTwo: "到一份传家记忆。",
@@ -486,6 +494,8 @@ const zhHant: typeof en = {
   landingDemoAria: "Fireside 產品示範影片",
   landingDemoPreviewAria: "Fireside 產品示範影片預覽圖",
   landingDemoFallback: "你的瀏覽器不支援影片播放。",
+  landingHeroDescription:
+    "Fireside 把溫暖的對話變成家人可以聆聽、珍藏和分享的長久故事。",
   loginSubtitle: "登入以收聽家人的故事。",
   loginBusy: "正在登入...",
   loginDevNote: "登入後，此瀏覽器會記住你的帳戶，直到你主動登出。",
