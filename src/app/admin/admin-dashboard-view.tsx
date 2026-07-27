@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, Clock3, Mic2, Plus, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowUpRight, Clock3, Mic2, Pencil, Plus, Users } from "lucide-react";
+import { updateGuest } from "./actions";
 import { formatDuration } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import styles from "./admin-dashboard.module.css";
@@ -39,6 +43,8 @@ export type UsagePoint = { key: string; value: number };
 export type GuestDirectoryItem = {
   id: string;
   name: string;
+  bio: string | null;
+  topics: string[] | null;
   language: string;
   registered: boolean;
   conversationCount: number;
@@ -140,6 +146,91 @@ function CategoryRow({ label, value, total, tone }: { label: string; value: numb
   );
 }
 
+/** Edits the four fields the AI host reads before it interviews someone. */
+function GuestEditDialog({
+  guest,
+  onClose,
+}: {
+  guest: GuestDirectoryItem;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setBusy(true);
+    setFailed(false);
+    try {
+      const result = await updateGuest(guest.id, formData);
+      if (!result.ok) {
+        setFailed(true);
+        return;
+      }
+      onClose();
+      router.refresh();
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The route-entrance animation leaves a transform on the section, which would
+  // otherwise anchor and clip this fixed backdrop. Portalling escapes it.
+  return createPortal(
+    <div className={styles.modalBackdrop} role="presentation" onMouseDown={onClose}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-guest-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <h2 id="edit-guest-title">{t("guestEditTitle")}</h2>
+        <form onSubmit={save}>
+          <label className={styles.modalField}>
+            <span>{t("guestName")}</span>
+            <input name="name" required defaultValue={guest.name} autoFocus placeholder={t("guestNamePlaceholder")} />
+          </label>
+
+          <label className={styles.modalField}>
+            <span>{t("guestAbout")}</span>
+            <textarea name="bio" rows={3} defaultValue={guest.bio ?? ""} placeholder={t("guestAboutPlaceholder")} />
+            <small>{t("guestAboutHelp")}</small>
+          </label>
+
+          <label className={styles.modalField}>
+            <span>{t("guestSubjects")}</span>
+            <input name="topics" defaultValue={guest.topics?.join(", ") ?? ""} placeholder={t("guestSubjectsPlaceholder")} />
+            <small>{t("guestSubjectsHelp")}</small>
+          </label>
+
+          <label className={styles.modalField}>
+            <span>{t("guestLanguage")}</span>
+            <input name="language" defaultValue={guest.language} placeholder={t("guestLanguageDefault")} />
+          </label>
+
+          {failed ? <p className={styles.modalError}>{t("guestSaveError")}</p> : null}
+
+          <div className={styles.modalActions}>
+            <button className={`${styles.modalButton} ${styles.modalCancel}`} type="button" disabled={busy} onClick={onClose}>
+              {t("guestCancel")}
+            </button>
+            <button className={`${styles.modalButton} ${styles.modalSave}`} type="submit" disabled={busy}>
+              {busy ? t("guestSaving") : t("guestSave")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function GuestDirectory({
   copy,
   copies,
@@ -151,7 +242,8 @@ export function GuestDirectory({
   guests: GuestDirectoryItem[];
   standalone?: boolean;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
+  const [editing, setEditing] = useState<GuestDirectoryItem | null>(null);
   const activeCopy = copy ?? copies?.[locale] ?? copies?.en;
   if (!activeCopy) return null;
   const numberFormatter = new Intl.NumberFormat(locale);
@@ -164,19 +256,31 @@ export function GuestDirectory({
       </div>
       <div className={styles.guestList}>
         <div className={styles.tableHeader}>
-          <span>{activeCopy.guest}</span><span>{activeCopy.account}</span><span>{activeCopy.conversations}</span><span>{activeCopy.language}</span><span>{activeCopy.lastActive}</span><span />
+          <span>{activeCopy.guest}</span><span>{activeCopy.account}</span><span>{activeCopy.conversations}</span><span>{activeCopy.language}</span><span>{activeCopy.lastActive}</span><span /><span />
         </div>
         {guests.length ? guests.map((guest) => (
-          <Link href={`/admin/guests/${guest.id}`} className={styles.guestRow} key={guest.id} aria-label={`${activeCopy.openGuest}: ${guest.name}`}>
-            <span className={styles.guestIdentity}><span className={styles.avatar}>{guest.name.trim().charAt(0).toUpperCase()}</span><strong>{guest.name}</strong></span>
-            <span><span className={guest.registered ? styles.statusRegistered : styles.statusGuest}>{guest.registered ? activeCopy.registered : activeCopy.notRegistered}</span></span>
-            <span className={styles.numeric}>{numberFormatter.format(guest.conversationCount)}</span>
-            <span>{guest.language}</span>
-            <span>{guest.lastActive ? new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(new Date(guest.lastActive)) : activeCopy.never}</span>
-            <ArrowUpRight className={styles.rowArrow} aria-hidden="true" />
-          </Link>
+          <div className={styles.guestRowWrap} key={guest.id}>
+            <Link href={`/admin/guests/${guest.id}`} className={styles.guestRow} aria-label={`${activeCopy.openGuest}: ${guest.name}`}>
+              <span className={styles.guestIdentity}><span className={styles.avatar}>{guest.name.trim().charAt(0).toUpperCase()}</span><strong>{guest.name}</strong></span>
+              <span><span className={guest.registered ? styles.statusRegistered : styles.statusGuest}>{guest.registered ? activeCopy.registered : activeCopy.notRegistered}</span></span>
+              <span className={styles.numeric}>{numberFormatter.format(guest.conversationCount)}</span>
+              <span>{guest.language}</span>
+              <span>{guest.lastActive ? new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(new Date(guest.lastActive)) : activeCopy.never}</span>
+              <ArrowUpRight className={styles.rowArrow} aria-hidden="true" />
+            </Link>
+            <button
+              className={styles.editButton}
+              type="button"
+              title={t("guestEdit")}
+              aria-label={`${t("guestEditTitle")}: ${guest.name}`}
+              onClick={() => setEditing(guest)}
+            >
+              <Pencil aria-hidden="true" />
+            </button>
+          </div>
         )) : <p className={styles.empty}>{activeCopy.noGuests}</p>}
       </div>
+      {editing ? <GuestEditDialog guest={editing} onClose={() => setEditing(null)} /> : null}
     </section>
   );
 }
