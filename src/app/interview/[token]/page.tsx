@@ -18,7 +18,7 @@ export default async function InterviewPage({
   const { data: session } = await admin
     .from("sessions")
     .select(
-      "id, status, topic, duration_ms, share_token, guests(name, user_id)"
+      "id, status, topic, duration_ms, share_token, recording_consent_at, guests(name, user_id)"
     )
     .eq("token", token)
     .single();
@@ -85,6 +85,7 @@ export default async function InterviewPage({
       isLoggedIn={Boolean(user)}
       homeHref={homeHref}
       resume={resume}
+      recordingConsentRequired={!session.recording_consent_at}
     />
   );
 }

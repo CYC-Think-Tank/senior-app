@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 
 type AutoLoopVideoProps = {
   src: string;
-  poster?: string;
   ariaLabel: string;
   fallback: string;
   className?: string;
@@ -12,7 +11,6 @@ type AutoLoopVideoProps = {
 
 export function AutoLoopVideo({
   src,
-  poster,
   ariaLabel,
   fallback,
   className,
@@ -56,7 +54,6 @@ export function AutoLoopVideo({
       muted
       playsInline
       preload="auto"
-      poster={poster}
       aria-label={ariaLabel}
     >
       <source src={src} type="video/mp4" />

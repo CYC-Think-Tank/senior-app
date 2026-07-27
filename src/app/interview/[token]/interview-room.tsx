@@ -38,6 +38,7 @@ type Props = {
   homeHref: "/" | "/admin" | "/family";
   /** Set when this conversation ended early and is being picked back up. */
   resume?: InterviewResume;
+  recordingConsentRequired: boolean;
 };
 
 export default function InterviewRoom({
@@ -49,6 +50,7 @@ export default function InterviewRoom({
   isLoggedIn,
   homeHref,
   resume,
+  recordingConsentRequired,
 }: Props) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<InterviewPhase>("idle");
@@ -61,18 +63,31 @@ export default function InterviewRoom({
   const [userSpeaking, setUserSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
   const [shareToken, setShareToken] = useState(initialShareToken);
+  const [recordingConsentSaved, setRecordingConsentSaved] = useState(!recordingConsentRequired);
   const clientRef = useRef<InterviewClient | null>(null);
   const micLevelRef = useRef(0);
   const aiLevelRef = useRef(0);
   const userSpeakingRef = useRef(false);
   const userSpeakingTimeoutRef = useRef<number | null>(null);
 
-  const begin = useCallback(() => {
+  const begin = useCallback(async () => {
     // React state updates after the click handler returns. The ref closes the
     // brief window where a double-click could otherwise start two calls.
     if (clientRef.current) return;
 
     setErrorDetail(null);
+    if (!recordingConsentSaved) {
+      const response = await fetch(`/api/sessions/${token}/consent`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        setErrorDetail(t("interviewErrorBody"));
+        setPhase("error");
+        return;
+      }
+      setRecordingConsentSaved(true);
+    }
+
     document.documentElement.dataset.interviewLive = "true";
     const client = new InterviewClient(token, {
       onPhase: (p, detail) => {
@@ -120,7 +135,7 @@ export default function InterviewRoom({
     }, resume);
     clientRef.current = client;
     void client.start();
-  }, [token, resume]);
+  }, [token, resume, recordingConsentSaved, t]);
 
   useEffect(() => {
     return () => {
@@ -213,12 +228,26 @@ export default function InterviewRoom({
               <p className={`${theme.body} mx-auto mt-6 max-w-xl text-lg leading-relaxed`}>
                 {t(resume ? "interviewResumeIntro" : "interviewIntro")}
               </p>
+              {!recordingConsentSaved && (
+                <>
+                  <p className={theme.consentNotice}>{t("interviewConsentNotice")}</p>
+                  <p className={theme.consentLinks}>
+                    <Link href="/privacy">{t("legalPrivacy")}</Link>
+                    <span aria-hidden="true"> · </span>
+                    <Link href="/terms">{t("legalTerms")}</Link>
+                  </p>
+                </>
+              )}
               <button
                 onClick={begin}
                 className={theme.beginButton}
               >
                 <Mic />
-                <span>{t(resume ? "interviewContinue" : "interviewBegin")}</span>
+                <span>
+                  {recordingConsentSaved
+                    ? t(resume ? "interviewContinue" : "interviewBegin")
+                    : t("interviewBeginConsent")}
+                </span>
               </button>
             </IntroScreen>
           )}
