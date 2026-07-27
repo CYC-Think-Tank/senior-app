@@ -7,6 +7,32 @@ export const REALTIME_MODEL = "gpt-realtime-2.1-mini";
 export const REALTIME_VOICE = "marin";
 export const CHAT_MODEL = "gpt-5-mini";
 
+/**
+ * The built-in voices the Realtime model accepts, in the order they are offered
+ * to storytellers. OpenAI recommends `marin` and `cedar` for quality, so those
+ * lead and the rest follow in the SDK's own order. Kept in step with the `voice`
+ * union in node_modules/openai/resources/realtime/realtime.d.ts.
+ */
+export const REALTIME_VOICES = [
+  "marin",
+  "cedar",
+  "alloy",
+  "ash",
+  "ballad",
+  "coral",
+  "echo",
+  "sage",
+  "shimmer",
+  "verse",
+] as const;
+
+export type RealtimeVoice = (typeof REALTIME_VOICES)[number];
+
+/** Guards a stored or submitted voice before it reaches the Realtime API. */
+export function isRealtimeVoice(value: unknown): value is RealtimeVoice {
+  return REALTIME_VOICES.includes(value as RealtimeVoice);
+}
+
 export const RAW_BUCKET = "raw-audio";
 export const EPISODES_BUCKET = "episodes";
 

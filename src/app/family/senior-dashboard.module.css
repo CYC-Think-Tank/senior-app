@@ -623,6 +623,95 @@
   font-size: 0.95rem;
 }
 
+.settingsCard {
+  display: grid;
+  max-width: 46rem;
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  gap: 2rem;
+  background: rgb(65 22 13 / 0.34);
+  border: 1px solid rgb(255 250 241 / 0.17);
+  border-radius: 18px;
+  backdrop-filter: blur(16px) saturate(1.05);
+}
+
+.settingsField {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.settingsField label {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.settingsInput,
+.settingsTextarea,
+.settingsSelect {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  color: #2f2018;
+  background: #fffaf1;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.settingsInput,
+.settingsSelect {
+  min-height: 3.5rem;
+  padding: 0 1rem;
+}
+
+.settingsTextarea {
+  min-height: 9rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.settingsInput:focus,
+.settingsTextarea:focus,
+.settingsSelect:focus {
+  border-color: #8d321f;
+  outline: none;
+}
+
+.settingsInput::placeholder,
+.settingsTextarea::placeholder {
+  color: rgb(47 32 24 / 0.42);
+}
+
+.settingsHint {
+  margin: 0;
+  color: rgb(255 250 241 / 0.62);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.settingsActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.settingsActions .requestPrimaryButton {
+  margin-top: 0;
+}
+
+.settingsStatus {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  gap: 0.4rem;
+  color: rgb(255 250 241 / 0.72);
+  font-size: 0.95rem;
+}
+
+.settingsStatus svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -650,7 +739,7 @@
   .mobileTools { position: absolute; top: 0.9rem; right: 1rem; display: flex; align-items: center; }
   .mobileTools > button { min-height: 2.75rem; }
   .sidebarLabel { display: none; }
-  .sidebarNav { grid-template-columns: repeat(3, 1fr); margin-top: 0.75rem; }
+  .sidebarNav { grid-template-columns: repeat(4, 1fr); margin-top: 0.75rem; }
   .navLink { min-height: 3.2rem; justify-content: center; padding: 0 0.5rem; font-size: 0.82rem; }
   .navLink svg { width: 1rem; height: 1rem; }
   .navLink:hover { transform: none; }

@@ -18,6 +18,8 @@ export type Guest = {
   photo_path: string | null;
   topics: string[] | null;
   language: string;
+  /** Null falls back to REALTIME_VOICE rather than pinning today's default. */
+  voice: string | null;
   created_at: string;
 };
 

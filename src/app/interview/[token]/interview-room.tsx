@@ -431,7 +431,8 @@ function IntroScreen({
 }
 
 function GreetingText({ guestName }: { guestName: string }) {
-  const text = `Hi ${guestName}!`;
+  const { t } = useI18n();
+  const text = t("interviewHello", { guestName });
 
   return (
     <h1

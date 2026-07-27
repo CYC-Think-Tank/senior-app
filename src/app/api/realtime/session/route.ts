@@ -1,9 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
 import { GUEST_FINISH_TOOL } from "@/lib/realtime/interview-ending";
-import { REALTIME_MODEL, REALTIME_VOICE } from "@/lib/constants";
+import {
+  isRealtimeVoice,
+  REALTIME_MODEL,
+  REALTIME_VOICE,
+} from "@/lib/constants";
 import type { Guest } from "@/lib/types";
 
 /**
@@ -47,12 +52,15 @@ export async function POST(request: NextRequest) {
     .order("idx", { ascending: true });
 
   const guest = session.guests as unknown as Guest;
-  const guestName = await resolveCurrentGuestName(admin, guest);
+  const [guestName, language] = await Promise.all([
+    resolveCurrentGuestName(admin, guest),
+    resolveCurrentGuestLanguage(admin, guest),
+  ]);
   const instructions = buildInterviewerInstructions({
     guestName,
     bio: guest.bio,
     topics: guest.topics,
-    language: guest.language,
+    language,
     topic: session.topic,
     priorTurns: priorTurns ?? undefined,
   });
@@ -83,7 +91,11 @@ export async function POST(request: NextRequest) {
               eagerness: "medium",
             },
           },
-          output: { voice: REALTIME_VOICE },
+          output: {
+            // An unrecognised stored voice (an old name, or one retired by
+            // OpenAI) would fail the whole session, so fall back instead.
+            voice: isRealtimeVoice(guest.voice) ? guest.voice : REALTIME_VOICE,
+          },
         },
       },
     }),

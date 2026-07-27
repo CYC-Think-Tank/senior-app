@@ -14,6 +14,14 @@ export function normalizeLocale(value: string | undefined | null): Locale {
   return locales.includes(value as Locale) ? (value as Locale) : defaultLocale;
 }
 
+/**
+ * The language Rosie speaks with someone who reads the app in `locale`. Both
+ * Chinese locales differ only in script, which a spoken interview never shows.
+ */
+export function interviewLanguage(locale: Locale) {
+  return locale === "en" ? "English" : "Chinese";
+}
+
 const en = {
   appDescription:
     "An audio-memoir podcast where an AI interviewer captures a senior's stories and approved episodes join a public archive.",
