@@ -645,7 +645,8 @@
 }
 
 .settingsInput,
-.settingsTextarea {
+.settingsTextarea,
+.settingsSelect {
   width: 100%;
   padding: 0.9rem 1rem;
   color: #2f2018;
@@ -656,7 +657,8 @@
   line-height: 1.55;
 }
 
-.settingsInput {
+.settingsInput,
+.settingsSelect {
   min-height: 3.5rem;
   padding: 0 1rem;
 }
@@ -668,7 +670,8 @@
 }
 
 .settingsInput:focus,
-.settingsTextarea:focus {
+.settingsTextarea:focus,
+.settingsSelect:focus {
   border-color: #8d321f;
   outline: none;
 }

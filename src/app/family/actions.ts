@@ -8,7 +8,11 @@ import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { interviewLanguage, localeCookieName, normalizeLocale } from "@/lib/i18n";
 import { personName } from "@/lib/names";
-import { EPISODES_BUCKET, RAW_BUCKET } from "@/lib/constants";
+import {
+  EPISODES_BUCKET,
+  isRealtimeVoice,
+  RAW_BUCKET,
+} from "@/lib/constants";
 
 export type ShareLinkResult =
   | { ok: true; token: string }
@@ -241,21 +245,29 @@ export async function deleteConversation(sessionId: string) {
  * Saves the signed-in person's own name and bio.
  *
  * The name lives on their profile — it is what the portal greets them by. The
- * bio lives on their "self" guest row, because that is the record the AI host
- * reads before an interview. Their guest name is kept in step here so the host
- * does not greet them by a name they just changed; `startMyConversation` does
- * the same sync for accounts that were renamed before this page existed.
+ * bio and chosen voice live on their "self" guest row, because that is the
+ * record the AI host reads before an interview. Their guest name is kept in
+ * step here so the host does not greet them by a name they just changed;
+ * `startMyConversation` does the same sync for accounts that were renamed
+ * before this page existed.
  *
  * Both writes go through the service role: family accounts have read-only
  * policies on `profiles` and `guests`, and the rows are pinned to the verified
  * user id from the session claims.
  */
-export async function updateMyProfile(name: string, bio: string) {
+export async function updateMyProfile(
+  name: string,
+  bio: string,
+  voice: string,
+) {
   const { user } = await requireUser();
   const admin = createSupabaseAdminClient();
 
   const displayName = name.trim().slice(0, 80) || null;
   const about = bio.trim().slice(0, 1000) || null;
+  // Anything unrecognised is stored as null, which reads back as the app's
+  // current default rather than freezing a bad value onto the row.
+  const chosenVoice = isRealtimeVoice(voice) ? voice : null;
 
   const { data: profile } = await admin
     .from("profiles")
@@ -275,6 +287,7 @@ export async function updateMyProfile(name: string, bio: string) {
   const guestFields = {
     name: personName(displayName, profile?.email ?? user.email),
     bio: about,
+    voice: chosenVoice,
   };
   const { data: guest } = await admin
     .from("guests")

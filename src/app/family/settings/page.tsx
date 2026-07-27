@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
 import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { isRealtimeVoice, REALTIME_VOICE } from "@/lib/constants";
 import { SettingsForm } from "./settings-form";
 import styles from "../senior-dashboard.module.css";
 
@@ -22,7 +23,11 @@ export default async function FamilySettingsPage() {
       .select("display_name, email")
       .eq("id", user.id)
       .single(),
-    supabase.from("guests").select("bio").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("guests")
+      .select("bio, voice")
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
 
   return (
@@ -42,6 +47,7 @@ export default async function FamilySettingsPage() {
       <SettingsForm
         name={profile?.display_name ?? ""}
         bio={guest?.bio ?? ""}
+        voice={isRealtimeVoice(guest?.voice) ? guest.voice : REALTIME_VOICE}
         email={profile?.email ?? user.email ?? ""}
       />
     </div>

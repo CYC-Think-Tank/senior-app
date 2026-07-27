@@ -3,7 +3,11 @@ import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
-import { REALTIME_MODEL, REALTIME_VOICE } from "@/lib/constants";
+import {
+  isRealtimeVoice,
+  REALTIME_MODEL,
+  REALTIME_VOICE,
+} from "@/lib/constants";
 import type { Guest } from "@/lib/types";
 
 /**
@@ -84,7 +88,11 @@ export async function POST(request: NextRequest) {
               eagerness: "medium",
             },
           },
-          output: { voice: REALTIME_VOICE },
+          output: {
+            // An unrecognised stored voice (an old name, or one retired by
+            // OpenAI) would fail the whole session, so fall back instead.
+            voice: isRealtimeVoice(guest.voice) ? guest.voice : REALTIME_VOICE,
+          },
         },
       },
     }),
