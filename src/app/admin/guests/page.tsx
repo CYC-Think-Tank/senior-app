@@ -61,14 +61,14 @@ export default async function GuestsPage() {
   const [{ data: guestRows }, { data: sessionRows }] = await Promise.all([
     supabase
       .from("guests")
-      .select("id, name, language, user_id")
+      .select("id, name, bio, topics, language, user_id")
       .order("created_at", { ascending: false }),
     supabase
       .from("sessions")
       .select("guest_id, created_at")
       .order("created_at", { ascending: false }),
   ]);
-  type GuestRow = Pick<Guest, "id" | "name" | "language" | "user_id">;
+  type GuestRow = Pick<Guest, "id" | "name" | "bio" | "topics" | "language" | "user_id">;
   type SessionRow = Pick<InterviewSession, "guest_id" | "created_at">;
   const guests = (guestRows ?? []) as GuestRow[];
   const sessions = (sessionRows ?? []) as SessionRow[];
@@ -85,6 +85,8 @@ export default async function GuestsPage() {
     return {
       id: guest.id,
       name: guest.name,
+      bio: guest.bio,
+      topics: guest.topics,
       language: guest.language,
       registered: Boolean(guest.user_id),
       conversationCount: guestSessions.length,

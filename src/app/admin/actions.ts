@@ -32,6 +32,34 @@ export async function createGuest(formData: FormData) {
   redirect(`/admin/guests/${guest.id}`);
 }
 
+export async function updateGuest(guestId: string, formData: FormData) {
+  const { supabase } = await requireAdmin();
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { ok: false as const };
+  const bio = String(formData.get("bio") ?? "").trim() || null;
+  const language = String(formData.get("language") ?? "").trim() || "English";
+  const topics = String(formData.get("topics") ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  const { error } = await supabase
+    .from("guests")
+    .update({ name, bio, language, topics: topics.length ? topics : null })
+    .eq("id", guestId);
+
+  if (error) {
+    console.error("Could not update the guest:", error);
+    return { ok: false as const };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/guests");
+  revalidatePath(`/admin/guests/${guestId}`);
+  return { ok: true as const };
+}
+
 export async function createSession(guestId: string, formData: FormData) {
   const { supabase } = await requireAdmin();
   const topic = String(formData.get("topic") ?? "").trim() || null;
