@@ -1,0 +1,85 @@
+.page {
+  flex: 1;
+  min-height: 100%;
+  padding: clamp(2rem, 6vw, 5rem) 1.5rem;
+  color: #fffaf1;
+  background:
+    radial-gradient(circle at 50% -10%, rgb(204 105 57 / 0.38), transparent 42rem),
+    linear-gradient(180deg, #4c2016, #25100d);
+}
+
+.shell {
+  width: min(48rem, 100%);
+  margin: 0 auto;
+}
+
+.home {
+  color: rgb(255 250 241 / 0.72);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.home:hover {
+  color: #fffaf1;
+}
+
+.eyebrow {
+  margin: 3.5rem 0 0.75rem;
+  color: #ffd19c;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: clamp(2.75rem, 7vw, 4.5rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+.updated {
+  margin: 1rem 0 3rem;
+  color: rgb(255 250 241 / 0.62);
+}
+
+.content {
+  display: grid;
+  gap: 2rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  color: rgb(255 250 241 / 0.82);
+  background: rgb(255 250 241 / 0.06);
+  border: 1px solid rgb(255 250 241 / 0.15);
+  border-radius: 1rem;
+  line-height: 1.65;
+}
+
+.content section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.content h2 {
+  margin: 0;
+  color: #fffaf1;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 500;
+}
+
+.content p,
+.content ul {
+  margin: 0;
+}
+
+.content ul {
+  padding-left: 1.25rem;
+}
+
+.content a {
+  color: #ffd19c;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}

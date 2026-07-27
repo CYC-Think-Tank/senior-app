@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect } from "react";
 import theme from "./interview-theme.module.css";
@@ -25,13 +24,7 @@ export function InterviewShell({
           className={theme.homeLink}
           aria-label="Fireside home"
         >
-          <Image
-            src="/firesidelogo.png"
-            alt=""
-            width={48}
-            height={48}
-            className={theme.homeLogo}
-          />
+          Fireside.
         </Link>
       ) : null}
       <div className={theme.content}>{children}</div>

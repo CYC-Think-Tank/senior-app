@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { cookies } from "next/headers";
 import { HeroSky } from "@/components/hero-sky";
@@ -210,20 +209,17 @@ export default async function LandingPage() {
 
       <footer className={styles.footer}>
         <Link href="/" className={styles.brand} aria-label={t("landingHomeAria")}>
-          <span className={styles.logoChip}>
-            <Image
-              src="/firesidelogo.png"
-              alt=""
-              width={26}
-              height={26}
-              className={styles.logo}
-            />
-          </span>
           <span className={styles.brandName}>
             {locale === "en" ? "Fireside" : "炉边夜话"}<span className={styles.brandDot}>.</span>
           </span>
         </Link>
-        <p className={styles.footerNote}>{t("landingFooterNote")}</p>
+        <div className={styles.footerMeta}>
+          <p className={styles.footerNote}>{t("landingFooterNote")}</p>
+          <nav className={styles.footerLinks} aria-label="Legal">
+            <Link href="/privacy">{t("legalPrivacy")}</Link>
+            <Link href="/terms">{t("legalTerms")}</Link>
+          </nav>
+        </div>
       </footer>
     </main>
   );

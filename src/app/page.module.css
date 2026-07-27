@@ -637,22 +637,6 @@
   text-decoration: none;
 }
 
-.logoChip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  background: var(--color-whiteout);
-  border-radius: 6px;
-}
-
-.logo {
-  width: 1.35rem;
-  height: 1.35rem;
-  object-fit: contain;
-}
-
 .brandName {
   color: var(--color-whiteout);
   font-family: var(--font-display);
@@ -665,8 +649,32 @@
 }
 
 .footerNote {
+  margin: 0;
   color: rgb(255 250 241 / 0.58);
   font-size: 0.95rem;
+}
+
+.footerMeta {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+}
+
+.footerLinks {
+  display: flex;
+  gap: 1rem;
+}
+
+.footerLinks a {
+  color: rgb(255 250 241 / 0.7);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
+.footerLinks a:hover {
+  color: var(--color-whiteout);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 /* ----------------------------- Animations ------------------------- */
@@ -831,5 +839,9 @@
     align-items: flex-start;
     gap: 1rem;
     padding-inline: 1.25rem;
+  }
+
+  .footerMeta {
+    justify-items: start;
   }
 }
