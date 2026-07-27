@@ -134,15 +134,22 @@ export async function invitePodcastUser(userId: string) {
     .select("session_id, status, source, request_kind")
     .eq("user_id", userId)
     .maybeSingle();
+  // A submitted conversation can only be reviewed when it still points to the
+  // finished session. Older or interrupted requests may have the request kind
+  // but no session; turn those into a normal new-interview invite instead of
+  // leaving the admin on a Server Action error page.
   if (
     existingParticipation?.status === "requested" &&
-    existingParticipation.request_kind === "existing_conversation"
+    existingParticipation.request_kind === "existing_conversation" &&
+    existingParticipation.session_id
   ) {
     throw new Error("This request already includes a finished conversation. Review it from the requests page.");
   }
   let sessionId = existingParticipation?.session_id as string | null | undefined;
+  const needsNewSession =
+    !sessionId || existingParticipation?.status === "interview_done";
 
-  if (!sessionId || existingParticipation?.status === "interview_done") {
+  if (needsNewSession) {
     const { data: session, error: sessionError } = await admin
       .from("sessions")
       .insert({ guest_id: guestId })
@@ -157,7 +164,11 @@ export async function invitePodcastUser(userId: string) {
       user_id: userId,
       session_id: sessionId,
       source: existingParticipation?.source ?? "admin_invite",
-      request_kind: existingParticipation?.request_kind ?? "new_interview",
+      // A record without a usable submitted conversation now represents the
+      // new interview we just created.
+      request_kind: needsNewSession
+        ? "new_interview"
+        : existingParticipation?.request_kind ?? "new_interview",
       status: "invited",
       updated_at: new Date().toISOString(),
     },

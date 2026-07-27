@@ -147,6 +147,13 @@
   caret-color: #fffaf1;
 }
 
+.passwordHint {
+  margin: -0.1rem 0 0;
+  color: rgb(255 250 241 / 0.48);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
 .error {
   margin: 0;
   color: #ffd0ae;

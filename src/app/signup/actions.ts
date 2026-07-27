@@ -1,7 +1,8 @@
 "use server";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { verifyGeneratedEmailLink } from "@/lib/supabase/email-link-session";
+import { validateNewPassword } from "@/lib/password";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type SignUpResult =
   | { ok: true; redirectTo: string }
@@ -11,9 +12,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SIGN_UP_ERROR =
   "We couldn’t create your account. Please wait a moment and try again.";
 
-export async function signUpWithEmail(
+export async function signUpWithPassword(
   nameInput: string,
-  emailInput: string
+  emailInput: string,
+  password: string,
 ): Promise<SignUpResult> {
   const name = nameInput.trim().replace(/\s+/g, " ");
   const email = emailInput.trim().toLowerCase();
@@ -31,10 +33,13 @@ export async function signUpWithEmail(
     return { ok: false, error: "Enter a valid email address." };
   }
 
+  const passwordError = validateNewPassword(password);
+  if (passwordError) return { ok: false, error: passwordError };
+
   const admin = createSupabaseAdminClient();
   const { data: existingProfile, error: profileLookupError } = await admin
     .from("profiles")
-    .select("id, role")
+    .select("id")
     .ilike("email", email)
     .maybeSingle();
 
@@ -44,44 +49,21 @@ export async function signUpWithEmail(
   }
 
   if (existingProfile) {
-    // A prior signup may have created the Supabase user before its session
-    // handoff failed. Treat a retry like the app's email-only login flow so
-    // the user reaches the dashboard instead of getting stuck.
-    const { data, error } = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-    });
-
-    if (error || !data.properties) {
-      console.error("Could not recover the existing signup:", error);
-      return { ok: false, error: SIGN_UP_ERROR };
-    }
-
-    const sessionResult = await verifyGeneratedEmailLink(data.properties);
-    if (!sessionResult.ok) {
-      console.error(
-        "Could not create a session for the existing signup:",
-        sessionResult.error
-      );
-      return { ok: false, error: SIGN_UP_ERROR };
-    }
-
     return {
-      ok: true,
-      redirectTo: existingProfile.role === "admin" ? "/admin" : "/family",
+      ok: false,
+      error: "An account with this email already exists. Sign in instead.",
     };
   }
 
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: "magiclink",
+  const { data, error } = await admin.auth.admin.createUser({
     email,
-    options: {
-      data: { display_name: name },
-    },
+    password,
+    email_confirm: true,
+    user_metadata: { display_name: name },
   });
 
-  if (error || !data.properties?.hashed_token || !data.user?.id) {
-    console.error("Could not create a Supabase sign-up token:", error);
+  if (error || !data.user?.id) {
+    console.error("Could not create a password account:", error);
     return { ok: false, error: SIGN_UP_ERROR };
   }
 
@@ -107,12 +89,13 @@ export async function signUpWithEmail(
     return { ok: false, error: SIGN_UP_ERROR };
   }
 
-  const sessionResult = await verifyGeneratedEmailLink(data.properties);
-  if (!sessionResult.ok) {
-    console.error(
-      "Could not verify the Supabase sign-up token:",
-      sessionResult.error
-    );
+  const supabase = await createSupabaseServerClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (signInError) {
+    console.error("Could not sign in after password sign-up:", signInError);
     return { ok: false, error: SIGN_UP_ERROR };
   }
 
