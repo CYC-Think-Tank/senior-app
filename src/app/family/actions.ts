@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { interviewLanguage, localeCookieName, normalizeLocale } from "@/lib/i18n";
 import { personName } from "@/lib/names";
 import { EPISODES_BUCKET, RAW_BUCKET } from "@/lib/constants";
 
@@ -291,10 +291,9 @@ export async function updateMyProfile(name: string, bio: string) {
         ...guestFields,
         user_id: user.id,
         family_id: profile?.family_id ?? null,
-        language:
-          normalizeLocale((await cookies()).get(localeCookieName)?.value) === "en"
-            ? "English"
-            : "Chinese",
+        language: interviewLanguage(
+          normalizeLocale((await cookies()).get(localeCookieName)?.value),
+        ),
       });
 
   if (guestError) {
@@ -357,7 +356,7 @@ export async function startMyConversation() {
         user_id: user.id,
         family_id: profile?.family_id ?? null,
         name: currentName,
-        language: locale === "en" ? "English" : "Chinese",
+        language: interviewLanguage(locale),
       })
       .select("id")
       .single();

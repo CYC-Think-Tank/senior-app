@@ -2,7 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { interviewLanguage, localeCookieName, normalizeLocale } from "@/lib/i18n";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type StartConversationState = {
@@ -88,7 +88,7 @@ export async function startConversation(
   const locale = normalizeLocale(
     (await cookies()).get(localeCookieName)?.value,
   );
-  const language = locale === "en" ? "English" : "Chinese";
+  const language = interviewLanguage(locale);
   const admin = createSupabaseAdminClient();
   const { data: guest, error: guestError } = await admin
     .from("guests")

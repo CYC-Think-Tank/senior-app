@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
@@ -46,12 +47,15 @@ export async function POST(request: NextRequest) {
     .order("idx", { ascending: true });
 
   const guest = session.guests as unknown as Guest;
-  const guestName = await resolveCurrentGuestName(admin, guest);
+  const [guestName, language] = await Promise.all([
+    resolveCurrentGuestName(admin, guest),
+    resolveCurrentGuestLanguage(admin, guest),
+  ]);
   const instructions = buildInterviewerInstructions({
     guestName,
     bio: guest.bio,
     topics: guest.topics,
-    language: guest.language,
+    language,
     topic: session.topic,
     priorTurns: priorTurns ?? undefined,
   });
