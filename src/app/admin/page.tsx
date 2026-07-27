@@ -102,9 +102,11 @@ export default async function AdminDashboard() {
   const { supabase } = await requireAdmin();
 
   const [{ data: guestRows }, { data: sessionRows }] = await Promise.all([
+    // Only people an admin invited; see the note in guests/page.tsx.
     supabase
       .from("guests")
       .select("id, name, bio, topics, language, user_id")
+      .eq("origin", "admin_invite")
       .order("created_at", { ascending: false }),
     supabase
       .from("sessions")
@@ -118,7 +120,12 @@ export default async function AdminDashboard() {
     "guest_id" | "status" | "duration_ms" | "created_at"
   >;
   const guests = (guestRows ?? []) as GuestRow[];
-  const sessions = (sessionRows ?? []) as SessionRow[];
+  // The counts and the chart below describe the same people the directory
+  // lists, so conversations belonging to guests we filtered out drop away too.
+  const guestIds = new Set(guests.map((guest) => guest.id));
+  const sessions = ((sessionRows ?? []) as SessionRow[]).filter((session) =>
+    guestIds.has(session.guest_id),
+  );
   const today = dateKey(new Date());
   const finishedSessions = sessions.filter((session) => session.status === "ready");
   const durations = finishedSessions

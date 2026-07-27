@@ -59,9 +59,13 @@ const copyByLocale: Record<string, GuestDirectoryCopy> = {
 export default async function GuestsPage() {
   const { supabase } = await requireAdmin();
   const [{ data: guestRows }, { data: sessionRows }] = await Promise.all([
+    // Only people an admin invited: storytellers who set themselves up from
+    // /family, and walk-ins from the public /interview flow, are not ours to
+    // manage from here.
     supabase
       .from("guests")
       .select("id, name, bio, topics, language, user_id")
+      .eq("origin", "admin_invite")
       .order("created_at", { ascending: false }),
     supabase
       .from("sessions")

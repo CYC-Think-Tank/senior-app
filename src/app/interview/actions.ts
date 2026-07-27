@@ -92,7 +92,7 @@ export async function startConversation(
   const admin = createSupabaseAdminClient();
   const { data: guest, error: guestError } = await admin
     .from("guests")
-    .insert({ name, language })
+    .insert({ name, language, origin: "public" })
     .select("id")
     .single();
 

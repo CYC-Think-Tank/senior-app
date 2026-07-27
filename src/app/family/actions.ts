@@ -304,6 +304,7 @@ export async function updateMyProfile(
         ...guestFields,
         user_id: user.id,
         family_id: profile?.family_id ?? null,
+        origin: "self_serve",
         language: interviewLanguage(
           normalizeLocale((await cookies()).get(localeCookieName)?.value),
         ),

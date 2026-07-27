@@ -24,7 +24,13 @@ export async function createGuest(formData: FormData) {
 
   const { data: guest, error } = await supabase
     .from("guests")
-    .insert({ name, bio, language, topics: topics.length ? topics : null })
+    .insert({
+      name,
+      bio,
+      language,
+      topics: topics.length ? topics : null,
+      origin: "admin_invite",
+    })
     .select("id")
     .single();
 
@@ -127,7 +133,7 @@ export async function invitePodcastUser(userId: string) {
 
   const { data: existingGuest } = await admin
     .from("guests")
-    .select("id, name")
+    .select("id, name, origin")
     .eq("user_id", userId)
     .maybeSingle();
   let guestId: string;
@@ -135,10 +141,15 @@ export async function invitePodcastUser(userId: string) {
 
   if (existingGuest) {
     guestId = existingGuest.id;
-    if (existingGuest.name !== currentName) {
+    // Inviting someone who already set themselves up makes them ours: the
+    // origin has to follow, or they never reach the Guests tab.
+    const changes: { name?: string; origin?: string } = {};
+    if (existingGuest.name !== currentName) changes.name = currentName;
+    if (existingGuest.origin !== "admin_invite") changes.origin = "admin_invite";
+    if (Object.keys(changes).length) {
       const { error: guestError } = await admin
         .from("guests")
-        .update({ name: currentName })
+        .update(changes)
         .eq("id", guestId);
       if (guestError) throw new Error("Could not prepare the invitation.");
     }
@@ -150,6 +161,7 @@ export async function invitePodcastUser(userId: string) {
         family_id: profile.family_id,
         name: currentName,
         language: "English",
+        origin: "admin_invite",
       })
       .select("id")
       .single();
