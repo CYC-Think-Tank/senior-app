@@ -5,7 +5,8 @@ export type Profile = {
   email: string;
   display_name: string | null;
   role: Role;
-  family_id: string;
+  /** Null for admins: they read every family through `is_admin()`. */
+  family_id: string | null;
   created_at: string;
 };
 

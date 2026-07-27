@@ -80,6 +80,9 @@ export async function signUpWithPassword(
       email,
       display_name: name,
       role,
+      // Admins belong to no family. Family accounts keep the family the
+      // new-user trigger gave them (or the column default, if this insert wins).
+      ...(role === "admin" ? { family_id: null } : {}),
     },
     { onConflict: "id" }
   );
