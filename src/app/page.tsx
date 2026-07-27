@@ -36,6 +36,8 @@ export default async function LandingPage() {
     }
   }
 
+  const startConversationHref = dashboardHref ?? "/interview";
+
   return (
     <main className={styles.page} data-landing-page>
       <HeroSky
@@ -89,7 +91,7 @@ export default async function LandingPage() {
             </p>
             <div className={styles.heroCtas}>
               <PageTransitionLink
-                href="/interview"
+                href={startConversationHref}
                 className={styles.btnPrimary}
                 aria-label={t("landingStartAria")}
               >
@@ -200,7 +202,7 @@ export default async function LandingPage() {
             {t("landingCtaTitle")}
           </h2>
           <p className={styles.ctaSub}>{t("landingCtaBody")}</p>
-        <PageTransitionLink href="/interview" className={styles.btnLight}>
+        <PageTransitionLink href={startConversationHref} className={styles.btnLight}>
           {t("landingStartConversation")}
           <ArrowRight className={styles.btnIcon} aria-hidden="true" />
         </PageTransitionLink>
