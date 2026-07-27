@@ -4,6 +4,12 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RAW_BUCKET } from "@/lib/constants";
 import type { TurnDraft } from "@/lib/types";
 import type { DenoiseState } from "@shiguredo/rnnoise-wasm";
+import {
+  findGuestFinishToolCall,
+  getInterviewClosingInstructions,
+  type GuestFinishToolCall,
+  type InterviewClosingStyle,
+} from "@/lib/realtime/interview-ending";
 
 export type InterviewPhase =
   | "idle"
@@ -36,6 +42,7 @@ export type InterviewCallbacks = {
   /** Streaming text of the AI's in-progress reply ("" when none). */
   onLiveAiText: (text: string) => void;
   onAiSpeaking: (speaking: boolean) => void;
+  onWrapUpStarted: () => void;
   /** ~60fps: mic input level (0..1), elapsed recording ms, and RNNoise VAD. */
   onMeter: (level: number, elapsedMs: number, voiceActivity?: number) => void;
   /** ~60fps: the RMS level of Rosie's output audio (0..1). */
@@ -169,6 +176,8 @@ export class InterviewClient {
   private wrapUpStopTimer: number | null = null;
   private wrapUpPlaybackWatchdogTimer: number | null = null;
   private wrapUpAudioStarted = false;
+  private wrapUpStyle: InterviewClosingStyle = "warm_summary";
+  private handledFinishCallIds = new Set<string>();
   private aiOutputPlaying = false;
   private activeResponseIds = new Set<string>();
 
@@ -716,7 +725,12 @@ export class InterviewClient {
       }
       case "response.done": {
         const response = e.response as
-          | { id?: string; status?: string; metadata?: Record<string, string> | null }
+          | {
+              id?: string;
+              status?: string;
+              metadata?: Record<string, string> | null;
+              output?: unknown[];
+            }
           | undefined;
         const responseId = response?.id;
         if (responseId) {
@@ -736,6 +750,10 @@ export class InterviewClient {
             // would otherwise leave the interview live forever.
             this.startWrapUpPlaybackWatchdog();
           }
+        }
+        if (response?.status === "completed") {
+          const finishCall = findGuestFinishToolCall(response);
+          if (finishCall) this.handleGuestFinishToolCall(finishCall);
         }
         // response.done precedes WebRTC playback completion. It may allow a
         // queued closing to start, but it must never end the interview.
@@ -878,17 +896,76 @@ export class InterviewClient {
     }
   }
 
-  /** Ask the AI to deliver its warm closing, then end the interview. */
+  /** The guest pressed the finish button; deliver a warm closing, then end. */
   requestWrapUp() {
-    if (this.stopped || this.wrapUpRequested) return;
+    this.beginWrapUp("warm_summary");
+  }
+
+  private beginWrapUp(style: InterviewClosingStyle) {
+    if (this.stopped || this.wrapUpRequested) return false;
     this.wrapUpRequested = true;
     this.wrapUpAudioStarted = false;
+    this.wrapUpStyle = style;
+    this.cb.onWrapUpStarted();
 
     // Prevent a new guest turn from interrupting or racing Rosie's closing.
     this.processedMicStream?.getAudioTracks().forEach((track) => {
       track.enabled = false;
     });
     this.maybeSendWrapUpResponse();
+    return true;
+  }
+
+  private handleGuestFinishToolCall(call: GuestFinishToolCall) {
+    if (
+      this.stopped ||
+      this.handledFinishCallIds.has(call.callId) ||
+      this.dc?.readyState !== "open"
+    ) {
+      return;
+    }
+
+    this.handledFinishCallIds.add(call.callId);
+    const accepted = call.reason !== null && !this.wrapUpRequested;
+    this.dc.send(
+      JSON.stringify({
+        type: "conversation.item.create",
+        item: {
+          type: "function_call_output",
+          call_id: call.callId,
+          output: JSON.stringify({
+            accepted,
+            ...(accepted
+              ? { reason: call.reason }
+              : {
+                  error: call.reason
+                    ? "The interview is already ending."
+                    : "The finish reason was invalid.",
+                }),
+          }),
+        },
+      })
+    );
+
+    if (accepted) {
+      this.beginWrapUp("brief_goodbye");
+      return;
+    }
+
+    // A malformed call would otherwise leave the model waiting for a new
+    // response forever. Recover without ending or suggesting that it ended.
+    if (!this.wrapUpRequested && call.reason === null) {
+      this.dc.send(
+        JSON.stringify({
+          type: "response.create",
+          response: {
+            tool_choice: "none",
+            instructions:
+              "The application did not accept the finish request. Continue the interview naturally from the guest's last turn. Do not say goodbye or imply that the conversation is ending.",
+          },
+        })
+      );
+    }
   }
 
   private maybeSendWrapUpResponse() {
@@ -908,9 +985,12 @@ export class InterviewClient {
       JSON.stringify({
         type: "response.create",
         response: {
-          metadata: { purpose: "interview_wrap_up" },
-          instructions:
-            "The conversation is ending now. Deliver your warm closing: reflect back one or two highlights from today in the guest's own words, thank them by name, and say goodbye. Keep it under 45 seconds.",
+          metadata: {
+            purpose: "interview_wrap_up",
+            style: this.wrapUpStyle,
+          },
+          tool_choice: "none",
+          instructions: getInterviewClosingInstructions(this.wrapUpStyle),
         },
       })
     );
