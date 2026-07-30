@@ -7,5 +7,4 @@ export default async function LoginLayout({
   await redirectSignedInUser();
   return children;
 }
-hello anke
 
