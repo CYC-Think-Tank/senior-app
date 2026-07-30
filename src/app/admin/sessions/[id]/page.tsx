@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createAudioUrl } from "@/lib/audio/encryption";
 import { RAW_BUCKET } from "@/lib/constants";
 import type { Episode, Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
 import TranscriptEditor from "./transcript-editor";
@@ -28,14 +28,9 @@ export default async function SessionEditorPage({
 
   if (!session) notFound();
 
-  let audioUrl: string | null = null;
-  if (session.raw_audio_path) {
-    const admin = createSupabaseAdminClient();
-    const { data } = await admin.storage
-      .from(RAW_BUCKET)
-      .createSignedUrl(session.raw_audio_path, 60 * 60 * 2);
-    audioUrl = data?.signedUrl ?? null;
-  }
+  const audioUrl = session.raw_audio_path
+    ? createAudioUrl(RAW_BUCKET, session.raw_audio_path, 60 * 60 * 2)
+    : null;
 
   return (
     <TranscriptEditor

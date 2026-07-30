@@ -7,6 +7,7 @@ import {
   LockKeyhole,
 } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createAudioUrl } from "@/lib/audio/encryption";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Wordmark, formatDuration } from "@/components/ui";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -96,13 +97,9 @@ export default async function SharedConversationPage({
     guests: Pick<Guest, "name">;
   };
 
-  let audioUrl: string | null = null;
-  if (s.raw_audio_path) {
-    const { data } = await admin.storage
-      .from(RAW_BUCKET)
-      .createSignedUrl(s.raw_audio_path, 60 * 60 * 6);
-    audioUrl = data?.signedUrl ?? null;
-  }
+  const audioUrl = s.raw_audio_path
+    ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
+    : null;
 
   const title = s.topic?.trim() || pageCopy.defaultTitle(s.guests.name);
   const recordedDate = new Date(s.created_at).toLocaleDateString(locale, {

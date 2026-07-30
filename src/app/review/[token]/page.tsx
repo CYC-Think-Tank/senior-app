@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createAudioUrl } from "@/lib/audio/encryption";
 import { EPISODES_BUCKET } from "@/lib/constants";
 import type { Episode, Guest } from "@/lib/types";
 import ReviewPlayer from "./review-player";
@@ -22,9 +23,7 @@ export default async function ReviewPage({
 
   const e = episode as unknown as Episode & { guests: Pick<Guest, "name"> };
 
-  const { data: signed } = await admin.storage
-    .from(EPISODES_BUCKET)
-    .createSignedUrl(e.audio_path, 60 * 60 * 6);
+  const audioUrl = createAudioUrl(EPISODES_BUCKET, e.audio_path, 60 * 60 * 6);
 
   return (
     <ReviewPlayer
@@ -33,7 +32,7 @@ export default async function ReviewPage({
       title={e.title}
       episodeNumber={e.episode_number}
       status={e.status}
-      audioUrl={signed?.signedUrl ?? null}
+      audioUrl={audioUrl}
     />
   );
 }

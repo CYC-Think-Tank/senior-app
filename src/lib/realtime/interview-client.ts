@@ -1,7 +1,5 @@
 "use client";
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { RAW_BUCKET } from "@/lib/constants";
 import type { TurnDraft } from "@/lib/types";
 import type { DenoiseState } from "@shiguredo/rnnoise-wasm";
 import {
@@ -416,28 +414,28 @@ export class InterviewClient {
         await new Promise((r) => setTimeout(r, 500 * 2 ** retry));
       }
       try {
-        const res = await fetch(`/api/sessions/${this.token}/upload-url`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contentType: this.mimeType,
-            part: index,
-            attempt: this.attemptId,
-          }),
+        // The chunk goes through the server, which encrypts it before it
+        // touches storage; the browser never holds the key.
+        const query = new URLSearchParams({
+          part: String(index),
+          contentType: this.mimeType,
+          ...(this.attemptId ? { attempt: String(this.attemptId) } : {}),
         });
-        if (!res.ok) throw new Error(`upload-url returned ${res.status}`);
-        const { path, uploadToken, attempt } = await res.json();
-        // Remembered even if the upload below fails, so a chunk that never
-        // lands cannot split the recording across two attempts.
-        this.attemptId ??= attempt;
-
-        const supabase = createSupabaseBrowserClient();
-        const { error } = await supabase.storage
-          .from(RAW_BUCKET)
-          .uploadToSignedUrl(path, uploadToken, blob, {
-            contentType: this.mimeType,
-          });
-        if (error) throw error;
+        const res = await fetch(
+          `/api/sessions/${this.token}/upload-part?${query}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: blob,
+          }
+        );
+        const body = await res.json().catch(() => null);
+        // Remembered even when the store fails, so a chunk that never lands
+        // cannot split the recording across two attempts once retried.
+        if (typeof body?.attempt === "number") {
+          this.attemptId ??= body.attempt;
+        }
+        if (!res.ok) throw new Error(`upload-part returned ${res.status}`);
 
         this.failedParts.delete(index);
         return;

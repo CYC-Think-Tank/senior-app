@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import { mergeKeptRanges, renderCut } from "@/lib/audio/render-cut";
 import { generateEpisodeMetadata } from "@/lib/ai/episode-metadata";
 import { EPISODES_BUCKET, RAW_BUCKET } from "@/lib/constants";
@@ -88,15 +89,18 @@ export async function POST(request: NextRequest) {
     const ext = session.raw_audio_path.endsWith(".m4a") ? "m4a" : "webm";
     const inputPath = path.join(workDir, `raw.${ext}`);
     const outputPath = path.join(workDir, "cut.mp3");
-    await writeFile(inputPath, Buffer.from(await rawBlob.arrayBuffer()));
+    await writeFile(
+      inputPath,
+      decryptAudio(Buffer.from(await rawBlob.arrayBuffer()))
+    );
 
     await renderCut(inputPath, ranges, outputPath);
 
     const audioPath = `${guest.id}/${session.id}.mp3`;
     const { error: uploadError } = await admin.storage
       .from(EPISODES_BUCKET)
-      .upload(audioPath, await readFile(outputPath), {
-        contentType: "audio/mpeg",
+      .upload(audioPath, encryptAudio(await readFile(outputPath)), {
+        contentType: "application/octet-stream",
         upsert: true,
       });
     if (uploadError) {

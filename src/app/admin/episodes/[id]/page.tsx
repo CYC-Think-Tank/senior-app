@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Send } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createAudioUrl } from "@/lib/audio/encryption";
 import {
   markApproved,
   sendForApproval,
@@ -45,10 +45,7 @@ export default async function EpisodePage({
   if (!episode) notFound();
 
   const e = episode as unknown as Episode & { guests: Guest };
-  const admin = createSupabaseAdminClient();
-  const { data: signed } = await admin.storage
-    .from(EPISODES_BUCKET)
-    .createSignedUrl(e.audio_path, 60 * 60 * 2);
+  const audioUrl = createAudioUrl(EPISODES_BUCKET, e.audio_path, 60 * 60 * 2);
 
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const status = statusCopy[e.status] ?? statusCopy.draft;
@@ -85,11 +82,7 @@ export default async function EpisodePage({
       )}
 
       <Card className="p-4">
-        {signed?.signedUrl ? (
-          <audio controls src={signed.signedUrl} className="w-full" />
-        ) : (
-          <p className="text-sm text-ink-soft">Audio unavailable.</p>
-        )}
+        <audio controls src={audioUrl} className="w-full" />
         <p className="mt-2 text-sm text-ink-faint">
           Edited cut · {formatDuration(e.duration_ms)}
         </p>
