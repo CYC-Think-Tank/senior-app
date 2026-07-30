@@ -13,9 +13,9 @@ const dateKey = (date: Date) => date.toISOString().slice(0, 10);
 
 const copyByLocale: Record<string, AdminDashboardCopy> = {
   en: {
-    eyebrow: "Fireside overview",
+    eyebrow: "WiseShare overview",
     title: "Good to see you.",
-    intro: "A clear view of the people, stories, and conversations growing across Fireside.",
+    intro: "A clear view of the people, stories, and conversations growing across WiseShare.",
     newGuest: "Add a guest",
     totalUsers: "Total users",
     recordingsToday: "Recordings today",
@@ -41,9 +41,9 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
     openGuest: "Open guest",
   },
   "zh-Hans": {
-    eyebrow: "炉边夜话概览",
+    eyebrow: "慧仁享概览",
     title: "欢迎回来。",
-    intro: "清晰了解炉边夜话中不断增长的用户、故事和对话。",
+    intro: "清晰了解慧仁享中不断增长的用户、故事和对话。",
     newGuest: "添加访客",
     totalUsers: "用户总数",
     recordingsToday: "今日录音",
@@ -69,9 +69,9 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
     openGuest: "打开访客",
   },
   "zh-Hant": {
-    eyebrow: "炉边夜话概覽",
+    eyebrow: "慧仁享概覽",
     title: "歡迎回來。",
-    intro: "清楚掌握炉边夜话中持續成長的使用者、故事和對話。",
+    intro: "清楚掌握慧仁享中持續成長的使用者、故事和對話。",
     newGuest: "新增訪客",
     totalUsers: "使用者總數",
     recordingsToday: "今日錄音",

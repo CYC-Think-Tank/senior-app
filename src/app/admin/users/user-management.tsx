@@ -48,7 +48,7 @@ export function UserManagement({ users }: { users: ManagedUser[] }) {
         <div className={styles.modalBackdrop} role="presentation" onMouseDown={() => setDeleteTarget(null)}>
           <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="delete-user-title" onMouseDown={(event) => event.stopPropagation()}>
             <h2 id="delete-user-title">Delete {deleteTarget.name}?</h2>
-            <p>This removes their Fireside account and access. Their completed podcast recordings will remain in the archive.</p>
+            <p>This removes their WiseShare account and access. Their completed podcast recordings will remain in the archive.</p>
             <div className={styles.modalActions}>
               <button className={styles.cancel} onClick={() => setDeleteTarget(null)}>Cancel</button>
               <form action={deletePodcastUser.bind(null, deleteTarget.id)}>

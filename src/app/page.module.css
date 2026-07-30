@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ */
-/*  Fireside landing — warm atmosphere and editorial typography        */
+/*  WiseShare landing — warm atmosphere and editorial typography        */
 /* ------------------------------------------------------------------ */
 
 :global(html:has([data-landing-page])),
@@ -776,6 +776,15 @@
 
   .companionSection {
     --companion-spacer: clamp(13rem, 38vh, 20rem);
+  }
+
+  .companionQuote {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: min(34rem, 100%);
+    margin: 0 auto clamp(4rem, 10vh, 6rem);
+    transform: none;
   }
 
   .companionSection .sectionTitle {

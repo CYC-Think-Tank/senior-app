@@ -49,7 +49,7 @@ export default function LoginPage() {
         >
           <span className={portalStyles.navSpacer} aria-hidden="true" />
           <div className={portalStyles.headerBrand}>
-            <Wordmark tone="light" name={locale === "en" ? undefined : "炉边夜话"} />
+            <Wordmark tone="light" name={locale === "en" ? undefined : "慧仁享"} />
           </div>
         </div>
       </header>
@@ -57,7 +57,7 @@ export default function LoginPage() {
         <div className={styles.wrap}>
           <div className={styles.panel}>
             <div className={styles.panelTop}>
-              <p className={styles.eyebrow}>Fireside</p>
+              <p className={styles.eyebrow}>WiseShare</p>
               <LanguageSwitcher tone="bare" />
             </div>
             <h1 className={styles.heading}>{t("commonSignIn")}</h1>

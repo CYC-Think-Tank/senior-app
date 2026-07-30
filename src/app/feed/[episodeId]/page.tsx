@@ -27,8 +27,8 @@ export default async function EpisodePlayerPage({ params }: { params: Promise<{ 
   const { data: signed } = await admin.storage.from(EPISODES_BUCKET).createSignedUrl(e.audio_path, 60 * 60 * 6);
   const noteLines = (e.show_notes ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
   const copy = locale === "en"
-    ? { back: "All episodes", archive: "From the Fireside archive", notes: "In this episode", unavailable: "The audio isn’t available right now." }
-    : { back: "全部节目", archive: "来自炉边夜话档案", notes: "本期内容", unavailable: "音频暂时无法播放。" };
+    ? { back: "All episodes", archive: "From the WiseShare archive", notes: "In this episode", unavailable: "The audio isn’t available right now." }
+    : { back: "全部节目", archive: "来自慧仁享档案", notes: "本期内容", unavailable: "音频暂时无法播放。" };
 
   return (
     <article className={styles.detail}>

@@ -28,7 +28,7 @@ export default async function FeedPage() {
   return (
     <div className={styles.feed}>
       <header className={styles.hero}>
-        <p className={styles.eyebrow}>The Fireside archive</p>
+        <p className={styles.eyebrow}>The WiseShare archive</p>
         <h1 className={styles.title}>{t("feedTitle")}</h1>
         <p className={styles.intro}>{intro}</p>
       </header>

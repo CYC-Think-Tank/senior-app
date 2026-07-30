@@ -22,9 +22,9 @@ export function InterviewShell({
         <Link
           href={homeHref}
           className={theme.homeLink}
-          aria-label="Fireside home"
+          aria-label="WiseShare home"
         >
-          Fireside.
+          WiseShare.
         </Link>
       ) : null}
       <div className={theme.content}>{children}</div>

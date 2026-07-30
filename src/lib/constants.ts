@@ -1,5 +1,5 @@
 // Branding is a placeholder — swap APP_NAME/TAGLINE when a real name is chosen.
-export const APP_NAME = "Fireside";
+export const APP_NAME = "WiseShare";
 export const TAGLINE = "Every life is worth the telling.";
 
 // Use the faster, lower-cost distilled realtime model for interview sessions.

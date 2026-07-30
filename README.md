@@ -1,4 +1,4 @@
-# Fireside — private audio-memoir podcast
+# WiseShare — private audio-memoir podcast
 
 An AI interviewer (OpenAI Realtime API) holds warm voice conversations with a senior, records them, and turns them into podcast episodes that — after the senior approves — release on a schedule to a private family feed.
 

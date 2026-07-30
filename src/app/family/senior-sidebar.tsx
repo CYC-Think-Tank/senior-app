@@ -74,7 +74,7 @@ export function SeniorSidebar({ name }: { name: string }) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.sidebarBrand}>
-        <Wordmark tone="light" name={chinese ? "炉边夜话" : undefined} />
+        <Wordmark tone="light" name={chinese ? "慧仁享" : undefined} />
       </div>
       <div className={styles.mobileTools}>
         <LanguageSwitcher tone="bare" />
