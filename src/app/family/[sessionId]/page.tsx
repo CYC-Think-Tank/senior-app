@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Mic } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { resumeConversation } from "@/app/family/actions";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createAudioUrl } from "@/lib/audio/encryption";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Monogram, formatDuration } from "@/components/ui";
 import { RAW_BUCKET } from "@/lib/constants";
@@ -43,14 +43,9 @@ export default async function FamilyConversationPage({
       t("familyConversationNumbered", { number })
     ).get(s.id) ?? "";
 
-  let audioUrl: string | null = null;
-  if (s.raw_audio_path) {
-    const admin = createSupabaseAdminClient();
-    const { data } = await admin.storage
-      .from(RAW_BUCKET)
-      .createSignedUrl(s.raw_audio_path, 60 * 60 * 6);
-    audioUrl = data?.signedUrl ?? null;
-  }
+  const audioUrl = s.raw_audio_path
+    ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
+    : null;
 
   return (
     <div className="space-y-6">

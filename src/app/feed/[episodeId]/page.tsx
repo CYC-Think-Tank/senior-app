@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createAudioUrl } from "@/lib/audio/encryption";
 import { AudioPlayer } from "@/components/audio-player";
 import { formatDuration } from "@/components/ui";
 import { EPISODES_BUCKET } from "@/lib/constants";
@@ -24,7 +25,7 @@ export default async function EpisodePlayerPage({ params }: { params: Promise<{ 
   if (!episode) notFound();
 
   const e = episode as unknown as Episode & { guests: { name: string } };
-  const { data: signed } = await admin.storage.from(EPISODES_BUCKET).createSignedUrl(e.audio_path, 60 * 60 * 6);
+  const audioUrl = createAudioUrl(EPISODES_BUCKET, e.audio_path, 60 * 60 * 6);
   const noteLines = (e.show_notes ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
   const copy = locale === "en"
     ? { back: "All episodes", archive: "From the Fireside archive", notes: "In this episode", unavailable: "The audio isn’t available right now." }
@@ -42,7 +43,7 @@ export default async function EpisodePlayerPage({ params }: { params: Promise<{ 
         </p>
       </header>
 
-      {signed?.signedUrl ? <AudioPlayer src={signed.signedUrl} durationMs={e.duration_ms} /> : <p className={styles.intro}>{copy.unavailable}</p>}
+      <AudioPlayer src={audioUrl} durationMs={e.duration_ms} />
 
       {e.description || noteLines.length ? (
         <div className={`${styles.bodyGrid} ${noteLines.length ? "" : styles.bodyGridSingle}`}>

@@ -5,6 +5,7 @@ import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { RAW_BUCKET } from "@/lib/constants";
+import { decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import { partsPrefix } from "@/lib/audio/parts";
 
 const DOWNLOAD_CONCURRENCY = 8;
@@ -85,7 +86,9 @@ async function downloadParts(
         if (error || !data) {
           throw new Error(`Could not download part ${parts[i].name}.`);
         }
-        buffers[i] = Buffer.from(await data.arrayBuffer());
+        // Per-part decryption; a session that straddled the encryption
+        // rollout can mix plaintext and encrypted chunks.
+        buffers[i] = decryptAudio(Buffer.from(await data.arrayBuffer()));
       }
     }
   );
@@ -221,8 +224,8 @@ export async function stitchSessionParts(
     const storagePath = `${sessionId}/raw-${Date.now()}.${ext}`;
     const { error: uploadError } = await admin.storage
       .from(RAW_BUCKET)
-      .upload(storagePath, await readFile(outputPath), {
-        contentType: ext === "m4a" ? "audio/mp4" : "audio/webm",
+      .upload(storagePath, encryptAudio(await readFile(outputPath)), {
+        contentType: "application/octet-stream",
         upsert: true,
       });
     if (uploadError) {
