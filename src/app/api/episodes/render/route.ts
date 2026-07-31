@@ -9,6 +9,7 @@ import { mergeKeptRanges, renderCut } from "@/lib/audio/render-cut";
 import { generateEpisodeMetadata } from "@/lib/ai/episode-metadata";
 import { EPISODES_BUCKET, RAW_BUCKET } from "@/lib/constants";
 import { HOST_NAME } from "@/lib/realtime/interviewer-prompt";
+import { decryptTurns } from "@/lib/transcript/encryption";
 import type { Guest, TranscriptTurn } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -63,7 +64,9 @@ export async function POST(request: NextRequest) {
   }
 
   const guest = session.guests as unknown as Guest;
-  const kept = ((turns ?? []) as TranscriptTurn[]).filter((t) => !t.excluded);
+  const kept = decryptTurns(sessionId, (turns ?? []) as TranscriptTurn[]).filter(
+    (t) => !t.excluded
+  );
   if (kept.length === 0) {
     return NextResponse.json(
       { error: "Every line is cut — restore at least one turn." },

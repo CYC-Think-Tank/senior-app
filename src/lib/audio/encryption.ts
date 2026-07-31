@@ -58,6 +58,13 @@ const BLOCK_SIZE = 256 * 1024;
 
 let cachedKey: Buffer | null = null;
 
+/**
+ * AUDIO_ENCRYPTION_KEY is the one at-rest secret the app has — it also backs
+ * transcript encryption, which derives its own subkey from it in
+ * src/lib/transcript/encryption.ts. This module deliberately imports nothing
+ * from the app: node runs it directly, from the tests and from the migration
+ * scripts, where the `@/` alias does not resolve.
+ */
 function masterKey(): Buffer {
   if (cachedKey) return cachedKey;
   const raw = process.env.AUDIO_ENCRYPTION_KEY;

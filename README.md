@@ -18,7 +18,7 @@ An AI interviewer (OpenAI Realtime API) holds warm voice conversations with a se
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Settings → API)
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (the sender must use a domain verified in Resend; `onboarding@resend.dev` only sends to the Resend account owner)
    - `OPENAI_API_KEY` (needs Realtime API access)
-   - `AUDIO_ENCRYPTION_KEY` (`openssl rand -base64 32`) — encrypts every recording at rest; back it up, losing it makes stored audio unreadable. Recordings already in the buckets are converted in place with `node --env-file=.env.local scripts/encrypt-existing-audio.mjs` (idempotent, so it is safe to re-run).
+   - `AUDIO_ENCRYPTION_KEY` (`openssl rand -base64 32`) — the app's at-rest key: it encrypts every recording in storage and every transcript turn in the database, each under its own derived subkey. Back it up; losing it makes stored recordings and transcripts unreadable. Data already saved is converted in place with `node --env-file=.env.local scripts/encrypt-existing-audio.mjs` and `node --env-file=.env.local scripts/encrypt-existing-transcripts.mjs` (both idempotent, so they are safe to re-run; the transcript one takes `--check` to report any plaintext left without writing).
 3. **Run**: `npm install && npm run dev`
 4. Sign in at `/login` with your admin email (magic link), and you'll land on `/admin`.
 

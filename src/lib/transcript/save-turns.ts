@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { encryptTurnText } from "@/lib/transcript/encryption";
 import type { TurnDraft } from "@/lib/types";
 
 export const MAX_TURNS = 1000;
@@ -32,7 +33,9 @@ function toRows(sessionId: string, turns: TurnDraft[]): TurnRow[] {
         session_id: sessionId,
         idx,
         speaker: t.speaker,
-        text: t.text.trim().slice(0, 10_000),
+        // Capped before sealing: the limit is on what was said, not on the
+        // framing, and the row is unreadable after this point.
+        text: encryptTurnText(sessionId, idx, t.text.trim().slice(0, 10_000)),
         start_ms: start,
         end_ms: Math.max(start + 100, Math.round(Number(t.endMs) || 0)),
       };

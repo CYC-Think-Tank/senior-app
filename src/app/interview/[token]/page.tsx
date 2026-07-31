@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { decryptTurns } from "@/lib/transcript/encryption";
 import type { InterviewResume } from "@/lib/realtime/interview-client";
 import InterviewRoom from "./interview-room";
 
@@ -52,12 +53,12 @@ export default async function InterviewPage({
   if (session.status !== "ready") {
     const { data: saved } = await admin
       .from("transcript_turns")
-      .select("speaker, text, start_ms, end_ms")
+      .select("idx, speaker, text, start_ms, end_ms")
       .eq("session_id", session.id)
       .order("idx", { ascending: true });
 
     if (saved?.length) {
-      const turns = saved.map((turn) => ({
+      const turns = decryptTurns(session.id, saved).map((turn) => ({
         speaker: turn.speaker,
         text: turn.text,
         startMs: turn.start_ms,
