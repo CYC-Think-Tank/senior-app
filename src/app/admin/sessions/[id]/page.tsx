@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { RAW_BUCKET } from "@/lib/constants";
+import { decryptTurns } from "@/lib/transcript/encryption";
 import type { Episode, Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
 import TranscriptEditor from "./transcript-editor";
 
@@ -36,7 +37,7 @@ export default async function SessionEditorPage({
     <TranscriptEditor
       session={session as unknown as InterviewSession}
       guest={session.guests as unknown as Guest}
-      initialTurns={(turns ?? []) as TranscriptTurn[]}
+      initialTurns={decryptTurns(id, (turns ?? []) as TranscriptTurn[])}
       episode={(episode ?? null) as Episode | null}
       audioUrl={audioUrl}
     />

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { decryptTurns } from "@/lib/transcript/encryption";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
 import { GUEST_FINISH_TOOL } from "@/lib/realtime/interview-ending";
 import {
@@ -45,9 +46,9 @@ export async function POST(request: NextRequest) {
   // Whatever the live checkpoints saved before the tab closed. Handing it to
   // the interviewer is what turns reopening the link into carrying on rather
   // than starting the conversation again.
-  const { data: priorTurns } = await admin
+  const { data: savedTurns } = await admin
     .from("transcript_turns")
-    .select("speaker, text")
+    .select("idx, speaker, text")
     .eq("session_id", session.id)
     .order("idx", { ascending: true });
 
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     topics: guest.topics,
     language,
     topic: session.topic,
-    priorTurns: priorTurns ?? undefined,
+    priorTurns: decryptTurns(session.id, savedTurns ?? []),
   });
 
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
