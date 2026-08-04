@@ -2,9 +2,15 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { setLocaleAction } from "@/app/language/actions";
-import { localeCookieName, type Locale } from "@/lib/i18n";
+import {
+  localeCookieName,
+  localeLabels,
+  locales,
+  type Locale,
+} from "@/lib/i18n";
 import styles from "@/components/language-switcher.module.css";
 
 export function LanguageSwitcher({
@@ -35,15 +41,15 @@ export function LanguageSwitcher({
     [],
   );
 
-  function toggleLocale() {
+  function selectLocale(nextLocale: Locale) {
     if (preparing || pending) return;
+    if (nextLocale === displayLocale) return;
 
     if (safetyTimerRef.current !== null) {
       window.clearTimeout(safetyTimerRef.current);
       safetyTimerRef.current = null;
     }
 
-    const nextLocale: Locale = displayLocale === "en" ? "zh-Hans" : "en";
     const needsServerRefresh = !pathname.startsWith("/admin");
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -104,23 +110,37 @@ export function LanguageSwitcher({
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggleLocale}
-      disabled={preparing || pending}
-      aria-busy={preparing || pending}
-      className={`${styles.control} inline-flex min-h-10 items-center justify-center rounded-lg border text-sm disabled:cursor-wait disabled:opacity-60 ${
-        tone === "bare"
-          ? `${styles.bare} border-transparent bg-transparent px-4 font-medium`
-          : tone === "dark"
-            ? "border-white/20 bg-white/10 px-3 font-semibold text-cream hover:bg-white/16"
-            : "border-line bg-cream px-3 font-semibold text-ink-soft hover:bg-paper-deep hover:text-ink"
-      }`}
-      aria-label={displayLocale === "en" ? "Switch to Chinese" : "Switch to English"}
-    >
-      <span key={displayLocale} className={styles.label}>
-        {displayLocale === "en" ? "中文" : "English"}
-      </span>
-    </button>
+    <span className={styles.wrapper}>
+      <select
+        value={displayLocale}
+        onChange={(event) => selectLocale(event.target.value as Locale)}
+        disabled={preparing || pending}
+        aria-busy={preparing || pending}
+        aria-label="Language"
+        className={`${styles.control} inline-flex min-h-10 cursor-pointer appearance-none items-center justify-center rounded-lg border text-sm disabled:cursor-wait disabled:opacity-60 ${
+          tone === "bare"
+            ? `${styles.bare} border-transparent bg-transparent py-0 pl-4 pr-10 font-medium`
+            : tone === "dark"
+              ? "border-white/20 bg-white/10 py-0 pl-3 pr-9 font-semibold text-cream hover:bg-white/16"
+              : "border-line bg-cream py-0 pl-3 pr-9 font-semibold text-ink-soft hover:bg-paper-deep hover:text-ink"
+        }`}
+      >
+        {locales.map((availableLocale) => (
+          <option key={availableLocale} value={availableLocale}>
+            {localeLabels[availableLocale]}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        aria-hidden="true"
+        className={`${styles.chevron} ${
+          tone === "bare"
+            ? styles.chevronBare
+            : tone === "dark"
+              ? styles.chevronDark
+              : styles.chevronLight
+        }`}
+      />
+    </span>
   );
 }

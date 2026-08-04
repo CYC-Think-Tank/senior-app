@@ -16,6 +16,7 @@
     "@shiguredo/rnnoise-wasm": "^2025.1.5",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.6",
+    "archiver": "^8.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "ffmpeg-static": "^5.3.0",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^8.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
