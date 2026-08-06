@@ -1,3 +1,9 @@
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
 .control {
   transform: translate3d(0, 0, 0);
   transition:
@@ -10,20 +16,41 @@
   will-change: color, opacity, text-shadow, transform;
 }
 
-.label {
-  display: inline-block;
-  animation: languageLabelIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.control:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
-@keyframes languageLabelIn {
-  from {
-    opacity: 0;
-    transform: translateY(0.3rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.control option {
+  color: #2f2922;
+  background: #fffaf1;
+}
+
+.chevron {
+  position: absolute;
+  top: 50%;
+  right: 0.75rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.chevronBare {
+  color: rgb(255 250 241 / 76%);
+}
+
+.chevronDark {
+  color: rgb(255 250 241 / 90%);
+}
+
+.chevronLight {
+  color: currentColor;
+}
+
+.wrapper:hover .chevron {
+  transform: translateY(-50%) translateY(-1px);
 }
 
 .bare {
@@ -44,11 +71,11 @@
     transition: color 120ms ease, opacity 120ms ease;
   }
 
-  .label {
-    animation: none;
-  }
-
   .bare:hover {
     transform: none;
+  }
+
+  .wrapper:hover .chevron {
+    transform: translateY(-50%);
   }
 }

@@ -46,7 +46,7 @@ export default async function LandingPage() {
       <section className={styles.heroPanel} aria-label={t("landingWelcomeAria")}>
         <div className={styles.heroTop}>
           <Link href="/" className={styles.wordmark} aria-label={t("landingHomeAria")}>
-            {locale === "en" ? "WiseShare." : "慧仁享."}
+            {locale === "en" ? "WiseShare." : "慧仁享"}
           </Link>
           <nav className={styles.authNav} aria-label={t("landingAccountAria")}>
             <LanguageSwitcher tone="bare" />
@@ -207,7 +207,13 @@ export default async function LandingPage() {
       <footer className={styles.footer}>
         <Link href="/" className={styles.brand} aria-label={t("landingHomeAria")}>
           <span className={styles.brandName}>
-            {locale === "en" ? "WiseShare" : "慧仁享"}<span className={styles.brandDot}>.</span>
+            {locale === "en" ? (
+              <>
+                WiseShare<span className={styles.brandDot}>.</span>
+              </>
+            ) : (
+              "慧仁享"
+            )}
           </span>
         </Link>
         <div className={styles.footerMeta}>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Headphones, Pencil, Save, Trash2, X } from "lucide-react";
+import { Download, Headphones, Pencil, Save, Trash2, X } from "lucide-react";
 import { deleteConversation, renameConversation } from "./actions";
 import type { FamilyConversation } from "./family-data";
 import { ShareConversation } from "@/components/share-conversation";
@@ -106,6 +106,18 @@ function ConversationItem({
           <button className={styles.rowButton} type="button" onClick={() => setEditing(true)}>
             <Pencil aria-hidden="true" /> {chinese ? "重命名" : "Rename"}
           </button>
+          <a
+            className={styles.rowButton}
+            href={`/api/family/conversations/export?conversationId=${encodeURIComponent(conversation.id)}`}
+            download
+          >
+            <Download aria-hidden="true" />{" "}
+            {locale === "zh-Hant"
+              ? "匯出"
+              : locale === "zh-Hans"
+                ? "导出"
+                : "Export"}
+          </a>
           {conversation.unfinished ? null : (
             <ShareConversation
               sessionId={conversation.id}
