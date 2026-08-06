@@ -35,7 +35,7 @@ export function AdminSidebar() {
 
   return (
     <aside className={portalStyles.adminSidebar}>
-      <div className={portalStyles.sidebarBrand}><Wordmark tone="light" name={locale === "en" ? undefined : "慧仁享"} /></div>
+      <div className={portalStyles.sidebarBrand}><Wordmark tone="light" locale={locale} /></div>
       <p className={portalStyles.sidebarLabel}>Workspace</p>
       <nav className={portalStyles.sidebarNav} aria-label="Admin navigation">
         {items.map((item) => (

@@ -1,13 +1,18 @@
 import Link from "next/link";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, APP_NAME_ZH } from "@/lib/constants";
+import { defaultLocale, type Locale } from "@/lib/i18n";
 
 export function Wordmark({
   tone = "ink",
-  name = APP_NAME,
+  locale = defaultLocale,
 }: {
   tone?: "ink" | "light";
-  name?: string;
+  locale?: Locale;
 }) {
+  // The ember full stop is a Latin typographic flourish; after 慧仁享 it reads
+  // as a stray period, so the Chinese wordmark carries the name alone.
+  const chinese = locale !== "en";
+
   return (
     <Link
       href="/"
@@ -15,10 +20,12 @@ export function Wordmark({
         tone === "light" ? "text-cream" : "text-ink"
       }`}
     >
-      {name}
-      <span className={tone === "light" ? "text-[#ffd19c]" : "text-ember"}>
-        .
-      </span>
+      {chinese ? APP_NAME_ZH : APP_NAME}
+      {chinese ? null : (
+        <span className={tone === "light" ? "text-[#ffd19c]" : "text-ember"}>
+          .
+        </span>
+      )}
     </Link>
   );
 }
