@@ -1,30 +1,21 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Play, RotateCcw, Scissors, Wand2 } from "lucide-react";
+import { Play, Scissors } from "lucide-react";
 import { setTurnExcluded } from "@/app/admin/actions";
 import { HOST_NAME } from "@/lib/realtime/interviewer-prompt";
 import {
   Badge,
   Card,
-  buttonStyles,
   formatDuration,
   formatTimestamp,
 } from "@/components/ui";
-import type {
-  Episode,
-  Guest,
-  InterviewSession,
-  TranscriptTurn,
-} from "@/lib/types";
+import type { Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
 
 type Props = {
   session: InterviewSession;
   guest: Guest;
   initialTurns: TranscriptTurn[];
-  episode: Episode | null;
   audioUrl: string | null;
 };
 
@@ -32,15 +23,11 @@ export default function TranscriptEditor({
   session,
   guest,
   initialTurns,
-  episode,
   audioUrl,
 }: Props) {
-  const router = useRouter();
   const audioRef = useRef<HTMLAudioElement>(null);
   const durationPrimedRef = useRef(false);
   const [turns, setTurns] = useState(initialTurns);
-  const [rendering, setRendering] = useState(false);
-  const [renderError, setRenderError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const keptMs = useMemo(
@@ -95,80 +82,21 @@ export default function TranscriptEditor({
     void el.play();
   }
 
-  async function renderEpisode(regenerateMetadata: boolean) {
-    setRendering(true);
-    setRenderError(null);
-    try {
-      const res = await fetch("/api/episodes/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id, regenerateMetadata }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body.error ?? "Rendering failed.");
-      }
-      router.push(`/admin/episodes/${body.episodeId}`);
-    } catch (err) {
-      setRenderError(err instanceof Error ? err.message : "Rendering failed.");
-      setRendering(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-serif text-3xl font-semibold">
-            {guest.name}
-            {session.topic ? ` — ${session.topic}` : ""}
-          </h1>
-          <p className="mt-1 text-ink-soft">
-            Recorded{" "}
-            {session.started_at
-              ? new Date(session.started_at).toLocaleString()
-              : "—"}{" "}
-            · raw {formatDuration(session.duration_ms)} · edited cut ≈{" "}
-            {formatDuration(keptMs)}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {episode ? (
-            <div className="flex items-center gap-2">
-              <Link
-                href={`/admin/episodes/${episode.id}`}
-                className="text-sm font-medium text-ember hover:text-ember-deep"
-              >
-                Open episode →
-              </Link>
-              <button
-                onClick={() => renderEpisode(false)}
-                disabled={rendering}
-                className={buttonStyles.secondary}
-              >
-                <RotateCcw className="h-4 w-4" />
-                {rendering ? "Rendering…" : "Re-render audio"}
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => renderEpisode(true)}
-              disabled={rendering || keptMs === 0}
-              className={buttonStyles.primary}
-            >
-              <Wand2 className="h-4 w-4" />
-              {rendering ? "Rendering episode…" : "Generate episode"}
-            </button>
-          )}
-          {rendering && (
-            <p className="text-xs text-ink-faint">
-              Cutting audio and writing show notes — this can take a minute.
-            </p>
-          )}
-          {renderError && (
-            <p className="text-sm text-ember-deep">{renderError}</p>
-          )}
-        </div>
+      <div>
+        <h1 className="font-serif text-3xl font-semibold">
+          {guest.name}
+          {session.topic ? ` — ${session.topic}` : ""}
+        </h1>
+        <p className="mt-1 text-ink-soft">
+          Recorded{" "}
+          {session.started_at
+            ? new Date(session.started_at).toLocaleString()
+            : "—"}{" "}
+          · raw {formatDuration(session.duration_ms)} · kept ≈{" "}
+          {formatDuration(keptMs)}
+        </p>
       </div>
 
       {audioUrl ? (
@@ -192,8 +120,8 @@ export default function TranscriptEditor({
         <div className="flex items-center justify-between px-5 py-3 text-sm text-ink-soft">
           <span>
             <Scissors className="mr-1.5 inline h-4 w-4" />
-            Click a line to strike it from the episode. Click a timestamp to
-            listen from there.
+            Click a line to mark it as cut. Click a timestamp to listen from
+            there.
           </span>
           <Badge>{turns.filter((t) => t.excluded).length} cut</Badge>
         </div>

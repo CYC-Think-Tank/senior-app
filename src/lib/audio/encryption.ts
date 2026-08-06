@@ -8,9 +8,9 @@ import {
 } from "node:crypto";
 
 /**
- * At-rest encryption for every audio object in storage — interview chunks,
- * stitched raw recordings, and rendered episodes — so the buckets hold only
- * ciphertext and a leaked storage credential exposes no recordings.
+ * At-rest encryption for every audio object in storage — interview chunks and
+ * stitched raw recordings — so the bucket holds only ciphertext and a leaked
+ * storage credential exposes no recordings.
  *
  * Audio is encrypted in independent fixed-size blocks rather than as one
  * sealed blob. A recording runs to tens of megabytes, and a single blob would

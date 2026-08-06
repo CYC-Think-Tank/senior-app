@@ -27,20 +27,20 @@ export default function PrivacyPage() {
             <ul>
               <li>account information, such as your name and email address;</li>
               <li>profile details and interview preferences you choose to provide;</li>
-              <li>audio recordings, transcripts, and episode details created through WiseShare; and</li>
+              <li>audio recordings and transcripts created through WiseShare; and</li>
               <li>technical information needed to operate and secure the service, including authentication and session data.</li>
             </ul>
           </section>
           <section>
             <h2>How we use information</h2>
             <p>
-              We use information to provide interviews and accounts, create recordings and episodes, protect the service, respond to requests, and send account or invitation emails. We do not sell personal information.
+              We use information to provide interviews and accounts, create and store recordings, protect the service, respond to requests, and send account or invitation emails. We do not sell personal information.
             </p>
           </section>
           <section>
             <h2>Recording, AI, and publication</h2>
             <p>
-              Before an interview begins, the storyteller is asked to consent to recording and AI processing. WiseShare uses OpenAI to run the AI interviewer and help create episode metadata. Raw conversations remain private unless you deliberately share a private link. A finished episode is made public only after the storyteller separately approves it.
+              Before an interview begins, the storyteller is asked to consent to recording and AI processing. WiseShare uses OpenAI to run the AI interviewer. Conversations remain private unless you deliberately share a private link.
             </p>
           </section>
           <section>

@@ -88,7 +88,7 @@ export default async function FamilyConversationPage({
           </form>
         </Card>
       ) : (
-        <Card className="p-6 text-ink-soft">{t("reviewAudioMissing")}</Card>
+        <Card className="p-6 text-ink-soft">{t("audioMissing")}</Card>
       )}
     </div>
   );

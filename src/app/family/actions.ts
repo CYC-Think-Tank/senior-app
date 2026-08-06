@@ -8,85 +8,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { interviewLanguage } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { personName } from "@/lib/names";
-import {
-  EPISODES_BUCKET,
-  isRealtimeVoice,
-  RAW_BUCKET,
-} from "@/lib/constants";
+import { isRealtimeVoice, RAW_BUCKET } from "@/lib/constants";
 
 export type ShareLinkResult =
   | { ok: true; token: string }
   | { ok: false };
-
-export async function requestPodcastParticipation(
-  requestKind: "existing_conversation" | "new_interview",
-  sessionId?: string,
-) {
-  const { supabase, user } = await requireUser();
-  const admin = createSupabaseAdminClient();
-  const { data: existing } = await admin
-    .from("podcast_participation")
-    .select("status")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (existing && existing.status !== "interview_done") {
-    return { ok: false as const, reason: "existing_request" as const };
-  }
-
-  let selectedSessionId: string | null = null;
-  if (requestKind === "existing_conversation") {
-    if (!sessionId) return { ok: false as const, reason: "invalid_session" as const };
-    const { data: session } = await supabase
-      .from("sessions")
-      .select("id, guests!inner(user_id)")
-      .eq("id", sessionId)
-      .eq("status", "ready")
-      .eq("guests.user_id", user.id)
-      .single();
-    if (!session) return { ok: false as const, reason: "invalid_session" as const };
-    selectedSessionId = session.id;
-  }
-
-  const { error } = await admin.from("podcast_participation").upsert(
-    {
-      user_id: user.id,
-      session_id: selectedSessionId,
-      source: "request",
-      request_kind: requestKind,
-      status: "requested",
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  );
-  if (error) throw new Error("Could not send your request.");
-  revalidatePath("/family");
-  revalidatePath("/family/requests");
-  revalidatePath("/admin/participation");
-  return { ok: true as const };
-}
-
-export async function acceptPodcastInvitation() {
-  const { user } = await requireUser();
-  const admin = createSupabaseAdminClient();
-  const { data: participation } = await admin
-    .from("podcast_participation")
-    .select("id, session_id, sessions(token)")
-    .eq("user_id", user.id)
-    .eq("status", "invited")
-    .single();
-  const session = participation?.sessions as unknown as { token: string } | null;
-  if (!participation?.session_id || !session?.token) throw new Error("This invitation is no longer available.");
-
-  const { error } = await admin
-    .from("podcast_participation")
-    .update({ status: "accepted", updated_at: new Date().toISOString() })
-    .eq("id", participation.id);
-  if (error) throw new Error("Could not accept the invitation.");
-  revalidatePath("/family");
-  revalidatePath("/family/requests");
-  revalidatePath("/admin/participation");
-  redirect(`/interview/${session.token}`);
-}
 
 /**
  * Creates (once) a permanent public share token for a finished conversation.
@@ -158,8 +84,8 @@ export async function resumeConversation(sessionId: string) {
 
 /**
  * Renames a conversation. Writes to `title`, never `topic` — the latter feeds
- * the AI host and episode metadata, so it must keep describing the interview.
- * Passing an empty name clears it, returning the conversation to numbering.
+ * the AI host, so it must keep describing the interview. Passing an empty name
+ * clears it, returning the conversation to numbering.
  */
 export async function renameConversation(sessionId: string, name: string) {
   const { supabase, user } = await requireUser();
@@ -206,27 +132,15 @@ export async function deleteConversation(sessionId: string) {
   if (!visibleSession) return { ok: false as const };
 
   const admin = createSupabaseAdminClient();
-  const [{ data: session }, { data: episode }] = await Promise.all([
-    admin
-      .from("sessions")
-      .select("raw_audio_path")
-      .eq("id", sessionId)
-      .single(),
-    admin
-      .from("episodes")
-      .select("audio_path")
-      .eq("session_id", sessionId)
-      .maybeSingle(),
-  ]);
+  const { data: session } = await admin
+    .from("sessions")
+    .select("raw_audio_path")
+    .eq("id", sessionId)
+    .single();
 
-  const removals: Promise<unknown>[] = [];
   if (session?.raw_audio_path) {
-    removals.push(admin.storage.from(RAW_BUCKET).remove([session.raw_audio_path]));
+    await admin.storage.from(RAW_BUCKET).remove([session.raw_audio_path]);
   }
-  if (episode?.audio_path) {
-    removals.push(admin.storage.from(EPISODES_BUCKET).remove([episode.audio_path]));
-  }
-  await Promise.all(removals);
 
   const { error } = await admin.from("sessions").delete().eq("id", sessionId);
   if (error) {
@@ -236,7 +150,6 @@ export async function deleteConversation(sessionId: string) {
 
   revalidatePath("/family");
   revalidatePath("/family/conversations");
-  revalidatePath("/family/requests");
   revalidatePath("/admin");
   return { ok: true as const };
 }

@@ -13,11 +13,7 @@
 .avatar { display: grid; width: 2.15rem; height: 2.15rem; flex: none; place-items: center; color: #382017; background: #fffaf1; border-radius: 50%; font-family: var(--font-serif); }
 .name { overflow: hidden; color: #fffaf1; font-size: .86rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: flex; align-items: center; gap: .45rem; }
-.inviteButton, .deleteButton { display: inline-flex; min-height: 2.25rem; align-items: center; justify-content: center; padding: 0 .8rem; border-radius: 7px; font-size: .72rem; font-weight: 650; transition: background 180ms ease, color 180ms ease, transform 180ms ease; }
-.inviteButton { color: #382017; background: #fffaf1; }
-.inviteButton:hover { background: #fff; transform: translateY(-1px); }
-.inviteButton:disabled { color: rgb(255 250 241 / .45); background: rgb(255 250 241 / .08); cursor: default; transform: none; }
-.deleteButton { color: rgb(255 250 241 / .58); background: transparent; }
+.deleteButton { display: inline-flex; min-height: 2.25rem; align-items: center; justify-content: center; padding: 0 .8rem; border-radius: 7px; color: rgb(255 250 241 / .58); background: transparent; font-size: .72rem; font-weight: 650; transition: background 180ms ease, color 180ms ease; }
 .deleteButton:hover { color: #fff; background: rgb(255 250 241 / .07); }
 .empty { margin: 0; padding: 3rem 1.25rem; color: rgb(255 250 241 / .48); text-align: center; }
 .modalBackdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1.25rem; background: rgb(24 7 3 / .68); backdrop-filter: blur(8px); }
@@ -28,19 +24,5 @@
 .cancel, .confirm { min-height: 2.5rem; padding: 0 .9rem; border-radius: 7px; font-size: .75rem; font-weight: 650; }
 .cancel { color: #59443a; background: #f1e5d5; }
 .confirm { color: #fff; background: #8d321f; }
-.participationList { display: grid; }
-.participationRow { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(18rem, 2fr) auto; align-items: center; padding: 1.2rem 1.25rem; gap: 1.5rem; border-top: 1px solid rgb(255 250 241 / .08); }
-.participationRow:first-child { border-top: 0; }
-.source { display: block; margin-top: .28rem; color: rgb(255 250 241 / .43); font-size: .68rem; }
-.progress { display: grid; grid-template-columns: repeat(4, 1fr); }
-.step { position: relative; padding-top: 1.15rem; color: rgb(255 250 241 / .34); font-size: .6rem; text-align: center; }
-.step::before { position: absolute; top: .25rem; left: 50%; z-index: 2; width: .52rem; height: .52rem; background: #74412f; border: 2px solid #a66c51; border-radius: 50%; content: ""; transform: translateX(-50%); }
-.step::after { position: absolute; top: .47rem; right: 50%; width: 100%; height: 1px; background: #74412f; content: ""; }
-.step:first-child::after { display: none; }
-.stepComplete { color: rgb(255 250 241 / .76); }
-.stepComplete::before { background: #fffaf1; border-color: #fffaf1; }
-.stepComplete::after { background: rgb(255 250 241 / .7); }
-.status { min-width: 6.5rem; color: #fffaf1; font-size: .7rem; font-weight: 650; text-align: right; }
-@media (max-width: 760px) { .participationRow { grid-template-columns: 1fr; } .status { text-align: left; } }
 @media (max-width: 560px) { .header { align-items: start; flex-direction: column; } .userRow { align-items: start; flex-direction: column; } .actions { width: 100%; } .actions > * { flex: 1; } }
-@media (prefers-reduced-motion: reduce) { .inviteButton, .deleteButton { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .deleteButton { transition: none; } }

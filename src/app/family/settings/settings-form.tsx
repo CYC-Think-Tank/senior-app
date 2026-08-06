@@ -146,7 +146,7 @@ export function SettingsForm({
         </p>
       </div>
       {error ? (
-        <p className={styles.requestError}>
+        <p className={styles.settingsError}>
           {chinese ? "无法保存，请重试。" : "Could not save your changes. Please try again."}
         </p>
       ) : null}
