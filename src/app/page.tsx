@@ -50,9 +50,6 @@ export default async function LandingPage() {
           </Link>
           <nav className={styles.authNav} aria-label={t("landingAccountAria")}>
             <LanguageSwitcher tone="bare" />
-            <Link href="/feed" className={styles.navGhost}>
-              {t("commonEpisodes")}
-            </Link>
             {dashboardHref ? (
               <Link href={dashboardHref} className={styles.navPrimary}>
                 {t("commonDashboard")}

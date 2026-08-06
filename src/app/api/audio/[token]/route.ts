@@ -32,7 +32,7 @@ const MAX_RANGE_BYTES = 4 * 1024 * 1024;
 /**
  * Serves a stored audio object to the player, decrypting it on the way out.
  * The token is minted by a page that already did its own authorization
- * (family membership, admin role, share/review token), so possession of an
+ * (family membership, admin role, share token), so possession of an
  * unexpired token is the entire access check here — exactly the contract the
  * Supabase signed URLs used to provide, but for objects only this server can
  * read.

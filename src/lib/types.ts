@@ -47,23 +47,6 @@ export type InterviewSession = {
   created_at: string;
 };
 
-export type PodcastParticipationStatus =
-  | "requested"
-  | "invited"
-  | "accepted"
-  | "interview_done";
-
-export type PodcastParticipation = {
-  id: string;
-  user_id: string;
-  session_id: string | null;
-  source: "request" | "admin_invite";
-  request_kind: "existing_conversation" | "new_interview";
-  status: PodcastParticipationStatus;
-  created_at: string;
-  updated_at: string;
-};
-
 export type Speaker = "ai" | "guest";
 
 export type TranscriptTurn = {
@@ -75,30 +58,6 @@ export type TranscriptTurn = {
   start_ms: number;
   end_ms: number;
   excluded: boolean;
-};
-
-export type EpisodeStatus =
-  | "draft"
-  | "pending_approval"
-  | "changes_requested"
-  | "approved"
-  | "published";
-
-export type Episode = {
-  id: string;
-  session_id: string;
-  guest_id: string;
-  episode_number: number;
-  title: string;
-  description: string | null;
-  show_notes: string | null;
-  audio_path: string;
-  duration_ms: number | null;
-  review_token: string;
-  status: EpisodeStatus;
-  change_note: string | null;
-  publish_at: string | null;
-  created_at: string;
 };
 
 /** A finished turn assembled client-side during the live interview. */

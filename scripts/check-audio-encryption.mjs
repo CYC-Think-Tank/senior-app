@@ -11,7 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import { HEADER_LENGTH, readAudioHeader } from "../src/lib/audio/encryption.ts";
 import { fetchObjectRange } from "../src/lib/audio/object-range.ts";
 
-const BUCKETS = ["raw-audio", "episodes"];
+const BUCKETS = ["raw-audio"];
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

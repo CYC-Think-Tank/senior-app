@@ -26,7 +26,6 @@ export const dynamic = "force-dynamic";
 const copy = {
   en: {
     home: "Home",
-    episodes: "Episodes",
     eyebrow: "Shared from WiseShare",
     defaultTitle: (name: string) => `A conversation with ${name}`,
     intro: (name: string) =>
@@ -42,7 +41,6 @@ const copy = {
   },
   "zh-Hans": {
     home: "首页",
-    episodes: "节目",
     eyebrow: "来自慧仁享的分享",
     defaultTitle: (name: string) => `与${name}的对话`,
     intro: (name: string) =>
@@ -57,7 +55,6 @@ const copy = {
   },
   "zh-Hant": {
     home: "首頁",
-    episodes: "節目",
     eyebrow: "來自慧仁享的分享",
     defaultTitle: (name: string) => `與${name}的對話`,
     intro: (name: string) =>
@@ -115,7 +112,6 @@ export default async function SharedConversationPage({
           <Wordmark tone="light" name={locale === "en" ? undefined : "慧仁享"} />
           <nav className={styles.nav} aria-label="Public navigation">
             <Link href="/">{pageCopy.home}</Link>
-            <Link href="/feed">{pageCopy.episodes}</Link>
           </nav>
           <div className={styles.headerTools}>
             <LanguageSwitcher tone="bare" />
@@ -180,7 +176,7 @@ export default async function SharedConversationPage({
               <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
             ) : (
               <Card className={styles.missingAudio}>
-                {t("reviewAudioMissing")}
+                {t("audioMissing")}
               </Card>
             )}
 

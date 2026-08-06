@@ -1,11 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { createPortal } from "react-dom";
-import { ArrowUpRight, Clock3, Mic2, Pencil, Plus, Users } from "lucide-react";
-import { updateGuest } from "./actions";
+import { Clock3, Mic2, Users } from "lucide-react";
 import { formatDuration } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import styles from "./admin-dashboard.module.css";
@@ -14,7 +9,6 @@ export type AdminDashboardCopy = {
   eyebrow: string;
   title: string;
   intro: string;
-  newGuest: string;
   totalUsers: string;
   recordingsToday: string;
   averageTime: string;
@@ -28,45 +22,9 @@ export type AdminDashboardCopy = {
   ready: string;
   recording: string;
   pending: string;
-  guestDirectory: string;
-  guestDirectoryIntro: string;
-  guest: string;
-  account: string;
-  language: string;
-  lastActive: string;
-  never: string;
-  noGuests: string;
-  openGuest: string;
 };
 
 export type UsagePoint = { key: string; value: number };
-export type GuestDirectoryItem = {
-  id: string;
-  name: string;
-  bio: string | null;
-  topics: string[] | null;
-  language: string;
-  registered: boolean;
-  conversationCount: number;
-  lastActive: string | null;
-};
-
-export type GuestDirectoryCopy = Pick<
-  AdminDashboardCopy,
-  | "guestDirectory"
-  | "guestDirectoryIntro"
-  | "newGuest"
-  | "guest"
-  | "account"
-  | "conversations"
-  | "language"
-  | "lastActive"
-  | "registered"
-  | "notRegistered"
-  | "never"
-  | "noGuests"
-  | "openGuest"
->;
 
 type Props = {
   copies: Record<string, AdminDashboardCopy>;
@@ -77,7 +35,6 @@ type Props = {
   unregisteredUsers: number;
   conversationCategories: { ready: number; recording: number; pending: number };
   usage: UsagePoint[];
-  guests: GuestDirectoryItem[];
 };
 
 type LabeledUsagePoint = UsagePoint & { label: string };
@@ -146,145 +103,6 @@ function CategoryRow({ label, value, total, tone }: { label: string; value: numb
   );
 }
 
-/** Edits the four fields the AI host reads before it interviews someone. */
-function GuestEditDialog({
-  guest,
-  onClose,
-}: {
-  guest: GuestDirectoryItem;
-  onClose: () => void;
-}) {
-  const router = useRouter();
-  const { t } = useI18n();
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    setBusy(true);
-    setFailed(false);
-    try {
-      const result = await updateGuest(guest.id, formData);
-      if (!result.ok) {
-        setFailed(true);
-        return;
-      }
-      onClose();
-      router.refresh();
-    } catch {
-      setFailed(true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // The route-entrance animation leaves a transform on the section, which would
-  // otherwise anchor and clip this fixed backdrop. Portalling escapes it.
-  return createPortal(
-    <div className={styles.modalBackdrop} role="presentation" onMouseDown={onClose}>
-      <div
-        className={styles.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-guest-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <h2 id="edit-guest-title">{t("guestEditTitle")}</h2>
-        <form onSubmit={save}>
-          <label className={styles.modalField}>
-            <span>{t("guestName")}</span>
-            <input name="name" required defaultValue={guest.name} autoFocus placeholder={t("guestNamePlaceholder")} />
-          </label>
-
-          <label className={styles.modalField}>
-            <span>{t("guestAbout")}</span>
-            <textarea name="bio" rows={3} defaultValue={guest.bio ?? ""} placeholder={t("guestAboutPlaceholder")} />
-            <small>{t("guestAboutHelp")}</small>
-          </label>
-
-          <label className={styles.modalField}>
-            <span>{t("guestSubjects")}</span>
-            <input name="topics" defaultValue={guest.topics?.join(", ") ?? ""} placeholder={t("guestSubjectsPlaceholder")} />
-            <small>{t("guestSubjectsHelp")}</small>
-          </label>
-
-          <label className={styles.modalField}>
-            <span>{t("guestLanguage")}</span>
-            <input name="language" defaultValue={guest.language} placeholder={t("guestLanguageDefault")} />
-          </label>
-
-          {failed ? <p className={styles.modalError}>{t("guestSaveError")}</p> : null}
-
-          <div className={styles.modalActions}>
-            <button className={`${styles.modalButton} ${styles.modalCancel}`} type="button" disabled={busy} onClick={onClose}>
-              {t("guestCancel")}
-            </button>
-            <button className={`${styles.modalButton} ${styles.modalSave}`} type="submit" disabled={busy}>
-              {busy ? t("guestSaving") : t("guestSave")}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-export function GuestDirectory({
-  copy,
-  copies,
-  guests,
-  standalone = false,
-}: {
-  copy?: GuestDirectoryCopy;
-  copies?: Record<string, GuestDirectoryCopy>;
-  guests: GuestDirectoryItem[];
-  standalone?: boolean;
-}) {
-  const { locale, t } = useI18n();
-  const [editing, setEditing] = useState<GuestDirectoryItem | null>(null);
-  const activeCopy = copy ?? copies?.[locale] ?? copies?.en;
-  if (!activeCopy) return null;
-  const numberFormatter = new Intl.NumberFormat(locale);
-
-  return (
-    <section className={standalone ? styles.guestSectionStandalone : styles.guestSection}>
-      <div className={styles.guestHeader}>
-        <div><p className={styles.sectionNumber}>02</p><h2>{activeCopy.guestDirectory}</h2><p>{activeCopy.guestDirectoryIntro}</p></div>
-        <Link href="/admin/guests/new">{activeCopy.newGuest} <ArrowUpRight aria-hidden="true" /></Link>
-      </div>
-      <div className={styles.guestList}>
-        <div className={styles.tableHeader}>
-          <span>{activeCopy.guest}</span><span>{activeCopy.account}</span><span>{activeCopy.conversations}</span><span>{activeCopy.language}</span><span>{activeCopy.lastActive}</span><span /><span />
-        </div>
-        {guests.length ? guests.map((guest) => (
-          <div className={styles.guestRowWrap} key={guest.id}>
-            <Link href={`/admin/guests/${guest.id}`} className={styles.guestRow} aria-label={`${activeCopy.openGuest}: ${guest.name}`}>
-              <span className={styles.guestIdentity}><span className={styles.avatar}>{guest.name.trim().charAt(0).toUpperCase()}</span><strong>{guest.name}</strong></span>
-              <span><span className={guest.registered ? styles.statusRegistered : styles.statusGuest}>{guest.registered ? activeCopy.registered : activeCopy.notRegistered}</span></span>
-              <span className={styles.numeric}>{numberFormatter.format(guest.conversationCount)}</span>
-              <span>{guest.language}</span>
-              <span>{guest.lastActive ? new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(new Date(guest.lastActive)) : activeCopy.never}</span>
-              <ArrowUpRight className={styles.rowArrow} aria-hidden="true" />
-            </Link>
-            <button
-              className={styles.editButton}
-              type="button"
-              title={t("guestEdit")}
-              aria-label={`${t("guestEditTitle")}: ${guest.name}`}
-              onClick={() => setEditing(guest)}
-            >
-              <Pencil aria-hidden="true" />
-            </button>
-          </div>
-        )) : <p className={styles.empty}>{activeCopy.noGuests}</p>}
-      </div>
-      {editing ? <GuestEditDialog guest={editing} onClose={() => setEditing(null)} /> : null}
-    </section>
-  );
-}
-
 export function AdminDashboardView({
   copies,
   totalUsers,
@@ -294,7 +112,6 @@ export function AdminDashboardView({
   unregisteredUsers,
   conversationCategories,
   usage,
-  guests,
 }: Props) {
   const { locale } = useI18n();
   const copy = copies[locale] ?? copies.en;
@@ -316,9 +133,6 @@ export function AdminDashboardView({
           <h1 className={styles.title}>{copy.title}</h1>
           <p className={styles.intro}>{copy.intro}</p>
         </div>
-        <Link href="/admin/guests/new" className={styles.primaryAction}>
-          <Plus aria-hidden="true" /> {copy.newGuest}
-        </Link>
       </header>
 
       <section className={styles.statsGrid} aria-label="Dashboard statistics">
@@ -372,8 +186,6 @@ export function AdminDashboardView({
           </article>
         </div>
       </section>
-
-      <GuestDirectory copy={copy} guests={guests} />
     </div>
   );
 }

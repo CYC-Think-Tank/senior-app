@@ -30,7 +30,7 @@ export default function TermsPage() {
           <section>
             <h2>Publication choices</h2>
             <p>
-              A recording is not public by default. The storyteller can review a finished episode and choose whether it is approved for the public WiseShare episodes page. Private share links should be sent only to people you trust.
+              A recording is never public. It is shared only when someone with access deliberately creates a private share link, and those links should be sent only to people you trust.
             </p>
           </section>
           <section>

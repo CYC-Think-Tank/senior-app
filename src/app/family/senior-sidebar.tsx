@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { Headphones, Home, LogOut, MessageSquareText, Settings } from "lucide-react";
+import { Headphones, Home, LogOut, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Wordmark } from "@/components/ui";
@@ -35,7 +35,7 @@ function AccountActions({ name }: { name: string }) {
 }
 
 /** Sibling pages under /family that are not a conversation's id. */
-const namedRoutes = ["/family/requests", "/family/settings"];
+const namedRoutes = ["/family/settings"];
 
 export function SeniorSidebar({ name }: { name: string }) {
   const pathname = usePathname();
@@ -56,12 +56,6 @@ export function SeniorSidebar({ name }: { name: string }) {
       label: chinese ? "我的对话" : "Conversations",
       icon: Headphones,
       active: pathname.startsWith("/family/conversations") || conversationDetail,
-    },
-    {
-      href: "/family/requests",
-      label: chinese ? "播客申请" : "Podcast requests",
-      icon: MessageSquareText,
-      active: pathname.startsWith("/family/requests"),
     },
     {
       href: "/family/settings",
