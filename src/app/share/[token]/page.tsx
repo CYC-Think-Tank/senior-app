@@ -5,9 +5,11 @@ import {
   Clock3,
   Headphones,
   LockKeyhole,
+  Sprout,
 } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createAudioUrl } from "@/lib/audio/encryption";
+import { ensureMoral } from "@/lib/moral/generate";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Wordmark, formatDuration } from "@/components/ui";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -33,6 +35,8 @@ const copy = {
     storyteller: "Storyteller",
     recorded: "Recorded",
     duration: "Duration",
+    moral: "Moral of the story",
+    moralNote: "Drawn from this conversation by AI.",
     listen: "Listen to the conversation",
     ready: "Ready when you are",
     privateLink: "Private link",
@@ -48,6 +52,8 @@ const copy = {
     storyteller: "讲述者",
     recorded: "录制日期",
     duration: "时长",
+    moral: "故事的启示",
+    moralNote: "由 AI 从这段对话中提炼。",
     listen: "收听这段对话",
     ready: "准备好时即可开始",
     privateLink: "私密链接",
@@ -62,6 +68,8 @@ const copy = {
     storyteller: "講述者",
     recorded: "錄製日期",
     duration: "時長",
+    moral: "故事的啟示",
+    moralNote: "由 AI 從這段對話中提煉。",
     listen: "收聽這段對話",
     ready: "準備好時即可開始",
     privateLink: "私密連結",
@@ -98,6 +106,11 @@ export default async function SharedConversationPage({
     ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
     : null;
 
+  // Written on the first view that needs it, then read from the row forever
+  // after. Null for a conversation too short — or too unreadable — to have a
+  // point, and the section simply does not appear.
+  const moral = await ensureMoral(admin, s, s.guests.name);
+
   const title = s.topic?.trim() || pageCopy.defaultTitle(s.guests.name);
   const recordedDate = new Date(s.created_at).toLocaleDateString(locale, {
     year: "numeric",
@@ -109,9 +122,9 @@ export default async function SharedConversationPage({
     <PortalShell>
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <Wordmark tone="light" name={locale === "en" ? undefined : "慧仁享"} />
+          <Wordmark tone="light" locale={locale} />
           <nav className={styles.nav} aria-label="Public navigation">
-            <Link href="/">{pageCopy.home}</Link>
+            <Link href="/family">{pageCopy.home}</Link>
           </nav>
           <div className={styles.headerTools}>
             <LanguageSwitcher tone="bare" />
@@ -154,6 +167,21 @@ export default async function SharedConversationPage({
               </div>
             </div>
           </section>
+
+          {moral ? (
+            <section className={styles.moralPanel} aria-labelledby="moral-title">
+              <span className={styles.moralIcon} aria-hidden="true">
+                <Sprout />
+              </span>
+              <div>
+                <h2 className={styles.moralLabel} id="moral-title">
+                  {pageCopy.moral}
+                </h2>
+                <p className={styles.moralText}>{moral[locale]}</p>
+                <p className={styles.moralNote}>{pageCopy.moralNote}</p>
+              </div>
+            </section>
+          ) : null}
 
           <section className={styles.playerPanel} aria-labelledby="listen-title">
             <div className={styles.playerHeader}>

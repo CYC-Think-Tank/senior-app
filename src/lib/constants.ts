@@ -1,10 +1,17 @@
 // Branding is a placeholder — swap APP_NAME/TAGLINE when a real name is chosen.
 export const APP_NAME = "WiseShare";
+// Both Chinese locales share one wordmark; only the surrounding copy differs.
+export const APP_NAME_ZH = "慧仁享";
 export const TAGLINE = "Every life is worth the telling.";
 
 // Use the faster, lower-cost distilled realtime model for interview sessions.
 export const REALTIME_MODEL = "gpt-realtime-2.1-mini";
 export const REALTIME_VOICE = "marin";
+
+// Distilling a finished transcript into one sentence is a small, offline job
+// that nobody waits on mid-conversation, so it runs on a cheap text model
+// rather than the realtime one.
+export const MORAL_MODEL = "gpt-4.1-mini";
 
 /**
  * The built-in voices the Realtime model accepts, in the order they are offered

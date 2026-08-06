@@ -38,6 +38,8 @@ export type InterviewSession = {
   topic: string | null;
   title: string | null;
   status: SessionStatus;
+  /** Sealed JSON: the share page's takeaway, per locale. Null until asked for. */
+  moral: string | null;
   raw_audio_path: string | null;
   share_token: string | null;
   started_at: string | null;
