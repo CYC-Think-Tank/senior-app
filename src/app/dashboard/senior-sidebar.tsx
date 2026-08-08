@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { Headphones, Home, LogOut, Settings } from "lucide-react";
+import { Headphones, Home, LogOut, Settings, Users } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Wordmark } from "@/components/ui";
@@ -34,34 +34,55 @@ function AccountActions({ name }: { name: string }) {
   );
 }
 
-/** Sibling pages under /family that are not a conversation's id. */
-const namedRoutes = ["/family/settings"];
+/** Sibling pages under /dashboard that are not a conversation's id. */
+const namedRoutes = [
+  "/dashboard/settings",
+  "/dashboard/friends",
+  "/dashboard/circle",
+];
 
-export function SeniorSidebar({ name }: { name: string }) {
+export function SeniorSidebar({
+  name,
+  pendingRequests = 0,
+}: {
+  name: string;
+  pendingRequests?: number;
+}) {
   const pathname = usePathname();
   const router = useRouter();
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const chinese = locale !== "en";
   const conversationDetail =
-    /^\/family\/[^/]+$/.test(pathname) && !namedRoutes.includes(pathname);
+    /^\/dashboard\/[^/]+$/.test(pathname) && !namedRoutes.includes(pathname);
   const items = [
     {
-      href: "/family",
+      href: "/dashboard",
       label: chinese ? "首页" : "Home",
       icon: Home,
-      active: pathname === "/family",
+      active: pathname === "/dashboard",
     },
     {
-      href: "/family/conversations",
+      href: "/dashboard/conversations",
       label: chinese ? "我的对话" : "Conversations",
       icon: Headphones,
-      active: pathname.startsWith("/family/conversations") || conversationDetail,
+      active:
+        pathname.startsWith("/dashboard/conversations") || conversationDetail,
     },
     {
-      href: "/family/settings",
+      // Requests are managed on /dashboard/friends, so both routes light this up.
+      href: "/dashboard/circle",
+      label: t("circleNavLabel"),
+      icon: Users,
+      active:
+        pathname.startsWith("/dashboard/circle") ||
+        pathname.startsWith("/dashboard/friends"),
+      badge: pendingRequests,
+    },
+    {
+      href: "/dashboard/settings",
       label: chinese ? "设置" : "Settings",
       icon: Settings,
-      active: pathname.startsWith("/family/settings"),
+      active: pathname.startsWith("/dashboard/settings"),
     },
   ];
 
@@ -87,6 +108,20 @@ export function SeniorSidebar({ name }: { name: string }) {
           >
             <item.icon aria-hidden="true" />
             <span>{item.label}</span>
+            {item.badge ? (
+              // The number alone means nothing read aloud, so the label
+              // carries the whole sentence.
+              <span
+                className={styles.navBadge}
+                aria-label={
+                  item.badge === 1
+                    ? t("circlePendingBannerOne")
+                    : t("circlePendingBanner", { count: String(item.badge) })
+                }
+              >
+                {item.badge}
+              </span>
+            ) : null}
             <PendingIndicator />
           </Link>
         ))}

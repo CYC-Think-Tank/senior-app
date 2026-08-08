@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, Link2 } from "lucide-react";
-import { generateShareLink } from "@/app/family/actions";
+import { generateShareLink } from "@/app/dashboard/actions";
 import { useI18n } from "@/components/i18n-provider";
 
 export function ShareConversation({

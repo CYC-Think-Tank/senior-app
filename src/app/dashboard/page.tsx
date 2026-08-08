@@ -83,7 +83,7 @@ export default async function FamilyPage() {
       <section className={styles.section} aria-labelledby="past-conversations-title">
         <div className={styles.sectionHeader}>
           <h2 id="past-conversations-title">{chinese ? "过去的对话" : "Past conversations"}</h2>
-          <Link className={styles.viewAll} href="/family/conversations">
+          <Link className={styles.viewAll} href="/dashboard/conversations">
             {chinese ? "查看全部" : "View all"} <ArrowRight aria-hidden="true" />
           </Link>
         </div>

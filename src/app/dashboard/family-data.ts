@@ -17,6 +17,8 @@ export type FamilyConversation = {
   // Ended early and still resumable — the checkpoints saved most of what was
   // said. These have no finished recording to listen to yet.
   unfinished: boolean;
+  /** Switched on for the whole friend circle; see circle_shares. */
+  sharedWithCircle: boolean;
 };
 
 export const getFamilyConversations = cache(async () => {
@@ -36,6 +38,16 @@ export const getFamilyConversations = cache(async () => {
     "id" | "title" | "status" | "created_at" | "duration_ms" | "share_token"
   > & { guests: { name: string; user_id: string } };
   const rows = (data ?? []) as unknown as SessionRow[];
+
+  // "owner reads own circle shares" scopes this to the caller's own switches.
+  const { data: shares } = await supabase
+    .from("circle_shares")
+    .select("session_id")
+    .eq("owner_id", user.id);
+  const sharedWithCircle = new Set(
+    (shares ?? []).map((share) => share.session_id),
+  );
+
   const names = conversationNames(rows, (number) =>
     t("familyConversationNumbered", { number }),
   );
@@ -48,6 +60,7 @@ export const getFamilyConversations = cache(async () => {
     durationMs: row.duration_ms,
     shareToken: row.share_token,
     unfinished: row.status !== "ready",
+    sharedWithCircle: sharedWithCircle.has(row.id),
   }));
 
   const headerStore = await headers();

@@ -17,7 +17,7 @@ export const requireAdmin = cache(async function requireAdmin() {
     .select("role")
     .eq("id", userId)
     .single();
-  if (profile?.role !== "admin") redirect("/family");
+  if (profile?.role !== "admin") redirect("/dashboard");
 
   const user = {
     id: userId,
@@ -58,5 +58,5 @@ export async function redirectSignedInUser() {
     .eq("id", userId)
     .maybeSingle();
 
-  redirect(profile?.role === "admin" ? "/admin" : "/family");
+  redirect(profile?.role === "admin" ? "/admin" : "/dashboard");
 }

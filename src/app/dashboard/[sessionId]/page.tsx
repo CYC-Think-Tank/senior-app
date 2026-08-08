@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mic } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { resumeConversation } from "@/app/family/actions";
+import { resumeConversation } from "@/app/dashboard/actions";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Monogram, formatDuration } from "@/components/ui";
@@ -10,6 +10,8 @@ import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
+import { CommentThread } from "../circle/comment-thread";
+import { getConversationComments } from "../circle/circle-data";
 import type { Guest, InterviewSession } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +22,7 @@ export default async function FamilyConversationPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
@@ -47,10 +49,23 @@ export default async function FamilyConversationPage({
     ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
     : null;
 
+  // Only finished conversations can be shared, and the comment thread is only
+  // worth showing once there is a circle that could have written in it.
+  const finished = s.status === "ready";
+  const { data: share } = finished
+    ? await supabase
+        .from("circle_shares")
+        .select("session_id")
+        .eq("session_id", sessionId)
+        .maybeSingle()
+    : { data: null };
+  const sharedWithCircle = Boolean(share);
+  const comments = finished ? await getConversationComments(sessionId) : [];
+
   return (
     <div className="space-y-6">
       <Link
-        href="/family/conversations"
+        href="/dashboard/conversations"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-ink"
       >
         <ArrowLeft className="h-4 w-4" /> {t("familyAllConversations")}
@@ -90,6 +105,20 @@ export default async function FamilyConversationPage({
       ) : (
         <Card className="p-6 text-ink-soft">{t("audioMissing")}</Card>
       )}
+
+      {/* Sharing is switched from the Friends button in the conversations
+          table, so this page only shows what the circle has said back. */}
+      {finished && (sharedWithCircle || comments.length) ? (
+        <CommentThread
+          sessionId={s.id}
+          comments={comments}
+          viewerId={user.id}
+          isOwner
+          // Nothing to say into an empty room: once sharing is off, the thread
+          // is history rather than a conversation.
+          canComment={sharedWithCircle}
+        />
+      ) : null}
     </div>
   );
 }

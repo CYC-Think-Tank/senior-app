@@ -30,7 +30,7 @@ export default async function LandingPage() {
         .select("role")
         .eq("id", userId)
         .maybeSingle();
-      dashboardHref = profile?.role === "admin" ? "/admin" : "/family";
+      dashboardHref = profile?.role === "admin" ? "/admin" : "/dashboard";
     }
   }
 

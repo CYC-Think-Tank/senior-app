@@ -1,12 +1,12 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeEmail } from "@/lib/email";
 
 export type PasswordSignInResult =
   | { ok: true; redirectTo: string }
   | { ok: false; error: string };
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SIGN_IN_ERROR =
   "We couldn’t sign you in. Please wait a moment and try again.";
 
@@ -14,9 +14,9 @@ export async function signInWithPassword(
   emailInput: string,
   password: string,
 ): Promise<PasswordSignInResult> {
-  const email = emailInput.trim().toLowerCase();
+  const email = normalizeEmail(emailInput);
 
-  if (email.length > 320 || !EMAIL_PATTERN.test(email)) {
+  if (!email) {
     return { ok: false, error: "Enter a valid email address." };
   }
 
@@ -47,6 +47,6 @@ export async function signInWithPassword(
 
   return {
     ok: true,
-    redirectTo: profile.role === "admin" ? "/admin" : "/family",
+    redirectTo: profile.role === "admin" ? "/admin" : "/dashboard",
   };
 }

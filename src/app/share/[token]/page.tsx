@@ -124,7 +124,7 @@ export default async function SharedConversationPage({
         <div className={styles.headerInner}>
           <Wordmark tone="light" locale={locale} />
           <nav className={styles.nav} aria-label="Public navigation">
-            <Link href="/family">{pageCopy.home}</Link>
+            <Link href="/dashboard">{pageCopy.home}</Link>
           </nav>
           <div className={styles.headerTools}>
             <LanguageSwitcher tone="bare" />

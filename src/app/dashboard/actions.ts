@@ -50,8 +50,8 @@ export async function generateShareLink(
     return { ok: false };
   }
 
-  revalidatePath("/family");
-  revalidatePath("/family/conversations");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/conversations");
   return { ok: true, token };
 }
 
@@ -113,9 +113,9 @@ export async function renameConversation(sessionId: string, name: string) {
     return { ok: false as const };
   }
 
-  revalidatePath("/family");
-  revalidatePath("/family/conversations");
-  revalidatePath(`/family/${sessionId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/conversations");
+  revalidatePath(`/dashboard/${sessionId}`);
   return { ok: true as const };
 }
 
@@ -148,8 +148,8 @@ export async function deleteConversation(sessionId: string) {
     return { ok: false as const };
   }
 
-  revalidatePath("/family");
-  revalidatePath("/family/conversations");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/conversations");
   revalidatePath("/admin");
   return { ok: true as const };
 }
@@ -228,7 +228,7 @@ export async function updateMyProfile(
 
   // The sidebar greets them by name from the family layout, so refresh the
   // whole segment rather than just the settings page.
-  revalidatePath("/family", "layout");
+  revalidatePath("/dashboard", "layout");
   return { ok: true as const };
 }
 
@@ -304,7 +304,7 @@ export async function startMyConversation() {
     throw new Error("Could not start the conversation.");
   }
 
-  revalidatePath("/family");
-  revalidatePath("/family/conversations");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/conversations");
   redirect(`/interview/${session.token}`);
 }

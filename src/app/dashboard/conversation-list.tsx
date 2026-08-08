@@ -7,6 +7,8 @@ import { Download, Headphones, Pencil, Save, Trash2, X } from "lucide-react";
 import { deleteConversation, renameConversation } from "./actions";
 import type { FamilyConversation } from "./family-data";
 import { ShareConversation } from "@/components/share-conversation";
+import { CircleShareToggle } from "./circle-share-toggle";
+import { ConfirmDialog } from "./confirm-dialog";
 import { formatDuration } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import styles from "./senior-dashboard.module.css";
@@ -76,7 +78,7 @@ function ConversationItem({
           {error ? <span>{chinese ? "无法保存" : "Could not save"}</span> : null}
         </form>
       ) : (
-        <Link className={styles.conversationMain} href={`/family/${conversation.id}`}>
+        <Link className={styles.conversationMain} href={`/dashboard/${conversation.id}`}>
           <span className={styles.conversationDetails}>
             <span className={styles.conversationNameRow}>
               <span className={styles.conversationName}>{conversation.name}</span>
@@ -119,13 +121,20 @@ function ConversationItem({
                 : "Export"}
           </a>
           {conversation.unfinished ? null : (
-            <ShareConversation
-              sessionId={conversation.id}
-              initialToken={conversation.shareToken}
-              origin={origin}
-              buttonClassName={styles.rowButton}
-              label={chinese ? "分享" : "Share"}
-            />
+            <>
+              <ShareConversation
+                sessionId={conversation.id}
+                initialToken={conversation.shareToken}
+                origin={origin}
+                buttonClassName={styles.rowButton}
+                label={chinese ? "分享" : "Share"}
+              />
+              <CircleShareToggle
+                sessionId={conversation.id}
+                shared={conversation.sharedWithCircle}
+                compact
+              />
+            </>
           )}
           <button
             className={`${styles.rowButton} ${styles.rowButtonDanger}`}
@@ -205,43 +214,34 @@ export function ConversationList({
       </div>
 
       {deleteTarget ? (
-        <div className={styles.modalBackdrop} role="presentation" onMouseDown={() => setDeleteTarget(null)}>
-          <div
-            className={styles.modal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-conversation-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <h2 id="delete-conversation-title">
-              {chinese ? `删除“${deleteTarget.name}”？` : `Delete “${deleteTarget.name}”?`}
-            </h2>
-            <p>
-              {chinese
-                ? "这将永久删除录音，无法撤销。"
-                : "This permanently deletes the recording and cannot be undone."}
-            </p>
-            {deleteError ? <p>{chinese ? "无法删除，请重试。" : "Could not delete it. Please try again."}</p> : null}
-            <div className={styles.modalActions}>
-              <button
-                className={`${styles.modalButton} ${styles.modalCancel}`}
-                type="button"
-                disabled={deleting}
-                onClick={() => setDeleteTarget(null)}
-              >
-                {chinese ? "保留录音" : "Keep recording"}
-              </button>
-              <button
-                className={`${styles.modalButton} ${styles.modalDelete}`}
-                type="button"
-                disabled={deleting}
-                onClick={confirmDelete}
-              >
-                {deleting ? (chinese ? "正在删除…" : "Deleting…") : chinese ? "永久删除" : "Delete permanently"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title={chinese ? `删除“${deleteTarget.name}”？` : `Delete “${deleteTarget.name}”?`}
+          body={
+            chinese
+              ? "这将永久删除录音，无法撤销。"
+              : "This permanently deletes the recording and cannot be undone."
+          }
+          error={
+            deleteError
+              ? chinese
+                ? "无法删除，请重试。"
+                : "Could not delete it. Please try again."
+              : undefined
+          }
+          cancelLabel={chinese ? "保留录音" : "Keep recording"}
+          confirmLabel={
+            deleting
+              ? chinese
+                ? "正在删除…"
+                : "Deleting…"
+              : chinese
+                ? "永久删除"
+                : "Delete permanently"
+          }
+          busy={deleting}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+        />
       ) : null}
     </>
   );

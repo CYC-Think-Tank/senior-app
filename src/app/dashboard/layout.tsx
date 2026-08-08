@@ -6,6 +6,7 @@ import {
 import { personName } from "@/lib/names";
 import { RouteContentEntrance } from "@/components/page-entrance";
 import { SeniorSidebar } from "./senior-sidebar";
+import { getPendingRequestCount } from "./friends/friends-data";
 import styles from "./senior-dashboard.module.css";
 
 export default async function FamilyLayout({
@@ -20,11 +21,14 @@ export default async function FamilyLayout({
     .eq("id", user.id)
     .single();
   const name = personName(profile?.display_name, profile?.email ?? user.email);
+  // Drives the badge on the Friend circle nav item; accepting or declining a
+  // request revalidates this layout so it clears.
+  const pendingRequests = await getPendingRequestCount();
 
   return (
     <PortalShell>
       <div className={`${portalStyles.adminApp} ${styles.shell}`}>
-        <SeniorSidebar name={name} />
+        <SeniorSidebar name={name} pendingRequests={pendingRequests} />
         <div className={styles.content}>
           <main className={styles.main}>
             <div className={portalStyles.surface}>
