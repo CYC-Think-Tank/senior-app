@@ -35,7 +35,7 @@ export default async function InterviewPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  let homeHref: "/" | "/admin" | "/family" = "/";
+  let homeHref: "/" | "/admin" | "/dashboard" = "/";
 
   if (user) {
     const { data: profile } = await supabase
@@ -43,7 +43,7 @@ export default async function InterviewPage({
       .select("role")
       .eq("id", user.id)
       .maybeSingle();
-    homeHref = profile?.role === "admin" ? "/admin" : "/family";
+    homeHref = profile?.role === "admin" ? "/admin" : "/dashboard";
   }
 
   // A conversation that ended before it was wrapped up is waiting to be picked

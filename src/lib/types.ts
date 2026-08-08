@@ -49,6 +49,42 @@ export type InterviewSession = {
   created_at: string;
 };
 
+export type FriendshipStatus = "pending" | "accepted";
+
+/**
+ * One row per pair of accounts, with the ids in a fixed order — `user_low` is
+ * always the smaller uuid. Normalise through `friendshipPair()` before
+ * querying; see supabase/migrations/013_friend_circle.sql.
+ */
+export type Friendship = {
+  id: string;
+  user_low: string;
+  user_high: string;
+  /** Who sent the request. Decides who may accept while status is pending. */
+  requester_id: string;
+  status: FriendshipStatus;
+  created_at: string;
+  responded_at: string | null;
+};
+
+/** Presence of the row *is* the whole-circle sharing switch for a session. */
+export type CircleShare = {
+  session_id: string;
+  /** Denormalised from guests.user_id so the friend policy stays one compare. */
+  owner_id: string;
+  created_at: string;
+};
+
+export type ConversationComment = {
+  id: string;
+  session_id: string;
+  author_id: string;
+  /** The author's name when they wrote it; see migration 016 for why. */
+  author_name: string;
+  body: string;
+  created_at: string;
+};
+
 export type Speaker = "ai" | "guest";
 
 export type TranscriptTurn = {

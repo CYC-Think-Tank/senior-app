@@ -69,6 +69,24 @@
   background: #fffaf1;
 }
 
+/* Ember on both nav states: the active link inverts to a light background,
+   so a translucent badge would wash out exactly when it matters. */
+.navBadge {
+  display: inline-flex;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  margin-left: auto;
+  padding: 0 0.45rem;
+  align-items: center;
+  justify-content: center;
+  color: #fffaf1;
+  background: #8d321f;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
 .navPending {
   width: 0.9rem;
   height: 0.9rem;
@@ -336,8 +354,17 @@
   font-weight: 650;
 }
 
+/* The table owns the column tracks and every row borrows them through
+   subgrid. Sizing them once is what keeps the Date header sitting over the
+   dates: left to their own grids, the header and the rows size their last
+   track to their own contents, and a row of five action buttons is far wider
+   than the word "Actions". It also keeps rows aligned with each other when
+   an unfinished conversation offers fewer actions than a finished one. */
 .conversationTable {
+  display: grid;
+  grid-template-columns: minmax(15rem, 1fr) minmax(10rem, 0.55fr) auto;
   overflow: hidden;
+  column-gap: 1.25rem;
   background: rgb(65 22 13 / 0.32);
   border: 1px solid rgb(255 250 241 / 0.16);
   border-radius: 16px;
@@ -347,7 +374,8 @@
 .conversationHeader,
 .conversationRow {
   display: grid;
-  grid-template-columns: minmax(15rem, 1fr) minmax(10rem, 0.55fr) auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: 1.25rem;
   padding: 0 1.4rem;
@@ -362,6 +390,10 @@
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
+
+/* .rowActions right-justifies its buttons inside a track far wider than the
+   word, so the heading tracks the buttons rather than the track's left edge. */
+.conversationHeader > :nth-child(3) { text-align: right; }
 
 .conversationRow {
   min-height: 6.4rem;
@@ -450,6 +482,16 @@
 
 .rowButton:disabled { opacity: 0.55; }
 
+/* The "on" state of the circle-sharing switch. Filled rather than outlined,
+   so whether a conversation is shared is legible at a glance down the column
+   instead of needing the label to be read. */
+.rowButtonOn,
+.rowButtonOn:hover {
+  color: #2f2018;
+  background: #fffaf1;
+  border-color: #fffaf1;
+}
+
 .rowButtonDanger {
   color: #ffd3c4;
 }
@@ -478,13 +520,17 @@
   font-size: 1rem;
 }
 
+/* Shares .conversationTable's surface but not its columns. */
 .emptyState {
+  display: block;
   padding: clamp(2rem, 6vw, 4rem) 1.5rem;
   color: rgb(255 250 241 / 0.68);
   text-align: center;
 }
 
-.emptyState svg {
+/* Direct child only: an empty state can carry a button back out of it, and
+   that button's icon must stay button-sized. */
+.emptyState > svg {
   width: 3rem;
   height: 3rem;
   margin: 0 auto 1rem;
@@ -660,10 +706,212 @@
   to { transform: rotate(360deg); }
 }
 
+/* Friend circle
+   ------------------------------------------------------------------------ */
+
+/* The settings pages cap their cards at a reading width, but this one stacks
+   above full-width friend tables, so it squares up with them instead. */
+.friendCard { max-width: none; }
+
+.friendSearchForm {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* An email address needs a field, not a runway — the card grew, this doesn't. */
+.friendSearchForm .settingsInput {
+  max-width: 26rem;
+  flex: 1 1 18rem;
+  width: auto;
+}
+
+/* Matches .settingsInput's height so the pair reads as one control. */
+.friendSearchForm .smallStartButton { min-height: 3.5rem; }
+
+.friendSearchNote {
+  margin: 0;
+  color: rgb(255 250 241 / 0.72);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.friendResult {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1.1rem 1.25rem;
+  background: rgb(255 250 241 / 0.06);
+  border: 1px solid rgb(255 250 241 / 0.16);
+  border-radius: 14px;
+}
+
+.friendResultName {
+  flex: 1 1 8rem;
+  font-size: 1.18rem;
+  font-weight: 700;
+}
+
+/* A friend or request row carries no date column, so it drops the middle
+   track the conversation rows use. */
+.friendRow { grid-template-columns: minmax(12rem, 1fr) auto; }
+
+.friendMain {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1rem;
+  color: #fffaf1;
+}
+
+/* A shared conversation's header facts and its AI takeaway
+   ------------------------------------------------------------------------ */
+
+.circleDetails {
+  display: flex;
+  align-items: center;
+  gap: 2.25rem;
+  flex-wrap: wrap;
+}
+
+.circleDetail {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  color: #fffaf1;
+}
+
+.circleDetail svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  color: rgb(255 250 241 / 0.6);
+  stroke-width: 1.7;
+}
+
+.circleDetail small {
+  display: block;
+  color: rgb(255 250 241 / 0.55);
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+}
+
+.circleDetail strong {
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.moralPanel {
+  display: flex;
+  align-items: start;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  gap: 1.25rem;
+  background: rgb(65 22 13 / 0.34);
+  border: 1px solid rgb(255 250 241 / 0.17);
+  border-radius: 18px;
+  backdrop-filter: blur(16px) saturate(1.05);
+}
+
+.moralIcon {
+  display: inline-flex;
+  width: 3rem;
+  height: 3rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: #fffaf1;
+  background: rgb(255 250 241 / 0.1);
+  border-radius: 12px;
+}
+
+.moralIcon svg { width: 1.5rem; height: 1.5rem; }
+
+.moralLabel {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.moralText {
+  margin: 0 0 0.6rem;
+  color: rgb(255 250 241 / 0.9);
+  font-size: 1.18rem;
+  line-height: 1.65;
+}
+
+/* Comments
+   ------------------------------------------------------------------------ */
+
+/* The thread hangs under two different conversation pages whose titles are
+   set at different scales. A fixed, smaller heading stays subordinate to the
+   conversation on both, rather than out-shouting it on the smaller one. */
+.commentsHeader h2 { font-size: clamp(1.5rem, 3vw, 1.9rem); }
+
+.commentList {
+  display: grid;
+  overflow: hidden;
+  background: rgb(65 22 13 / 0.32);
+  border: 1px solid rgb(255 250 241 / 0.16);
+  border-radius: 16px;
+  backdrop-filter: blur(14px) saturate(1.05);
+}
+
+.commentRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  padding: 1.4rem;
+  gap: 1rem;
+  border-top: 1px solid rgb(255 250 241 / 0.1);
+}
+
+.commentRow:first-of-type { border-top: 0; }
+
+.commentBody { min-width: 0; }
+
+.commentAuthor {
+  margin: 0 0 0.35rem;
+  color: #fffaf1;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.commentText {
+  margin: 0;
+  color: rgb(255 250 241 / 0.88);
+  font-size: 1.12rem;
+  line-height: 1.6;
+  /* Comments are typed with their own line breaks; keep them. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commentMeta {
+  margin: 0.5rem 0 0;
+  color: rgb(255 250 241 / 0.55);
+  font-size: 0.95rem;
+}
+
+.commentComposer {
+  display: grid;
+  gap: 1rem;
+}
+
+.commentComposerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 920px) {
   .shell { grid-template-columns: 15.5rem minmax(0, 1fr); }
-  .conversationHeader,
-  .conversationRow { grid-template-columns: minmax(12rem, 1fr) auto; }
+  /* Dropping the date leaves two tracks; the rows follow through subgrid. */
+  .conversationTable { grid-template-columns: minmax(12rem, 1fr) auto; }
   .conversationHeader > :nth-child(2),
   .conversationDate { display: none; }
 }
@@ -701,6 +949,7 @@
   .smallStartButton,
   .exportButton { width: 100%; }
   .conversationHeader { display: none; }
+  .conversationTable { grid-template-columns: 1fr; }
   .conversationRow {
     grid-template-columns: 1fr;
     min-height: 0;
@@ -709,6 +958,12 @@
   }
   .conversationRow:first-of-type { border-top: 0; }
   .rowActions { justify-content: flex-start; flex-wrap: wrap; }
+  .friendRow { grid-template-columns: 1fr; }
+  .friendSearchForm .settingsInput { flex-basis: 100%; }
+  .friendSearchForm .smallStartButton { width: 100%; }
+  .commentRow { grid-template-columns: auto minmax(0, 1fr); }
+  .commentRow > .rowButton { grid-column: 2; justify-self: start; }
+  .commentComposerActions { align-items: stretch; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {

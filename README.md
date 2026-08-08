@@ -5,7 +5,7 @@ An AI interviewer (OpenAI Realtime API) holds warm voice conversations with a se
 ## Roles
 
 - **Senior (guest)** — talks with the AI host via an unguessable interview link. Never needs to log in.
-- **Family** — signs up, starts their own conversations, and listens to finished recordings at `/family`. Shares one by private link when they choose to.
+- **Family** — signs up, starts their own conversations, and listens to finished recordings at `/dashboard`. Shares one by private link when they choose to.
 - **Admin** — sees usage across the service at `/admin`, manages accounts at `/admin/users`, and can read a transcript at `/admin/sessions/<id>`.
 
 ## Setup
@@ -36,10 +36,10 @@ If those files are missing or the browser is unsupported, interviews fall back t
 
 ## The pipeline
 
-1. A conversation starts either from `/family` (a signed-in account records their own) or from the public `/interview` flow.
+1. A conversation starts either from `/dashboard` (a signed-in account records their own) or from the public `/interview` flow.
 2. The storyteller presses the one big button and talks with "Rosie" (WebRTC → OpenAI Realtime, `gpt-realtime`). Both sides of the audio are recorded in the browser and uploaded to Supabase Storage in chunks, with a timestamped transcript.
 3. On finish, ffmpeg stitches the chunks into the session's recording and marks it `ready`.
-4. The recording appears under `/family`, where it can be renamed, deleted, or given a permanent private share link (`/share/<token>`).
+4. The recording appears under `/dashboard`, where it can be renamed, deleted, or given a permanent private share link (`/share/<token>`).
 
 ## Notes
 

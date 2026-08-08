@@ -35,7 +35,7 @@ type Props = {
   initialShareToken: string | null;
   alreadyRecorded: boolean;
   isLoggedIn: boolean;
-  homeHref: "/" | "/admin" | "/family";
+  homeHref: "/" | "/admin" | "/dashboard";
   /** Set when this conversation ended early and is being picked back up. */
   resume?: InterviewResume;
   recordingConsentRequired: boolean;
