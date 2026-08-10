@@ -6,16 +6,20 @@ import { resumeConversation } from "@/app/dashboard/actions";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Monogram, formatDuration } from "@/components/ui";
+import { editedAudioDurationMs } from "@/lib/audio/cuts";
 import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { decryptTurns } from "@/lib/transcript/encryption";
 import { CommentThread } from "../circle/comment-thread";
 import { getConversationComments } from "../circle/circle-data";
-import type { Guest, InterviewSession } from "@/lib/types";
+import type { Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
 import type { ConversationVideo } from "@/lib/types";
 import { publicConversationVideo } from "@/lib/memoir/workflow";
 import { MemoirVideoCard } from "./memoir-video-card";
+import { ConversationTranscriptEditor } from "./transcript-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +57,25 @@ export default async function FamilyConversationPage({
     : null;
 
   const finished = s.status === "ready";
+  // Transcript rows are intentionally absent from family RLS. The session read
+  // above proved this is the caller's own conversation before the service role
+  // fetches and decrypts its editable lines.
+  const admin = createSupabaseAdminClient();
+  const { data: turnRows } = finished
+    ? await admin
+        .from("transcript_turns")
+        .select("*")
+        .eq("session_id", s.id)
+        .order("idx")
+    : { data: [] };
+  const turns = finished
+    ? decryptTurns(s.id, (turnRows ?? []) as TranscriptTurn[])
+    : [];
+  const cuts = turns
+    .filter((turn) => turn.excluded)
+    .map((turn) => ({ startMs: turn.start_ms, endMs: turn.end_ms }));
+  const editedDuration = editedAudioDurationMs(s.duration_ms, cuts);
+
   const { data: videoRow } = finished
     ? await supabase
         .from("conversation_videos")
@@ -97,12 +120,20 @@ export default async function FamilyConversationPage({
               month: "long",
               day: "numeric",
             })}{" "}
-            · {formatDuration(s.duration_ms)}
+            · {formatDuration(editedDuration)}
           </p>
         </div>
       </div>
 
-      {audioUrl ? (
+      {finished ? (
+        <ConversationTranscriptEditor
+          sessionId={s.id}
+          guestName={s.guests.name}
+          initialTurns={turns}
+          audioUrl={audioUrl}
+          durationMs={s.duration_ms}
+        />
+      ) : audioUrl ? (
         <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
       ) : s.status === "recording" ? (
         <Card className="space-y-4 p-6">

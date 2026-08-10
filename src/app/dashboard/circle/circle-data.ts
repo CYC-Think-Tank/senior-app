@@ -2,10 +2,12 @@ import { cache } from "react";
 import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createAudioUrl } from "@/lib/audio/encryption";
+import { editedAudioDurationMs, type AudioCut } from "@/lib/audio/cuts";
 import { ensureMoral } from "@/lib/moral/generate";
 import { RAW_BUCKET } from "@/lib/constants";
 import { personName } from "@/lib/names";
 import { getPreferredLocale } from "@/lib/preferred-locale";
+import { getExcludedAudioCuts } from "@/lib/transcript/audio-cuts";
 import type {
   ConversationComment,
   InterviewSession,
@@ -128,6 +130,7 @@ export const getCircleFeed = cache(async (): Promise<CircleConversation[]> => {
       "id" | "title" | "topic" | "duration_ms" | "created_at"
     >[]).map((session) => [session.id, session]),
   );
+  const cutsBySession = await getExcludedAudioCuts([...byId.keys()]);
 
   const feed: CircleConversation[] = [];
   for (const row of rows) {
@@ -143,7 +146,10 @@ export const getCircleFeed = cache(async (): Promise<CircleConversation[]> => {
       ownerName,
       name: session.title?.trim() || session.topic?.trim() || "",
       createdAt: session.created_at,
-      durationMs: session.duration_ms,
+      durationMs: editedAudioDurationMs(
+        session.duration_ms,
+        cutsBySession.get(session.id) ?? [],
+      ),
       sharedAt: row.created_at,
     });
   }
@@ -156,6 +162,7 @@ export type CircleConversationDetail = {
   ownerId: string;
   ownerName: string;
   audioUrl: string | null;
+  audioCuts: AudioCut[];
   moral: string | null;
   isOwner: boolean;
 };
@@ -210,6 +217,8 @@ export const getCircleConversation = cache(
         // signed /api/audio proxy rather than a Supabase signed URL.
         createAudioUrl(RAW_BUCKET, session.raw_audio_path, 60 * 60 * 6)
       : null;
+    const audioCuts =
+      (await getExcludedAudioCuts([session.id])).get(session.id) ?? [];
 
     // Generated on the first view that needs it, then cached on the row —
     // exactly as the public share page does it.
@@ -221,6 +230,7 @@ export const getCircleConversation = cache(
       ownerId: share.owner_id,
       ownerName,
       audioUrl,
+      audioCuts,
       moral: moralByLocale?.[locale] ?? null,
       isOwner,
     };

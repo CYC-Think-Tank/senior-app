@@ -154,9 +154,31 @@
   line-height: 1.4;
 }
 
+.fieldLink {
+  justify-self: end;
+  margin-top: -0.15rem;
+  color: rgb(255 250 241 / 0.68);
+  font-size: 0.7rem;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 250 241 / 0.3);
+  text-underline-offset: 0.2em;
+}
+
+.fieldLink:hover {
+  color: #fffaf1;
+  text-decoration-color: currentColor;
+}
+
 .error {
   margin: 0;
   color: #ffd0ae;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.success {
+  margin: 0;
+  color: #d8f5c2;
   font-size: 0.74rem;
   line-height: 1.45;
 }

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createAudioUrl } from "@/lib/audio/encryption";
+import { editedAudioDurationMs } from "@/lib/audio/cuts";
 import { ensureMoral } from "@/lib/moral/generate";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Wordmark, formatDuration } from "@/components/ui";
@@ -20,6 +21,7 @@ import {
 import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
+import { getExcludedAudioCuts } from "@/lib/transcript/audio-cuts";
 import type { Guest, InterviewSession } from "@/lib/types";
 import styles from "./share-page.module.css";
 
@@ -105,6 +107,8 @@ export default async function SharedConversationPage({
   const audioUrl = s.raw_audio_path
     ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
     : null;
+  const audioCuts = (await getExcludedAudioCuts([s.id])).get(s.id) ?? [];
+  const editedDuration = editedAudioDurationMs(s.duration_ms, audioCuts);
 
   // Written on the first view that needs it, then read from the row forever
   // after. Null for a conversation too short — or too unreadable — to have a
@@ -162,7 +166,7 @@ export default async function SharedConversationPage({
                 <Clock3 aria-hidden="true" />
                 <span>
                   <small>{pageCopy.duration}</small>
-                  <strong>{formatDuration(s.duration_ms)}</strong>
+                  <strong>{formatDuration(editedDuration)}</strong>
                 </span>
               </div>
             </div>
@@ -201,7 +205,11 @@ export default async function SharedConversationPage({
             </div>
 
             {audioUrl ? (
-              <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
+              <AudioPlayer
+                src={audioUrl}
+                durationMs={s.duration_ms}
+                cuts={audioCuts}
+              />
             ) : (
               <Card className={styles.missingAudio}>
                 {t("audioMissing")}

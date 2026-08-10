@@ -23,7 +23,10 @@ export async function setTurnExcluded(
   const { error } = await supabase
     .from("transcript_turns")
     .update({ excluded })
-    .eq("id", turnId);
+    .eq("id", turnId)
+    .eq("session_id", sessionId);
   if (error) throw new Error("Could not update the turn.");
   revalidatePath(`/admin/sessions/${sessionId}`);
+  revalidatePath(`/dashboard/${sessionId}`);
+  revalidatePath(`/dashboard/circle/${sessionId}`);
 }

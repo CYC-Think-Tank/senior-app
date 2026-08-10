@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarDays, Clock3, Sprout, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { AudioPlayer } from "@/components/audio-player";
 import { Card, Monogram, formatDuration } from "@/components/ui";
+import { editedAudioDurationMs } from "@/lib/audio/cuts";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { getCircleConversation, getConversationComments } from "../circle-data";
@@ -33,7 +34,7 @@ export default async function CircleConversationPage({
   if (!detail) notFound();
 
   const comments = await getConversationComments(sessionId);
-  const { session, ownerName, audioUrl, moral, isOwner } = detail;
+  const { session, ownerName, audioUrl, audioCuts, moral, isOwner } = detail;
   const title =
     session.title?.trim() ||
     session.topic?.trim() ||
@@ -77,7 +78,11 @@ export default async function CircleConversationPage({
         <span className={styles.circleDetail}>
           <Clock3 aria-hidden="true" />
           <span>
-            <strong>{formatDuration(session.duration_ms)}</strong>
+            <strong>
+              {formatDuration(
+                editedAudioDurationMs(session.duration_ms, audioCuts),
+              )}
+            </strong>
           </span>
         </span>
       </div>
@@ -98,7 +103,11 @@ export default async function CircleConversationPage({
       ) : null}
 
       {audioUrl ? (
-        <AudioPlayer src={audioUrl} durationMs={session.duration_ms} />
+        <AudioPlayer
+          src={audioUrl}
+          durationMs={session.duration_ms}
+          cuts={audioCuts}
+        />
       ) : (
         <Card className="p-6">{t("audioMissing")}</Card>
       )}

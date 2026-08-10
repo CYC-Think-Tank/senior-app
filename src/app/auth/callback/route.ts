@@ -7,6 +7,11 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
+  const requestedNext = searchParams.get("next");
+  const next =
+    requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
+      ? requestedNext
+      : null;
 
   const supabase = await createSupabaseServerClient();
 
@@ -22,6 +27,10 @@ export async function GET(request: NextRequest) {
 
   if (!user) {
     return NextResponse.redirect(`${origin}/login?error=link`);
+  }
+
+  if (next) {
+    return NextResponse.redirect(`${origin}${next}`);
   }
 
   const { data: profile } = await supabase

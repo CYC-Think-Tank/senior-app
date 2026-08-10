@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
+import { editedAudioDurationMs } from "@/lib/audio/cuts";
+import { getExcludedAudioCuts } from "@/lib/transcript/audio-cuts";
 import type { InterviewSession } from "@/lib/types";
 
 export type FamilyConversation = {
@@ -51,13 +53,19 @@ export const getFamilyConversations = cache(async () => {
   const names = conversationNames(rows, (number) =>
     t("familyConversationNumbered", { number }),
   );
+  // Only ids already authorized by the caller's RLS read are handed to the
+  // service helper that reads private transcript cut timestamps.
+  const cutsBySession = await getExcludedAudioCuts(rows.map((row) => row.id));
   const conversations: FamilyConversation[] = rows.map((row) => ({
     id: row.id,
     guestName: row.guests.name,
     name: names.get(row.id) ?? t("familyConversationLabel"),
     title: row.title,
     createdAt: row.created_at,
-    durationMs: row.duration_ms,
+    durationMs: editedAudioDurationMs(
+      row.duration_ms,
+      cutsBySession.get(row.id) ?? [],
+    ),
     shareToken: row.share_token,
     unfinished: row.status !== "ready",
     sharedWithCircle: sharedWithCircle.has(row.id),

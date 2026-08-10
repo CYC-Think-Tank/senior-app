@@ -96,6 +96,9 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className={styles.input}
                 />
+                <Link className={styles.fieldLink} href="/forgot-password">
+                  {t("loginForgotPassword")}
+                </Link>
               </div>
               {error && <p className={styles.error}>{error}</p>}
               <button

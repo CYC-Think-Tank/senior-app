@@ -123,6 +123,50 @@ export async function renameConversation(sessionId: string, name: string) {
   return { ok: true as const };
 }
 
+/**
+ * Removes or restores one transcript line for the storyteller who owns it.
+ * The row is kept so an accidental edit can be undone; every conversation
+ * player treats its timestamp range as deleted while `excluded` is true.
+ */
+export async function setConversationTurnExcluded(
+  sessionId: string,
+  turnId: string,
+  excluded: boolean,
+) {
+  const { supabase, user } = await requireUser();
+
+  // Server Actions are public POST endpoints. Authorize the conversation
+  // through the caller's RLS client before the service role touches its turns.
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("id, guests!inner(user_id)")
+    .eq("id", sessionId)
+    .eq("status", "ready")
+    .eq("guests.user_id", user.id)
+    .single();
+  if (!session) return { ok: false as const };
+
+  const admin = createSupabaseAdminClient();
+  const { data: turn, error } = await admin
+    .from("transcript_turns")
+    .update({ excluded })
+    .eq("id", turnId)
+    .eq("session_id", sessionId)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !turn) {
+    console.error("Could not edit the transcript line:", error);
+    return { ok: false as const };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/conversations");
+  revalidatePath(`/dashboard/${sessionId}`);
+  revalidatePath(`/dashboard/circle/${sessionId}`);
+  return { ok: true as const };
+}
+
 /** Permanently removes a conversation after confirming the caller can read it. */
 export async function deleteConversation(sessionId: string) {
   const { supabase, user } = await requireUser();
