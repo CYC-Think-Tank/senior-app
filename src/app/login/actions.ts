@@ -25,19 +25,23 @@ export async function signInWithPassword(
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signIn, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (error) {
+  if (error || !signIn.user) {
     console.error("Could not sign in with password:", error);
     return { ok: false, error: SIGN_IN_ERROR };
   }
 
+  // Filtered by id rather than left to RLS: an admin reads every profile, and
+  // anyone with a friend reads theirs too, so an unfiltered single() sees more
+  // than one row and fails — signing out the very people it just let in.
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role")
+    .eq("id", signIn.user.id)
     .single();
   if (profileError || !profile) {
     await supabase.auth.signOut();

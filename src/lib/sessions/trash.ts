@@ -60,14 +60,13 @@ export async function trashAbandonedAnonymousSessions(
     errors: [],
   };
 
-  // `!inner` makes the guest filters narrow the sessions themselves: no
-  // family to listen, no account to claim it.
+  // `!inner` makes the guest filter narrow the sessions themselves: no account
+  // to claim it, i.e. an anonymous walk-in from the public /interview flow.
   const { data: sessions, error } = await admin
     .from("sessions")
-    .select("id, guest_id, guests!inner(family_id, user_id)")
+    .select("id, guest_id, guests!inner(user_id)")
     .neq("status", "ready")
     .lt("created_at", cutoff)
-    .is("guests.family_id", null)
     .is("guests.user_id", null)
     .limit(BATCH);
 
