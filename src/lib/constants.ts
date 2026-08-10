@@ -35,6 +35,17 @@ export function isRealtimeVoice(value: unknown): value is RealtimeVoice {
 
 export const RAW_BUCKET = "raw-audio";
 export const EPISODES_BUCKET = "episodes";
+export const STORY_VIDEOS_BUCKET = "story-videos";
+
+export const SEEGEN_MODEL = "sd2-mini";
+// Fifteen 10-second scenes produce a 2:30 memoir, safely inside the promised
+// two-to-three-minute range while staying within SeeGen's per-task limit.
+export const MEMOIR_MAX_OUTPUT_SECONDS = 150;
+export const MEMOIR_SCENE_DURATION_SECONDS = 10;
+export const MEMOIR_MIN_SCENES = 15;
+export const MEMOIR_MAX_SCENES = 15;
+export const MEMOIR_OUTPUT_WIDTH = 854;
+export const MEMOIR_OUTPUT_HEIGHT = 480;
 
 // A live interview heartbeats every 15s, so a session still marked
 // 'recording' after this long lost its tab. Kept in step with the family

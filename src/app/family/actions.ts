@@ -12,6 +12,7 @@ import {
   EPISODES_BUCKET,
   isRealtimeVoice,
   RAW_BUCKET,
+  STORY_VIDEOS_BUCKET,
 } from "@/lib/constants";
 
 export type ShareLinkResult =
@@ -206,7 +207,7 @@ export async function deleteConversation(sessionId: string) {
   if (!visibleSession) return { ok: false as const };
 
   const admin = createSupabaseAdminClient();
-  const [{ data: session }, { data: episode }] = await Promise.all([
+  const [{ data: session }, { data: episode }, { data: video }] = await Promise.all([
     admin
       .from("sessions")
       .select("raw_audio_path")
@@ -217,6 +218,11 @@ export async function deleteConversation(sessionId: string) {
       .select("audio_path")
       .eq("session_id", sessionId)
       .maybeSingle(),
+    admin
+      .from("conversation_videos")
+      .select("id")
+      .eq("session_id", sessionId)
+      .maybeSingle(),
   ]);
 
   const removals: Promise<unknown>[] = [];
@@ -225,6 +231,18 @@ export async function deleteConversation(sessionId: string) {
   }
   if (episode?.audio_path) {
     removals.push(admin.storage.from(EPISODES_BUCKET).remove([episode.audio_path]));
+  }
+  if (video?.id) {
+    const prefix = `${sessionId}/${video.id}`;
+    const [{ data: objects }, { data: sceneObjects }] = await Promise.all([
+      admin.storage.from(STORY_VIDEOS_BUCKET).list(prefix),
+      admin.storage.from(STORY_VIDEOS_BUCKET).list(`${prefix}/scenes`),
+    ]);
+    const paths = [
+      ...(objects ?? []).filter((object) => object.id).map((object) => `${prefix}/${object.name}`),
+      ...(sceneObjects ?? []).filter((object) => object.id).map((object) => `${prefix}/scenes/${object.name}`),
+    ];
+    if (paths.length) removals.push(admin.storage.from(STORY_VIDEOS_BUCKET).remove(paths));
   }
   await Promise.all(removals);
 

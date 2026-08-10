@@ -19,6 +19,7 @@ const MIME_BY_EXT: Record<string, string> = {
   mp3: "audio/mpeg",
   m4a: "audio/mp4",
   webm: "audio/webm",
+  mp4: "video/mp4",
 };
 
 /**

@@ -11,6 +11,9 @@ import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
 import type { Guest, InterviewSession } from "@/lib/types";
+import type { ConversationVideo } from "@/lib/types";
+import { publicConversationVideo } from "@/lib/memoir/workflow";
+import { MemoirVideoCard } from "./memoir-video-card";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +48,17 @@ export default async function FamilyConversationPage({
 
   const audioUrl = s.raw_audio_path
     ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
+    : null;
+
+  const { data: videoRow } = s.status === "ready"
+    ? await supabase
+        .from("conversation_videos")
+        .select("*")
+        .eq("session_id", s.id)
+        .maybeSingle()
+    : { data: null };
+  const initialVideo = videoRow
+    ? await publicConversationVideo(videoRow as ConversationVideo)
     : null;
 
   return (
@@ -90,6 +104,10 @@ export default async function FamilyConversationPage({
       ) : (
         <Card className="p-6 text-ink-soft">{t("reviewAudioMissing")}</Card>
       )}
+
+      {s.status === "ready" ? (
+        <MemoirVideoCard sessionId={s.id} initialVideo={initialVideo} />
+      ) : null}
     </div>
   );
 }

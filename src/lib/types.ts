@@ -108,3 +108,27 @@ export type TurnDraft = {
   startMs: number;
   endMs: number;
 };
+
+export type ConversationVideoStatus =
+  | "planning"
+  | "preparing"
+  | "generating"
+  | "rendering"
+  | "ready"
+  | "failed";
+
+export type ConversationVideo = {
+  id: string;
+  session_id: string;
+  status: ConversationVideoStatus;
+  title: string | null;
+  story_ciphertext: string | null;
+  narration_ciphertext: string | null;
+  visual_bible_ciphertext: string | null;
+  narration_path: string | null;
+  video_path: string | null;
+  duration_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
