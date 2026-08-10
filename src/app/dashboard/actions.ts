@@ -184,7 +184,7 @@ export async function updateMyProfile(
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("email, family_id")
+    .select("email")
     .eq("id", user.id)
     .single();
 
@@ -209,14 +209,12 @@ export async function updateMyProfile(
     .maybeSingle();
 
   // No guest row yet means they have not recorded anything. Creating it now
-  // (stamped with their family, as in `startMyConversation`) means the bio is
-  // already waiting for the host when they do.
+  // means the bio is already waiting for the host when they do.
   const { error: guestError } = guest
     ? await admin.from("guests").update(guestFields).eq("id", guest.id)
     : await admin.from("guests").insert({
         ...guestFields,
         user_id: user.id,
-        family_id: profile?.family_id ?? null,
         origin: "self_serve",
         language: interviewLanguage(await getPreferredLocale()),
       });
@@ -250,7 +248,7 @@ export async function startMyConversation() {
       .maybeSingle(),
     admin
       .from("profiles")
-      .select("display_name, email, family_id")
+      .select("display_name, email")
       .eq("id", user.id)
       .single(),
   ]);
@@ -273,13 +271,12 @@ export async function startMyConversation() {
       }
     }
   } else {
-    // Stamping the user's family on the guest is what makes the finished
-    // recording visible to the rest of their family (and to them).
+    // The user_id is what makes the finished recording visible on their
+    // dashboard; see the "users read their own sessions" policy.
     const { data: guest, error: guestError } = await admin
       .from("guests")
       .insert({
         user_id: user.id,
-        family_id: profile?.family_id ?? null,
         name: currentName,
         language: interviewLanguage(locale),
       })

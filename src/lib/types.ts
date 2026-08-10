@@ -6,8 +6,6 @@ export type Profile = {
   display_name: string | null;
   locale: "en" | "zh-Hans" | "zh-Hant";
   role: Role;
-  /** Null for admins: they read every family through `is_admin()`. */
-  family_id: string | null;
   created_at: string;
 };
 
@@ -17,7 +15,6 @@ export type GuestOrigin = "admin_invite" | "self_serve" | "public";
 export type Guest = {
   id: string;
   user_id: string | null;
-  family_id: string | null;
   name: string;
   bio: string | null;
   photo_path: string | null;
