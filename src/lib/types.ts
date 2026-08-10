@@ -38,6 +38,8 @@ export type InterviewSession = {
   topic: string | null;
   title: string | null;
   status: SessionStatus;
+  /** Sealed JSON: the share page's takeaway, per locale. Null until asked for. */
+  moral: string | null;
   raw_audio_path: string | null;
   share_token: string | null;
   started_at: string | null;
@@ -47,21 +49,40 @@ export type InterviewSession = {
   created_at: string;
 };
 
-export type PodcastParticipationStatus =
-  | "requested"
-  | "invited"
-  | "accepted"
-  | "interview_done";
+export type FriendshipStatus = "pending" | "accepted";
 
-export type PodcastParticipation = {
+/**
+ * One row per pair of accounts, with the ids in a fixed order — `user_low` is
+ * always the smaller uuid. Normalise through `friendshipPair()` before
+ * querying; see supabase/migrations/013_friend_circle.sql.
+ */
+export type Friendship = {
   id: string;
-  user_id: string;
-  session_id: string | null;
-  source: "request" | "admin_invite";
-  request_kind: "existing_conversation" | "new_interview";
-  status: PodcastParticipationStatus;
+  user_low: string;
+  user_high: string;
+  /** Who sent the request. Decides who may accept while status is pending. */
+  requester_id: string;
+  status: FriendshipStatus;
   created_at: string;
-  updated_at: string;
+  responded_at: string | null;
+};
+
+/** Presence of the row *is* the whole-circle sharing switch for a session. */
+export type CircleShare = {
+  session_id: string;
+  /** Denormalised from guests.user_id so the friend policy stays one compare. */
+  owner_id: string;
+  created_at: string;
+};
+
+export type ConversationComment = {
+  id: string;
+  session_id: string;
+  author_id: string;
+  /** The author's name when they wrote it; see migration 016 for why. */
+  author_name: string;
+  body: string;
+  created_at: string;
 };
 
 export type Speaker = "ai" | "guest";
@@ -75,30 +96,6 @@ export type TranscriptTurn = {
   start_ms: number;
   end_ms: number;
   excluded: boolean;
-};
-
-export type EpisodeStatus =
-  | "draft"
-  | "pending_approval"
-  | "changes_requested"
-  | "approved"
-  | "published";
-
-export type Episode = {
-  id: string;
-  session_id: string;
-  guest_id: string;
-  episode_number: number;
-  title: string;
-  description: string | null;
-  show_notes: string | null;
-  audio_path: string;
-  duration_ms: number | null;
-  review_token: string;
-  status: EpisodeStatus;
-  change_note: string | null;
-  publish_at: string | null;
-  created_at: string;
 };
 
 /** A finished turn assembled client-side during the live interview. */

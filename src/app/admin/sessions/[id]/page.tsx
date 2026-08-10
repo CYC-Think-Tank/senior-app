@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { RAW_BUCKET } from "@/lib/constants";
 import { decryptTurns } from "@/lib/transcript/encryption";
-import type { Episode, Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
+import type { Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
 import TranscriptEditor from "./transcript-editor";
 
 export const dynamic = "force-dynamic";
@@ -16,16 +16,14 @@ export default async function SessionEditorPage({
   const { id } = await params;
   const { supabase } = await requireAdmin();
 
-  const [{ data: session }, { data: turns }, { data: episode }] =
-    await Promise.all([
-      supabase.from("sessions").select("*, guests(*)").eq("id", id).single(),
-      supabase
-        .from("transcript_turns")
-        .select("*")
-        .eq("session_id", id)
-        .order("idx"),
-      supabase.from("episodes").select("*").eq("session_id", id).maybeSingle(),
-    ]);
+  const [{ data: session }, { data: turns }] = await Promise.all([
+    supabase.from("sessions").select("*, guests(*)").eq("id", id).single(),
+    supabase
+      .from("transcript_turns")
+      .select("*")
+      .eq("session_id", id)
+      .order("idx"),
+  ]);
 
   if (!session) notFound();
 
@@ -38,7 +36,6 @@ export default async function SessionEditorPage({
       session={session as unknown as InterviewSession}
       guest={session.guests as unknown as Guest}
       initialTurns={decryptTurns(id, (turns ?? []) as TranscriptTurn[])}
-      episode={(episode ?? null) as Episode | null}
       audioUrl={audioUrl}
     />
   );

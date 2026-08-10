@@ -1,13 +1,10 @@
 .dashboard { display: grid; gap: 1.5rem; }
 .hero { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-bottom: .75rem; }
-.eyebrow, .sectionNumber { margin: 0 0 .7rem; color: rgb(255 250 241 / .58); font-size: .7rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.eyebrow { margin: 0 0 .7rem; color: rgb(255 250 241 / .58); font-size: .7rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .title { margin: 0; font-family: var(--font-serif); font-size: clamp(2.75rem, 5vw, 4.8rem); font-weight: 400; line-height: .98; letter-spacing: -.045em; }
 .intro { max-width: 40rem; margin: 1rem 0 0; color: rgb(255 250 241 / .68); font-size: .98rem; line-height: 1.65; }
-.primaryAction { display: inline-flex; min-height: 3rem; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0 1.15rem; gap: .55rem; color: #2f2018; background: #fffaf1; border-radius: 9px; font-size: .9rem; font-weight: 650; transition: transform 180ms ease, background 180ms ease; }
-.primaryAction:hover { background: #fff; transform: translateY(-1px); }
-.primaryAction svg { width: 1rem; height: 1rem; }
 .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; }
-.statCard, .chartCard, .breakdownCard, .guestList { background: rgb(65 22 13 / .3); border: 1px solid rgb(255 250 241 / .15); box-shadow: 0 18px 70px rgb(39 12 6 / .08); backdrop-filter: blur(14px) saturate(1.05); }
+.statCard, .chartCard, .breakdownCard { background: rgb(65 22 13 / .3); border: 1px solid rgb(255 250 241 / .15); box-shadow: 0 18px 70px rgb(39 12 6 / .08); backdrop-filter: blur(14px) saturate(1.05); }
 .statCard { display: flex; min-height: 11rem; flex-direction: column; padding: 1.25rem 1.35rem; border-radius: 14px; }
 .statTop { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .statLabel { color: rgb(255 250 241 / .7); font-size: .82rem; font-weight: 600; }
@@ -35,50 +32,6 @@
 .categoryMeta strong { color: #fffaf1; font-size: .75rem; }
 .categoryTrack { height: 4px; overflow: hidden; background: rgb(255 250 241 / .1); border-radius: 999px; }
 .categoryFill { display: block; height: 100%; border-radius: inherit; transition: width 500ms ease; }
-.guestSection { margin-top: 2.5rem; }
-.guestSectionStandalone { margin-top: 0; }
-.guestHeader { display: flex; align-items: end; justify-content: space-between; gap: 1.5rem; margin-bottom: 1rem; }
-.guestHeader h2 { margin: 0; font-family: var(--font-serif); font-size: clamp(2rem, 3.8vw, 3.2rem); font-weight: 400; letter-spacing: -.035em; }
-.guestHeader p:last-child { margin: .55rem 0 0; color: rgb(255 250 241 / .58); font-size: .82rem; }
-.guestHeader > a { display: inline-flex; align-items: center; gap: .35rem; color: rgb(255 250 241 / .72); font-size: .8rem; font-weight: 600; transition: color 180ms ease, transform 180ms ease; }
-.guestHeader > a:hover { color: #fff; transform: translateY(-1px); }
-.guestHeader svg { width: .9rem; height: .9rem; }
-.guestList { overflow: hidden; border-radius: 14px; }
-/* The trailing track is empty space the edit button is positioned over. */
-.tableHeader, .guestRow { display: grid; grid-template-columns: minmax(13rem, 1.7fr) 1fr .75fr .8fr 1fr 1.25rem 2.25rem; align-items: center; gap: 1rem; padding: 0 1.25rem; }
-.tableHeader { min-height: 2.9rem; color: rgb(255 250 241 / .42); background: rgb(255 250 241 / .035); font-size: .65rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-.guestRow { min-height: 4.6rem; color: rgb(255 250 241 / .68); border-top: 1px solid rgb(255 250 241 / .09); font-size: .78rem; transition: color 180ms ease, background 180ms ease; }
-.guestRow:hover { color: #fffaf1; background: rgb(255 250 241 / .06); }
-.guestRowWrap { position: relative; }
-.editButton { position: absolute; top: 50%; right: 1.25rem; display: grid; width: 2.1rem; height: 2.1rem; place-items: center; color: rgb(255 250 241 / .6); background: rgb(255 250 241 / .07); border: 1px solid rgb(255 250 241 / .14); border-radius: 9px; transform: translateY(-50%); transition: color 180ms ease, background 180ms ease; }
-.editButton:hover { color: #fffaf1; background: rgb(255 250 241 / .14); }
-.editButton svg { width: .95rem; height: .95rem; }
-.guestIdentity { display: flex; min-width: 0; align-items: center; gap: .8rem; color: #fffaf1; }
-.guestIdentity strong { overflow: hidden; font-size: .84rem; text-overflow: ellipsis; white-space: nowrap; }
-.avatar { display: grid; width: 2.15rem; height: 2.15rem; flex: 0 0 auto; place-items: center; color: #3d2117; background: #fffaf1; border-radius: 50%; font-family: var(--font-serif); font-size: 1rem; }
-.statusRegistered, .statusGuest { display: inline-flex; align-items: center; padding: .3rem .55rem; border-radius: 999px; font-size: .66rem; font-weight: 650; }
-.statusRegistered { color: #fffaf1; background: rgb(255 250 241 / .12); }
-.statusGuest { color: #ffd2b0; background: rgb(245 168 100 / .12); }
-.numeric { font-variant-numeric: tabular-nums; }
-.rowArrow { width: .9rem; height: .9rem; justify-self: end; opacity: .5; }
-.empty { margin: 0; padding: 3rem 1.25rem; color: rgb(255 250 241 / .5); text-align: center; }
-.modalBackdrop { position: fixed; inset: 0; z-index: 60; display: flex; padding: 1.25rem; background: rgb(23 6 3 / .72); backdrop-filter: blur(8px); overflow-y: auto; }
-/* `margin: auto` centers the dialog but still lets a tall one scroll from its
-   top edge, which `place-items: center` would cut off. */
-.modal { width: min(32rem, 100%); margin: auto; padding: 1.8rem; color: #342018; background: #fffaf1; border-radius: 16px; box-shadow: 0 2rem 7rem rgb(20 5 2 / .46); }
-.modal h2 { margin: 0 0 1.25rem; font-family: var(--font-serif); font-size: 1.9rem; font-weight: 520; }
-.modalField { display: block; margin-top: 1rem; }
-.modalField > span { display: block; margin-bottom: .4rem; color: #6f574a; font-size: .82rem; font-weight: 650; }
-.modalField input, .modalField textarea { display: block; width: 100%; padding: .6rem .75rem; color: #342018; background: #fff; border: 1px solid #e0cfbe; border-radius: 9px; font: inherit; font-size: .95rem; }
-.modalField input:focus, .modalField textarea:focus { border-color: #b07a51; outline: none; }
-.modalField textarea { resize: vertical; }
-.modalField small { display: block; margin-top: .35rem; color: #90786a; font-size: .74rem; }
-.modalError { margin: 1rem 0 0; color: #8d321f; font-size: .85rem; }
-.modalActions { display: flex; justify-content: flex-end; margin-top: 1.5rem; gap: .65rem; }
-.modalButton { min-height: 3rem; padding: 0 1rem; border-radius: 9px; font-size: .95rem; font-weight: 700; }
-.modalButton:disabled { opacity: .55; }
-.modalCancel { color: #5f4a40; background: #eee1d3; }
-.modalSave { color: #fff; background: #8d321f; }
 .loading { display: grid; gap: 1.5rem; }
 .loadingLine, .loadingCard { background: rgb(255 250 241 / .1); animation: loading-pulse 1.2s ease-in-out infinite alternate; }
 .loadingLine { height: .75rem; border-radius: 999px; }
@@ -89,6 +42,6 @@
 .loadingCard { min-height: 10rem; border: 1px solid rgb(255 250 241 / .08); border-radius: 14px; }
 .loadingPanel { min-height: 18rem; }
 @keyframes loading-pulse { to { background: rgb(255 250 241 / .16); } }
-@media (max-width: 900px) { .analyticsGrid { grid-template-columns: 1fr; } .breakdowns { grid-template-columns: 1fr 1fr; grid-template-rows: auto; } .tableHeader, .guestRow { grid-template-columns: minmax(10rem, 1.5fr) 1fr .7fr 1fr 1.25rem 2.25rem; } .tableHeader span:nth-child(4), .guestRow > span:nth-child(4) { display: none; } }
-@media (max-width: 680px) { .hero { align-items: start; flex-direction: column; } .primaryAction { width: 100%; } .statsGrid, .loadingGrid { grid-template-columns: 1fr; } .statCard { min-height: 9.5rem; } .breakdowns { grid-template-columns: 1fr; } .guestHeader { align-items: start; flex-direction: column; } .tableHeader { display: none; } .guestRow { grid-template-columns: minmax(0, 1fr) auto 1.25rem 2.25rem; min-height: 4.8rem; } .guestRow > span:nth-child(3), .guestRow > span:nth-child(4), .guestRow > span:nth-child(5) { display: none; } }
-@media (prefers-reduced-motion: reduce) { .primaryAction, .guestHeader > a, .guestRow, .categoryFill { transition: none; } .loadingLine, .loadingCard { animation: none; } }
+@media (max-width: 900px) { .analyticsGrid { grid-template-columns: 1fr; } .breakdowns { grid-template-columns: 1fr 1fr; grid-template-rows: auto; } }
+@media (max-width: 680px) { .hero { align-items: start; flex-direction: column; } .statsGrid, .loadingGrid { grid-template-columns: 1fr; } .statCard { min-height: 9.5rem; } .breakdowns { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .categoryFill { transition: none; } .loadingLine, .loadingCard { animation: none; } }

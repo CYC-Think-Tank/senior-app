@@ -4,9 +4,6 @@ import { stitchSessionParts } from "@/lib/audio/stitch-parts";
 /**
  * Turns the chunks uploaded during an interview into the session's finished
  * recording and marks it ready for editing.
- *
- * Shared by the guest's own end-of-interview call and by admin recovery of a
- * session whose tab was closed early, so both paths produce identical state.
  */
 export async function finalizeSessionAudio(
   admin: SupabaseClient,
@@ -36,11 +33,6 @@ export async function finalizeSessionAudio(
     console.error("session finalize failed:", error);
     return { error: "Could not finalize the session." };
   }
-
-  await admin
-    .from("podcast_participation")
-    .update({ status: "interview_done", updated_at: new Date().toISOString() })
-    .eq("session_id", session.id);
 
   return { error: null };
 }

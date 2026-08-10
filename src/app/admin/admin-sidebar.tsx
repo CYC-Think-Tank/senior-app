@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { LayoutDashboard, LogOut, Radio, Send, UserRound, UsersRound } from "lucide-react";
+import { LayoutDashboard, LogOut, UserRound } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { portalStyles } from "@/components/portal-shell";
 import { Wordmark } from "@/components/ui";
@@ -26,39 +26,16 @@ export function AdminSidebar() {
       active: pathname === "/admin",
     },
     {
-      href: "/admin/guests",
-      label: t("commonGuests"),
-      icon: UsersRound,
-      active: pathname.startsWith("/admin/guests"),
-    },
-    {
       href: "/admin/users",
       label: locale === "en" ? "Users" : locale === "zh-Hans" ? "用户" : "使用者",
       icon: UserRound,
       active: pathname.startsWith("/admin/users"),
     },
-    {
-      href: "/admin/participation",
-      label:
-        locale === "en"
-          ? "Invites & requests"
-          : locale === "zh-Hans"
-            ? "邀请与申请"
-            : "邀請與申請",
-      icon: Send,
-      active: pathname.startsWith("/admin/participation"),
-    },
-    {
-      href: "/feed",
-      label: t("commonViewFeed"),
-      icon: Radio,
-      active: pathname.startsWith("/feed"),
-    },
   ];
 
   return (
     <aside className={portalStyles.adminSidebar}>
-      <div className={portalStyles.sidebarBrand}><Wordmark tone="light" name={locale === "en" ? undefined : "慧仁享"} /></div>
+      <div className={portalStyles.sidebarBrand}><Wordmark tone="light" locale={locale} /></div>
       <p className={portalStyles.sidebarLabel}>Workspace</p>
       <nav className={portalStyles.sidebarNav} aria-label="Admin navigation">
         {items.map((item) => (

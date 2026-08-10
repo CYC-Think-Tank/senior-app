@@ -30,7 +30,7 @@ export default async function LandingPage() {
         .select("role")
         .eq("id", userId)
         .maybeSingle();
-      dashboardHref = profile?.role === "admin" ? "/admin" : "/family";
+      dashboardHref = profile?.role === "admin" ? "/admin" : "/dashboard";
     }
   }
 
@@ -50,9 +50,6 @@ export default async function LandingPage() {
           </Link>
           <nav className={styles.authNav} aria-label={t("landingAccountAria")}>
             <LanguageSwitcher tone="bare" />
-            <Link href="/feed" className={styles.navGhost}>
-              {t("commonEpisodes")}
-            </Link>
             {dashboardHref ? (
               <Link href={dashboardHref} className={styles.navPrimary}>
                 {t("commonDashboard")}

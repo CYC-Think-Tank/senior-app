@@ -5,12 +5,12 @@ import { validateNewPassword } from "@/lib/password";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { normalizeEmail } from "@/lib/email";
 
 export type SignUpResult =
   | { ok: true; redirectTo: string }
   | { ok: false; error: string };
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SIGN_UP_ERROR =
   "We couldn’t create your account. Please wait a moment and try again.";
 
@@ -20,7 +20,7 @@ export async function signUpWithPassword(
   password: string,
 ): Promise<SignUpResult> {
   const name = nameInput.trim().replace(/\s+/g, " ");
-  const email = emailInput.trim().toLowerCase();
+  const email = normalizeEmail(emailInput);
   const locale = normalizeLocale(
     (await cookies()).get(localeCookieName)?.value,
   );
@@ -34,7 +34,7 @@ export async function signUpWithPassword(
     return { ok: false, error: "Enter your name." };
   }
 
-  if (email.length > 320 || !EMAIL_PATTERN.test(email)) {
+  if (!email) {
     return { ok: false, error: "Enter a valid email address." };
   }
 
@@ -42,10 +42,14 @@ export async function signUpWithPassword(
   if (passwordError) return { ok: false, error: passwordError };
 
   const admin = createSupabaseAdminClient();
+  // Exact match, never `ilike`: `%` and `_` are legal in an email's local part
+  // but are wildcards in a LIKE pattern, so an address like `j%@gmail.com`
+  // would otherwise match every j-address on the domain. Both sides of this
+  // comparison are lowercased (migration 013 backfilled the column).
   const { data: existingProfile, error: profileLookupError } = await admin
     .from("profiles")
     .select("id")
-    .ilike("email", email)
+    .eq("email", email)
     .maybeSingle();
 
   if (profileLookupError) {
@@ -72,10 +76,14 @@ export async function signUpWithPassword(
     return { ok: false, error: SIGN_UP_ERROR };
   }
 
+  // Exact match for the same reason as the profile lookup above, and here it
+  // decides the account's role: under `ilike`, signing up as `j%@gmail.com`
+  // would match a seeded admin address and grant admin. Migration 013
+  // lowercased this table so `eq` matches what the signup trigger does.
   const { data: adminEmail } = await admin
     .from("admin_emails")
     .select("email")
-    .ilike("email", email)
+    .eq("email", email)
     .maybeSingle();
   const role = adminEmail ? "admin" : "family";
 
@@ -108,5 +116,5 @@ export async function signUpWithPassword(
     return { ok: false, error: SIGN_UP_ERROR };
   }
 
-  return { ok: true, redirectTo: role === "admin" ? "/admin" : "/family" };
+  return { ok: true, redirectTo: role === "admin" ? "/admin" : "/dashboard" };
 }

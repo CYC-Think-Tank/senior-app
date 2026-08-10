@@ -49,7 +49,7 @@ export default function LoginPage() {
         >
           <span className={portalStyles.navSpacer} aria-hidden="true" />
           <div className={portalStyles.headerBrand}>
-            <Wordmark tone="light" name={locale === "en" ? undefined : "慧仁享"} />
+            <Wordmark tone="light" locale={locale} />
           </div>
         </div>
       </header>
