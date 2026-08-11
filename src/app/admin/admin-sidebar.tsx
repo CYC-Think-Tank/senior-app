@@ -56,7 +56,7 @@ export function AdminSidebar() {
         ))}
       </nav>
       <div className={portalStyles.sidebarFooter}>
-        <LanguageSwitcher tone="bare" />
+        <LanguageSwitcher tone="bare" openUp />
         <form action={signOut}>
           <button className={portalStyles.sidebarUtility}>
             <LogOut aria-hidden="true" />

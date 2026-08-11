@@ -348,6 +348,7 @@ export async function startMyConversation() {
         user_id: user.id,
         name: currentName,
         language: interviewLanguage(locale),
+        origin: "self_serve",
       })
       .select("id")
       .single();

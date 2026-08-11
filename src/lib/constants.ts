@@ -13,6 +13,10 @@ export const CHAT_MODEL = "gpt-5-mini";
 // that nobody waits on mid-conversation, so it runs on a cheap text model
 // rather than the realtime one.
 export const MORAL_MODEL = "gpt-4.1-mini";
+// Continuity notes are another small structured extraction job. Keeping this
+// separate makes the model independently replaceable if memory evals call for
+// a different cost/quality tradeoff later.
+export const MEMORY_MODEL = "gpt-4.1-mini";
 
 /**
  * The built-in voices the Realtime model accepts, in the order they are offered

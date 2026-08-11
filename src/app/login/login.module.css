@@ -24,6 +24,8 @@
 }
 
 .panelTop {
+  position: relative;
+  z-index: 10;
   display: flex;
   min-height: 2.5rem;
   align-items: center;
