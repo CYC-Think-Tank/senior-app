@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MORAL_MODEL } from "@/lib/constants";
 import { locales } from "@/lib/i18n";
+import { LEGACY_QUESTION } from "@/lib/realtime/interviewer-prompt";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { decryptMoral, encryptMoral, type Moral } from "./encryption";
 
@@ -29,6 +30,8 @@ Write a single sentence:
 - Do not preach, do not open with "always" or "remember", do not use quotation marks or exclamation marks.
 - Speak to someone young without talking down to them.
 - Write it in the third person about the storyteller's life or as a plain statement of what holds true. Do not address the storyteller.
+
+If Rosie asked the storyteller near the end of the conversation what message they would leave with the youth of the next generation — "${LEGACY_QUESTION}", in any wording or language — then do not distil a takeaway of your own. The sentence must be a one-line summary of the answer they actually gave to that question, in their own terms, still obeying the length and style rules above. Ignore the rest of the transcript except to make that answer readable on its own.
 
 Return that same moral written naturally in each language — idiomatic in all three, not translated word for word:
 - en: English
