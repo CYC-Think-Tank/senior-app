@@ -3,6 +3,7 @@ import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptTurns } from "@/lib/transcript/encryption";
+import { getGuestMemorySummary } from "@/lib/memory/summary";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
 import { GUEST_FINISH_TOOL } from "@/lib/realtime/interview-ending";
 import {
@@ -53,14 +54,16 @@ export async function POST(request: NextRequest) {
     .order("idx", { ascending: true });
 
   const guest = session.guests as unknown as Guest;
-  const [guestName, language] = await Promise.all([
+  const [guestName, language, memorySummary] = await Promise.all([
     resolveCurrentGuestName(admin, guest),
     resolveCurrentGuestLanguage(admin, guest),
+    getGuestMemorySummary(admin, guest.id),
   ]);
   const instructions = buildInterviewerInstructions({
     guestName,
     bio: guest.bio,
     topics: guest.topics,
+    memorySummary,
     language,
     topic: session.topic,
     priorTurns: decryptTurns(session.id, savedTurns ?? []),

@@ -127,7 +127,7 @@ export function SeniorSidebar({
         ))}
       </nav>
       <div className={styles.sidebarFooter}>
-        <LanguageSwitcher tone="bare" />
+        <LanguageSwitcher tone="bare" openUp />
         <AccountActions name={name} />
       </div>
     </aside>

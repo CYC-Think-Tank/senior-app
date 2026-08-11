@@ -63,7 +63,7 @@ export function SettingsForm({
         <label htmlFor="settings-name">{chinese ? "您的名字" : "Your name"}</label>
         <input
           id="settings-name"
-          className={styles.settingsInput}
+          className={`${styles.settingsInput} ${styles.settingsControl}`}
           value={nameValue}
           maxLength={80}
           placeholder={email.split("@")[0]}
@@ -84,7 +84,7 @@ export function SettingsForm({
         <label htmlFor="settings-bio">{chinese ? "关于您" : "About you"}</label>
         <textarea
           id="settings-bio"
-          className={styles.settingsTextarea}
+          className={`${styles.settingsTextarea} ${styles.settingsControl}`}
           value={bioValue}
           maxLength={1000}
           rows={6}
@@ -109,7 +109,7 @@ export function SettingsForm({
         <label htmlFor="settings-voice">{chinese ? "Rosie 的声音" : "Rosie’s voice"}</label>
         <select
           id="settings-voice"
-          className={styles.settingsSelect}
+          className={`${styles.settingsSelect} ${styles.settingsControl}`}
           value={voiceValue}
           onChange={(event) => {
             setVoiceValue(event.target.value);
@@ -133,7 +133,7 @@ export function SettingsForm({
       </div>
 
       <div className={styles.settingsActions}>
-        <button className={styles.requestPrimaryButton} type="submit" disabled={busy}>
+        <button className={styles.settingsSaveButton} type="submit" disabled={busy}>
           <Save aria-hidden="true" />
           {busy ? (chinese ? "正在保存…" : "Saving…") : chinese ? "保存" : "Save changes"}
         </button>
