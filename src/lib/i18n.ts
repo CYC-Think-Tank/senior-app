@@ -15,11 +15,20 @@ export function normalizeLocale(value: string | undefined | null): Locale {
 }
 
 /**
- * The language Rosie speaks with someone who reads the app in `locale`. Both
- * Chinese locales differ only in script, which a spoken interview never shows.
+ * The language Rosie speaks with someone who reads the app in `locale`. The two
+ * Chinese locales share a written form but map to different spoken varieties:
+ * readers of Traditional Chinese hear Cantonese, readers of Simplified hear
+ * Mandarin.
  */
 export function interviewLanguage(locale: Locale) {
-  return locale === "en" ? "English" : "Chinese";
+  switch (locale) {
+    case "zh-Hant":
+      return "Cantonese";
+    case "zh-Hans":
+      return "Mandarin";
+    default:
+      return "English";
+  }
 }
 
 const en = {

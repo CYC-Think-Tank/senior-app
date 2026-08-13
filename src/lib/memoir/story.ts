@@ -73,7 +73,12 @@ export async function generateMemoirStory({
 
   const openai = new OpenAI();
   const source = await condenseLongTranscript(openai, transcript);
-  const narrationLength = language.toLowerCase().includes("chinese")
+  const spokenLanguage = language.toLowerCase();
+  const isChinese =
+    spokenLanguage.includes("chinese") ||
+    spokenLanguage.includes("cantonese") ||
+    spokenLanguage.includes("mandarin");
+  const narrationLength = isChinese
     ? "exactly 15 short sentences totaling 330–420 Chinese characters"
     : "exactly 15 short sentences totaling 180–255 words; keep every sentence at 17 words or fewer";
   const completion = await openai.chat.completions.create({
