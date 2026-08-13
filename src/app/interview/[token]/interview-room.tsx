@@ -23,12 +23,26 @@ import {
   type InterviewPhase,
   type InterviewResume,
 } from "@/lib/realtime/interview-client";
+import {
+  detectBackdrop,
+  type BackdropGroup,
+  type BackdropKey,
+} from "@/lib/realtime/icebreaker-backdrop";
 import type { TurnDraft } from "@/lib/types";
 import { formatTimestamp } from "@/components/ui";
 import { InterviewShell } from "@/components/interview-shell";
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import theme from "@/components/interview-theme.module.css";
 import { useI18n } from "@/components/i18n-provider";
+
+/**
+ * Only the opening exchanges are scanned for an icebreaker answer, so a season
+ * mentioned later inside a story cannot repaint the room mid-memory.
+ */
+const ICEBREAKER_GUEST_TURNS = 8;
+
+/** Long enough that a brisk reply from Rosie still leaves the image readable. */
+const BACKDROP_MIN_VISIBLE_MS = 3500;
 
 type Props = {
   token: string;
@@ -66,6 +80,11 @@ export default function InterviewRoom({
   const [wrappingUp, setWrappingUp] = useState(false);
   const [muted, setMuted] = useState(false);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const [backdrop, setBackdrop] = useState<BackdropKey | null>(null);
+  const backdropGroupsRef = useRef(new Set<BackdropGroup>());
+  const backdropScannedAtRef = useRef(-1);
+  const backdropShownAtRef = useRef(0);
+  const backdropAiRepliedRef = useRef(false);
   const [shareToken, setShareToken] = useState(initialShareToken);
   const [recordingConsentSaved, setRecordingConsentSaved] = useState(!recordingConsentRequired);
   const clientRef = useRef<InterviewClient | null>(null);
@@ -164,6 +183,64 @@ export default function InterviewRoom({
     const timeout = window.setTimeout(() => setConfirmingEnd(false), 4000);
     return () => window.clearTimeout(timeout);
   }, [confirmingEnd]);
+
+  // Raise the matching backdrop once the guest answers an icebreaker. Each
+  // icebreaker fires at most once, so a second mention cannot repaint the room.
+  useEffect(() => {
+    if (phase !== "live") return;
+    const guestTurns = turns.filter((turn) => turn.speaker === "guest");
+    if (guestTurns.length > ICEBREAKER_GUEST_TURNS) return;
+    const latest = guestTurns[guestTurns.length - 1];
+    if (!latest || latest.startMs === backdropScannedAtRef.current) return;
+    backdropScannedAtRef.current = latest.startMs;
+
+    const match = detectBackdrop(latest.text);
+    if (!match || backdropGroupsRef.current.has(match.group)) return;
+    backdropGroupsRef.current.add(match.group);
+    backdropAiRepliedRef.current = false;
+    backdropShownAtRef.current = Date.now();
+    setBackdrop(match.key);
+  }, [turns, phase]);
+
+  // "The question is finished" is Rosie having answered and fallen silent. The
+  // floor keeps a quick acknowledgement from flashing the image and losing it.
+  useEffect(() => {
+    if (!backdrop) return;
+    if (aiSpeaking) {
+      backdropAiRepliedRef.current = true;
+      return;
+    }
+    if (!backdropAiRepliedRef.current) return;
+
+    const held = Date.now() - backdropShownAtRef.current;
+    if (held >= BACKDROP_MIN_VISIBLE_MS) {
+      backdropAiRepliedRef.current = false;
+      setBackdrop(null);
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      backdropAiRepliedRef.current = false;
+      setBackdrop(null);
+    }, BACKDROP_MIN_VISIBLE_MS - held);
+    return () => window.clearTimeout(timeout);
+  }, [aiSpeaking, backdrop]);
+
+  // The atmosphere lives in the root layout, so the room asks for a backdrop
+  // the same way it asks for the lights to go down: an attribute on <html>.
+  useEffect(() => {
+    const root = document.documentElement;
+    // Derived rather than cleared on phase change: saving and the closing
+    // screens belong to the plain dark room, whatever was raised during it.
+    const active = phase === "live" ? backdrop : null;
+    if (active) {
+      root.dataset.interviewBackdrop = active;
+    } else {
+      delete root.dataset.interviewBackdrop;
+    }
+    return () => {
+      delete root.dataset.interviewBackdrop;
+    };
+  }, [backdrop, phase]);
 
   useEffect(() => {
     return () => {
