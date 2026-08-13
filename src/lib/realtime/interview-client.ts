@@ -894,6 +894,27 @@ export class InterviewClient {
     }
   }
 
+  /**
+   * Silences the guest at the source. The recorder tap and the level meter are
+   * wired upstream of `processedMicStream`, so disabling that stream — what
+   * wrap-up does — would still record a muted guest and still bounce the
+   * visualizer. Disabling the raw track feeds silence to the whole graph, so a
+   * muted stretch reaches neither Rosie nor the recording.
+   *
+   * Returns false when muting no longer applies, leaving the button as it was.
+   */
+  setMuted(muted: boolean) {
+    // Wrap-up has already cut the microphone; unmuting here would let a late
+    // guest turn race Rosie's closing.
+    if (this.stopped || this.wrapUpRequested) return false;
+    const tracks = this.micStream?.getAudioTracks() ?? [];
+    if (!tracks.length) return false;
+    tracks.forEach((track) => {
+      track.enabled = !muted;
+    });
+    return true;
+  }
+
   /** The guest pressed the finish button; deliver a warm closing, then end. */
   requestWrapUp() {
     this.beginWrapUp("warm_summary");

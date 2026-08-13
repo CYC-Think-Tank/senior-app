@@ -13,6 +13,8 @@ import {
   Copy,
   ExternalLink,
   Mic,
+  MicOff,
+  PhoneOff,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -62,6 +64,8 @@ export default function InterviewRoom({
   const [aiSpeaking, setAiSpeaking] = useState(false);
   const [userSpeaking, setUserSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [shareToken, setShareToken] = useState(initialShareToken);
   const [recordingConsentSaved, setRecordingConsentSaved] = useState(!recordingConsentRequired);
   const clientRef = useRef<InterviewClient | null>(null);
@@ -136,6 +140,30 @@ export default function InterviewRoom({
     clientRef.current = client;
     void client.start();
   }, [token, resume, recordingConsentSaved, t]);
+
+  const toggleMute = useCallback(() => {
+    const next = !muted;
+    // The client refuses once wrap-up has cut the microphone; leave the
+    // button showing what is actually true rather than what was asked for.
+    if (clientRef.current?.setMuted(next)) setMuted(next);
+  }, [muted]);
+
+  const endCall = useCallback(() => {
+    if (!confirmingEnd) {
+      setConfirmingEnd(true);
+      return;
+    }
+    setConfirmingEnd(false);
+    void clientRef.current?.stop();
+  }, [confirmingEnd]);
+
+  // A confirm that waits forever would eventually be tapped by accident, which
+  // is the thing it exists to prevent.
+  useEffect(() => {
+    if (!confirmingEnd) return;
+    const timeout = window.setTimeout(() => setConfirmingEnd(false), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [confirmingEnd]);
 
   useEffect(() => {
     return () => {
@@ -285,8 +313,15 @@ export default function InterviewRoom({
               />
             </div>
 
+            {/* Rosie still starts her own wrap-up when the guest says they are
+                done, so the state needs to stay visible now that the button
+                that used to announce it is gone. */}
             <p className={theme.liveLabel}>
-              {aiSpeaking ? t("interviewAiSpeaking") : t("interviewListening")}
+              {wrappingUp
+                ? t("interviewWrapBusy")
+                : aiSpeaking
+                  ? t("interviewAiSpeaking")
+                  : t("interviewListening")}
             </p>
 
             <div className={`${theme.caption} mx-auto mt-6 min-h-24 max-w-2xl`}>
@@ -301,17 +336,38 @@ export default function InterviewRoom({
 
             <div className={theme.actions}>
               <button
-                onClick={() => {
-                  setWrappingUp(true);
-                  clientRef.current?.requestWrapUp();
-                }}
+                type="button"
+                onClick={toggleMute}
                 disabled={wrappingUp}
-                className={theme.secondaryAction}
+                aria-pressed={muted}
+                className={theme.ghostAction}
               >
-                <Sparkles className="h-5 w-5" />
-                {t(wrappingUp ? "interviewWrapBusy" : "interviewWrap")}
+                {muted ? (
+                  <MicOff className="h-5 w-5" aria-hidden="true" />
+                ) : (
+                  <Mic className="h-5 w-5" aria-hidden="true" />
+                )}
+                {t(muted ? "interviewUnmute" : "interviewMute")}
+              </button>
+
+              {/* Stays enabled through wrap-up: someone who wants out now
+                  should not have to sit through Rosie's closing. */}
+              <button
+                type="button"
+                onClick={endCall}
+                data-confirming={confirmingEnd}
+                className={theme.endAction}
+              >
+                <PhoneOff className="h-5 w-5" aria-hidden="true" />
+                {t(confirmingEnd ? "interviewEndConfirm" : "interviewEndSave")}
               </button>
             </div>
+
+            {muted && (
+              <p className={theme.mutedNotice} role="status">
+                {t("interviewMutedNotice")}
+              </p>
+            )}
           </Screen>
         )}
 

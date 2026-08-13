@@ -4,6 +4,9 @@
   --room-faint: #666;
   --room-line: #2a2a2a;
   --room-ember: #df7d3b;
+  /* Dark enough to clear 5:1 against white label text. */
+  --room-alert: #c4342e;
+  --room-alert-hover: #d94b44;
   position: relative;
   isolation: isolate;
   z-index: 1;
@@ -445,13 +448,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Three controls have to survive a narrow phone without being squeezed
+     below a comfortable tap target. */
+  flex-wrap: wrap;
   gap: 0.625rem;
   margin-top: 2.25rem;
 }
 
+.mutedNotice {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  color: var(--room-white);
+  opacity: 0.75;
+}
+
 .secondaryAction,
 .primaryAction,
-.retryButton {
+.retryButton,
+.ghostAction,
+.endAction {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -496,6 +511,67 @@
   color: #000;
   background: var(--room-white);
   border: 1px solid var(--room-white);
+}
+
+/* Unmuted is the resting state, so it reads as a quiet outline; muting is the
+   condition worth shouting about, and fills red below. */
+.ghostAction {
+  color: var(--room-white);
+  background: transparent;
+  /* --room-line is a hairline for dividers; against this near-black room it
+     is far too faint to read as a tappable control. */
+  border: 1px solid var(--room-muted);
+}
+
+.ghostAction:hover:not(:disabled) {
+  border-color: var(--room-white);
+  transform: translateY(-1px);
+}
+
+.ghostAction[aria-pressed="true"] {
+  color: var(--room-white);
+  background: var(--room-alert);
+  border-color: var(--room-alert);
+}
+
+.ghostAction[aria-pressed="true"] svg {
+  color: var(--room-white);
+}
+
+/* Must follow the plain :hover rule — that one carries an extra :not() and
+   would otherwise win on specificity and paint the border white. */
+.ghostAction[aria-pressed="true"]:hover {
+  background: var(--room-alert-hover);
+  border-color: var(--room-alert-hover);
+  transform: translateY(-1px);
+}
+
+.ghostAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.endAction {
+  color: var(--room-white);
+  background: transparent;
+  border: 1px solid var(--room-muted);
+}
+
+.endAction:hover {
+  border-color: #f4a3a3;
+  color: #f4a3a3;
+  transform: translateY(-1px);
+}
+
+/* The confirm step is the only moment this control looks dangerous. */
+.endAction[data-confirming="true"] {
+  color: #000;
+  background: #f4a3a3;
+  border-color: #f4a3a3;
+}
+
+.endAction[data-confirming="true"] svg {
+  color: #000;
 }
 
 .primaryAction {
