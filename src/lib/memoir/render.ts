@@ -4,11 +4,12 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import {
-  MEMOIR_MAX_OUTPUT_SECONDS,
   MEMOIR_OUTPUT_HEIGHT,
   MEMOIR_OUTPUT_WIDTH,
   MEMOIR_SCENE_DURATION_SECONDS,
-} from "@/lib/constants";
+  MEMOIR_TRANSITION_SECONDS,
+} from "../constants";
+import { buildMemoirRenderPlan } from "./render-plan";
 
 async function runFfmpeg(args: string[]) {
   if (!ffmpegPath) throw new Error("ffmpeg binary not found.");
@@ -29,7 +30,18 @@ function durationFromLog(log: string) {
   return Math.round((Number(progress[1]) * 3600 + Number(progress[2]) * 60 + Number(progress[3])) * 1000);
 }
 
-export async function renderMemoirVideo(sceneVideos: Buffer[]) {
+export async function renderMemoirVideo(
+  sceneVideos: Buffer[],
+  {
+    sceneDurationSeconds = MEMOIR_SCENE_DURATION_SECONDS,
+    transitionSeconds = MEMOIR_TRANSITION_SECONDS,
+    narrationAudio,
+  }: {
+    sceneDurationSeconds?: number;
+    transitionSeconds?: number;
+    narrationAudio?: Buffer;
+  } = {},
+) {
   if (!sceneVideos.length) throw new Error("No completed scenes were available to render.");
   const directory = await mkdtemp(path.join(tmpdir(), "memoir-render-"));
   try {
@@ -39,24 +51,35 @@ export async function renderMemoirVideo(sceneVideos: Buffer[]) {
       return file;
     }));
     const outputPath = path.join(directory, "memoir.mp4");
+    const narrationPath = narrationAudio
+      ? path.join(directory, "narration.m4a")
+      : null;
+    if (narrationPath && narrationAudio) await writeFile(narrationPath, narrationAudio);
 
-    const inputs = scenePaths.flatMap((file) => ["-i", file]);
-    const videoFilters = scenePaths.map((_, index) =>
-      `[${index}:v]scale=${MEMOIR_OUTPUT_WIDTH}:${MEMOIR_OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${MEMOIR_OUTPUT_WIDTH}:${MEMOIR_OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,tpad=stop_mode=clone:stop_duration=${MEMOIR_SCENE_DURATION_SECONDS},trim=duration=${MEMOIR_SCENE_DURATION_SECONDS},setpts=PTS-STARTPTS,format=yuv420p[v${index}]`,
-    );
-    const audioFilters = scenePaths.map((_, index) =>
-      `[${index}:a]aresample=async=1:first_pts=0,apad=pad_dur=${MEMOIR_SCENE_DURATION_SECONDS},atrim=duration=${MEMOIR_SCENE_DURATION_SECONDS},asetpts=PTS-STARTPTS[a${index}]`,
-    );
-    const concatInputs = scenePaths.map((_, index) => `[v${index}][a${index}]`).join("");
-    const filter = `${videoFilters.join(";")};${audioFilters.join(";")};${concatInputs}concat=n=${scenePaths.length}:v=1:a=1[vout][aout]`;
+    const inputs = [...scenePaths, ...(narrationPath ? [narrationPath] : [])]
+      .flatMap((file) => ["-i", file]);
+    const plan = buildMemoirRenderPlan({
+      sceneCount: scenePaths.length,
+      sceneDurationSeconds,
+      transitionSeconds,
+      width: MEMOIR_OUTPUT_WIDTH,
+      height: MEMOIR_OUTPUT_HEIGHT,
+      includeSceneAudio: !narrationAudio,
+    });
+    const masterAudioLabel = "mastera";
+    const filter = narrationAudio
+      ? `${plan.filter};[${scenePaths.length}:a]aresample=48000:async=1:first_pts=0,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,apad=pad_dur=${plan.durationSeconds},atrim=duration=${plan.durationSeconds},asetpts=PTS-STARTPTS[${masterAudioLabel}]`
+      : plan.filter;
+    const audioLabel = narrationAudio ? masterAudioLabel : plan.audioLabel;
+    if (!audioLabel) throw new Error("The memoir render has no audio timeline.");
     const log = await runFfmpeg([
       "-y", ...inputs,
       "-filter_complex", filter,
-      "-map", "[vout]",
-      "-map", "[aout]",
+      "-map", `[${plan.videoLabel}]`,
+      "-map", `[${audioLabel}]`,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
       "-c:a", "aac", "-b:a", "160k",
-      "-t", String(MEMOIR_MAX_OUTPUT_SECONDS),
+      "-t", String(plan.durationSeconds),
       "-movflags", "+faststart", outputPath,
     ]);
     try {
@@ -65,7 +88,7 @@ export async function renderMemoirVideo(sceneVideos: Buffer[]) {
         "-map", "0:a:0", "-c", "copy", "-f", "null", "-",
       ]);
     } catch {
-      throw new Error("The rendered memoir is missing its SeeGen audio track.");
+      throw new Error("The rendered memoir is missing its master narration track.");
     }
     return { buffer: await readFile(outputPath), durationMs: durationFromLog(log) };
   } finally {

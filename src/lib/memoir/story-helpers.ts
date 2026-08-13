@@ -15,7 +15,10 @@ export function storytellerTranscript(turns: StoryTurn[]): string {
     .join("\n");
 }
 
-export const SEEGEN_AUDIO_PROMPT_MARKER = "AUDIO DIRECTION: Generate synchronized audio";
+/** New storyboards are silent; this marker also distinguishes retry layouts. */
+export const SEEGEN_SILENT_PROMPT_MARKER = "AUDIO DIRECTION: Generate no audio";
+/** Paid storyboards created before master narration shipped remain reusable. */
+export const LEGACY_SEEGEN_AUDIO_PROMPT_MARKER = "AUDIO DIRECTION: Generate synchronized audio";
 
 function usesCjkNarration(narration: string) {
   const compact = Array.from(narration).filter((character) => !/\s/u.test(character));
@@ -27,9 +30,9 @@ function usesCjkNarration(narration: string) {
 }
 
 /**
- * Gives every generated scene one unique portion of the narration. The chunks
- * are balanced so SeeGen can speak each one within its ten-second scene, and
- * together they contain the complete narration exactly once.
+ * Gives every generated scene one complete portion of the narration. These
+ * become independently timed TTS sentences on one final master audio track;
+ * Seedance never receives or cuts the spoken audio.
  */
 export function splitNarrationIntoScenes(narration: string, sceneCount: number) {
   const trimmed = narration.trim();
@@ -46,7 +49,7 @@ export function splitNarrationIntoScenes(narration: string, sceneCount: number) 
     throw new Error("The memoir narration is too short to cover every scene.");
   }
 
-  const maxUnitsPerScene = cjk ? 32 : 18;
+  const maxUnitsPerScene = cjk ? 46 : 24;
   if (units.length > sceneCount * maxUnitsPerScene) {
     throw new Error("The memoir narration is too long to fit inside the film.");
   }
@@ -93,13 +96,11 @@ CONTINUITY: ${visualBible}
 
 SHOT: ${description}
 
-${SEEGEN_AUDIO_PROMPT_MARKER} with the video. A warm older storyteller speaks the voiceover in a gentle, intimate, reflective voice. Speak the following voiceover once, clearly and verbatim:
-
-VOICEOVER FOR THIS SCENE ONLY:
+NARRATION CONTEXT FOR VISUAL TIMING ONLY:
 ${narration}
-END SCENE VOICEOVER
+END NARRATION CONTEXT
 
-Add only subtle natural ambience and restrained background music beneath the voice. Keep the narration easy to understand. Characters on screen must not speak.
+${SEEGEN_SILENT_PROMPT_MARKER}. Do not generate speech, music, ambience, or sound effects. Do not show the narration as text. Characters must not speak or move their lips as though speaking. A separately generated master narration will be synchronized during editing.
 
 Keep every recurring character, outfit, location, palette, and prop consistent with the continuity guide. Tell the moment visually without character dialogue or on-screen text.`;
 }

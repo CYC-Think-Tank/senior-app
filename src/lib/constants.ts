@@ -48,12 +48,20 @@ export const RAW_BUCKET = "raw-audio";
 export const STORY_VIDEOS_BUCKET = "story-videos";
 
 export const SEEGEN_MODEL = "sd2-mini";
-// Fifteen 10-second scenes produce a 2:30 memoir, safely inside the promised
-// two-to-three-minute range while staying within SeeGen's per-task limit.
-export const MEMOIR_MAX_OUTPUT_SECONDS = 150;
-export const MEMOIR_SCENE_DURATION_SECONDS = 10;
-export const MEMOIR_MIN_SCENES = 15;
-export const MEMOIR_MAX_SCENES = 15;
+// Pin memoir narration so one saved film never changes voice between retries.
+// OpenAI recommends cedar (along with marin) for its highest-quality built-in
+// speech, and the instruction-following TTS model lets us set a documentary
+// cadence without imitating the storyteller's real voice.
+export const MEMOIR_TTS_MODEL = "gpt-4o-mini-tts-2025-12-15";
+export const MEMOIR_TTS_VOICE = "cedar";
+// Nine 14-second scenes, overlapped by 0.75 seconds at each of eight joins,
+// produce exactly 120 seconds. Each shot still has a stable 12.5-second area
+// for its full narration sentence, within Seedance Mini's 15-second limit.
+export const MEMOIR_MAX_OUTPUT_SECONDS = 120;
+export const MEMOIR_SCENE_DURATION_SECONDS = 14;
+export const MEMOIR_TRANSITION_SECONDS = 0.75;
+export const MEMOIR_MIN_SCENES = 9;
+export const MEMOIR_MAX_SCENES = 9;
 export const MEMOIR_OUTPUT_WIDTH = 854;
 export const MEMOIR_OUTPUT_HEIGHT = 480;
 

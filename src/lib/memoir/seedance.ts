@@ -63,7 +63,10 @@ export async function createSeedanceScene(prompt: string, duration = MEMOIR_SCEN
         duration: `${Math.max(4, Math.min(MEMOIR_SCENE_DURATION_SECONDS, Math.round(duration)))}s`,
         resolution: "1280x720",
         outputResolution,
-        generateAudio: true,
+        // Narration is generated once on a separate master timeline. Asking
+        // Seedance for scene audio would reintroduce voice and word boundaries
+        // at every generated clip.
+        generateAudio: false,
       },
     }),
     signal: AbortSignal.timeout(60_000),
