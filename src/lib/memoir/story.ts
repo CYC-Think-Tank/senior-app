@@ -1,5 +1,9 @@
 import OpenAI from "openai";
-import { CHAT_MODEL, MEMOIR_SCENE_DURATION_SECONDS } from "@/lib/constants";
+import {
+  CHAT_MODEL,
+  MEMOIR_MIN_SCENES,
+  MEMOIR_SCENE_DURATION_SECONDS,
+} from "@/lib/constants";
 import type { TranscriptTurn } from "@/lib/types";
 import {
   buildSeedancePrompt,
@@ -73,14 +77,16 @@ export async function generateMemoirStory({
 
   const openai = new OpenAI();
   const source = await condenseLongTranscript(openai, transcript);
+  // interviewLanguage() names the spoken variety, not the script, so a
+  // Cantonese or Mandarin memoir never contains the word "Chinese".
   const spokenLanguage = language.toLowerCase();
   const isChinese =
     spokenLanguage.includes("chinese") ||
     spokenLanguage.includes("cantonese") ||
     spokenLanguage.includes("mandarin");
   const narrationLength = isChinese
-    ? "exactly 15 short sentences totaling 330–420 Chinese characters"
-    : "exactly 15 short sentences totaling 180–255 words; keep every sentence at 17 words or fewer";
+    ? `exactly ${MEMOIR_MIN_SCENES} short sentences totaling 324–396 Chinese characters; keep every sentence at 46 characters or fewer`
+    : `exactly ${MEMOIR_MIN_SCENES} short sentences totaling 180–207 words; keep every sentence at 23 words or fewer`;
   const completion = await openai.chat.completions.create({
     model: CHAT_MODEL,
     response_format: { type: "json_object" },
@@ -96,7 +102,7 @@ Rules:
 - The interviewer has already been removed. Never mention an interview, host, question, recording, or transcript.
 - Write in ${language}, matching the storyteller's natural language.
 - story: a compact first-person short story focused on the single main story or strongest connected arc.
-- narration: ${narrationLength}, first person, speech-friendly, warm and reflective, with a clear beginning, middle, and ending. It will be spoken by SeeGen's generated audio, not by ${guestName}.
+- narration: ${narrationLength}, first person, speech-friendly, warm and reflective, with a clear beginning, middle, and ending. It will be spoken by a disclosed synthetic narrator, not by ${guestName}.
 - title: specific and evocative, no more than eight words.
 - visual_bible: a concise continuity guide for recurring characters, ages at the time of the memory, clothing, locations, season, era, palette, and props. Describe only details supported by the source; keep unspecified traits generic.
 - Do not imitate or mention any entertainment company, franchise, trademarked character, or existing film.`,

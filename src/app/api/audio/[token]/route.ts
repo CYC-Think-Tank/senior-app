@@ -31,6 +31,15 @@ const MIME_BY_EXT: Record<string, string> = {
 const MAX_RANGE_BYTES = 4 * 1024 * 1024;
 
 /**
+ * How much ciphertext one storage read pulls in. A request with a Range header
+ * never exceeds `MAX_RANGE_BYTES`, so playback still costs a single read. An
+ * unranged request — what `<a download>` sends — has no such ceiling, so it
+ * walks the object one window at a time instead of buffering the whole thing
+ * and dropping it partway, which truncated saved files while playback worked.
+ */
+const READ_WINDOW_BYTES = MAX_RANGE_BYTES;
+
+/**
  * Serves a stored audio object to the player, decrypting it on the way out.
  * The token is minted by a page that already did its own authorization
  * (family membership, admin role, share token), so possession of an
@@ -148,25 +157,45 @@ async function serveSegmented(
     return new NextResponse(null, { headers: rangeHeaders(contentType, 0) });
   }
 
-  const { firstBlock, lastBlock, from, to } = cipherRangeFor(
-    header,
-    start,
-    end
+  const { firstBlock, lastBlock } = cipherRangeFor(header, start, end);
+  const blocksPerWindow = Math.max(
+    1,
+    Math.floor(READ_WINDOW_BYTES / header.blockSize)
   );
-  const cipher = await fetchObjectRange(grant.bucket, grant.path, from, to);
-  if (cipher === null) {
-    return NextResponse.json({ error: "Audio not found." }, { status: 404 });
-  }
 
   let index = firstBlock;
+  // The ciphertext currently in hand, and the offset it starts at. Refilled
+  // whenever the block being served falls past its end.
+  let window: { cipher: Buffer; from: number; lastBlock: number } | null = null;
+
   const body = new ReadableStream<Uint8Array>({
-    pull(controller) {
+    async pull(controller) {
       if (index > lastBlock) {
         controller.close();
         return;
       }
       try {
-        const plain = decryptBlock(cipher, from, header, index);
+        if (!window || index > window.lastBlock) {
+          const windowLast = Math.min(lastBlock, index + blocksPerWindow - 1);
+          const span = cipherRangeFor(
+            header,
+            index * header.blockSize,
+            windowLast * header.blockSize
+          );
+          const cipher = await fetchObjectRange(
+            grant.bucket,
+            grant.path,
+            span.from,
+            span.to
+          );
+          // The object existed when its header was read moments ago, so a miss
+          // here means it went away mid-stream. Headers are already sent.
+          if (cipher === null) {
+            throw new Error("The stored object disappeared mid-read.");
+          }
+          window = { cipher, from: span.from, lastBlock: windowLast };
+        }
+        const plain = decryptBlock(window.cipher, window.from, header, index);
         // Trim the first and last blocks down to the bytes actually asked for.
         const blockStart = index * header.blockSize;
         const sliceFrom = Math.max(0, start - blockStart);

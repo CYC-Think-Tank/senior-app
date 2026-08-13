@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { createAudioUrl, decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import {
+  MEMOIR_MAX_OUTPUT_SECONDS,
   MEMOIR_MAX_SCENES,
   MEMOIR_MIN_SCENES,
   MEMOIR_SCENE_DURATION_SECONDS,
@@ -15,7 +16,11 @@ import {
   generateMemoirStoryboard,
   generateMemoirStory,
 } from "./story";
-import { SEEGEN_AUDIO_PROMPT_MARKER } from "./story-helpers";
+import {
+  LEGACY_SEEGEN_AUDIO_PROMPT_MARKER,
+  SEEGEN_SILENT_PROMPT_MARKER,
+} from "./story-helpers";
+import { generateNarrationMaster } from "./narration";
 import { createSeedanceScene, getSeedanceScene, isSeegenTaskId } from "./seedance";
 
 type SceneRow = {
@@ -29,6 +34,11 @@ type SceneRow = {
   result_url: string | null;
   error_message: string | null;
 };
+
+// Jobs bought before audio crossfades shipped used this layout. Keep accepting
+// it on retry so a transient provider failure does not throw paid clips away.
+const LEGACY_SCENE_COUNT = 15;
+const LEGACY_SCENE_DURATION_SECONDS = 10;
 
 const now = () => new Date().toISOString();
 
@@ -45,6 +55,10 @@ export type PublicConversationVideo = {
 
 function sceneArchivePath(video: Pick<ConversationVideo, "id" | "session_id">, sceneIndex: number) {
   return `${video.session_id}/${video.id}/scenes/scene-${sceneIndex + 1}.mp4`;
+}
+
+function narrationArchivePath(video: Pick<ConversationVideo, "id" | "session_id">) {
+  return `${video.session_id}/${video.id}/narration.m4a`;
 }
 
 export async function publicConversationVideo(video: ConversationVideo): Promise<PublicConversationVideo> {
@@ -130,14 +144,25 @@ async function prepareConversationVideo(videoId: string) {
 
     const sceneCount = MEMOIR_MIN_SCENES;
     const scenes = await generateMemoirStoryboard({ ...story, sceneCount });
+    // Voice the approved storyboard before buying any Seedance tasks. If the
+    // script cannot fit naturally, the job fails without spending video credits.
+    const narrationMaster = await generateNarrationMaster(story.narration, sceneCount);
+    const narrationPath = narrationArchivePath(video);
+    const { error: narrationUploadError } = await admin.storage
+      .from(STORY_VIDEOS_BUCKET)
+      .upload(narrationPath, encryptAudio(narrationMaster.buffer), {
+        contentType: "application/octet-stream",
+        upsert: true,
+      });
+    if (narrationUploadError) throw narrationUploadError;
 
     await updateVideo(admin, video.id, {
       title: story.title,
       story_ciphertext: encryptMemoirText(video.id, "story", story.story),
       narration_ciphertext: encryptMemoirText(video.id, "narration", story.narration),
       visual_bible_ciphertext: encryptMemoirText(video.id, "visual-bible", story.visualBible),
-      narration_path: null,
-      duration_ms: scenes.length * MEMOIR_SCENE_DURATION_SECONDS * 1000,
+      narration_path: narrationPath,
+      duration_ms: MEMOIR_MAX_OUTPUT_SECONDS * 1000,
     });
 
     const sceneRows = scenes.map((scene, idx) => ({
@@ -198,19 +223,27 @@ export async function startConversationVideo(
       .select("*")
       .eq("video_id", video.id)
       .order("idx");
-    const hasCurrentStoryboard = Boolean(
-      reusableScenes
-      && reusableScenes.length >= MEMOIR_MIN_SCENES
-      && reusableScenes.length <= MEMOIR_MAX_SCENES
-      && (reusableScenes as SceneRow[]).every(
-        (scene) => scene.duration_seconds <= MEMOIR_SCENE_DURATION_SECONDS,
-      )
-      && (reusableScenes as SceneRow[]).every((scene) =>
-        decryptMemoirText(video.id, `scene-${scene.idx}`, scene.prompt_ciphertext)
-          .includes(SEEGEN_AUDIO_PROMPT_MARKER),
-      )
+    const sceneRows = (reusableScenes ?? []) as SceneRow[];
+    const hasCurrentLayout =
+      sceneRows.length >= MEMOIR_MIN_SCENES &&
+      sceneRows.length <= MEMOIR_MAX_SCENES &&
+      sceneRows.every(
+        (scene) => scene.duration_seconds === MEMOIR_SCENE_DURATION_SECONDS,
+      );
+    const hasLegacyLayout =
+      sceneRows.length === LEGACY_SCENE_COUNT &&
+      sceneRows.every(
+        (scene) => scene.duration_seconds === LEGACY_SCENE_DURATION_SECONDS,
+      );
+    const hasReusableStoryboard = Boolean(
+      (hasCurrentLayout || hasLegacyLayout)
+      && sceneRows.every((scene) => {
+        const prompt = decryptMemoirText(video.id, `scene-${scene.idx}`, scene.prompt_ciphertext);
+        return prompt.includes(SEEGEN_SILENT_PROMPT_MARKER)
+          || prompt.includes(LEGACY_SEEGEN_AUDIO_PROMPT_MARKER);
+      })
     );
-    if (!canRegenerate && video.narration_ciphertext && hasCurrentStoryboard) {
+    if (!canRegenerate && video.narration_ciphertext && hasReusableStoryboard) {
       // Keep the completed story, script, and storyboard on every provider
       // retry. Keep paid SeeGen tasks, but discard task IDs from the previous
       // provider so they are never queried through the wrong API.
@@ -308,12 +341,57 @@ async function readArchivedScene(
   return archiveSceneVideo(admin, video, scene, scene.result_url);
 }
 
+async function readNarrationMaster(
+  admin: SupabaseClient,
+  video: ConversationVideo,
+  scenes: SceneRow[],
+) {
+  if (video.narration_path) {
+    const { data, error } = await admin.storage
+      .from(STORY_VIDEOS_BUCKET)
+      .download(video.narration_path);
+    if (error || !data) {
+      throw error ?? new Error("The saved master narration could not be downloaded.");
+    }
+    return decryptAudio(Buffer.from(await data.arrayBuffer()));
+  }
+  if (!video.narration_ciphertext) {
+    throw new Error("The memoir has no narration script to voice.");
+  }
+  const sceneDurationSeconds = scenes[0]?.duration_seconds;
+  if (!sceneDurationSeconds) throw new Error("The memoir has no scenes to synchronize.");
+  const narration = decryptMemoirText(video.id, "narration", video.narration_ciphertext);
+  const generated = await generateNarrationMaster(narration, scenes.length, {
+    sceneDurationSeconds,
+  });
+  const path = narrationArchivePath(video);
+  const { error } = await admin.storage.from(STORY_VIDEOS_BUCKET).upload(
+    path,
+    encryptAudio(generated.buffer),
+    { contentType: "application/octet-stream", upsert: true },
+  );
+  if (error) throw error;
+  await updateVideo(admin, video.id, { narration_path: path });
+  return generated.buffer;
+}
+
 async function renderCompletedVideo(admin: SupabaseClient, video: ConversationVideo, scenes: SceneRow[]) {
   const ordered = [...scenes].sort((a, b) => a.idx - b.idx);
+  const sceneDurationSeconds = ordered[0]?.duration_seconds;
+  if (
+    !sceneDurationSeconds ||
+    ordered.some((scene) => scene.duration_seconds !== sceneDurationSeconds)
+  ) {
+    throw new Error("The memoir scenes do not share one render duration.");
+  }
   const sceneBuffers = await Promise.all(
     ordered.map((scene) => readArchivedScene(admin, video, scene)),
   );
-  const rendered = await renderMemoirVideo(sceneBuffers);
+  const narrationAudio = await readNarrationMaster(admin, video, ordered);
+  const rendered = await renderMemoirVideo(sceneBuffers, {
+    sceneDurationSeconds,
+    narrationAudio,
+  });
   const videoPath = `${video.session_id}/${video.id}/memoir-${Date.now()}.mp4`;
   const { error: uploadError } = await admin.storage.from(STORY_VIDEOS_BUCKET).upload(
     videoPath,
