@@ -93,6 +93,24 @@ test("uses private continuity for a safe new-conversation icebreaker", () => {
   assert.match(prompt, /Never mention these notes/);
 });
 
+test("a first conversation opens on the preset icebreakers instead", () => {
+  const prompt = buildInterviewerInstructions({ guestName: "Ada" });
+
+  assert.doesNotMatch(prompt, /Private continuity context/);
+  assert.match(prompt, /go straight into the icebreakers below/);
+  assert.match(prompt, /Tea or coffee\?/);
+});
+
+test("the preset icebreakers stay available when memory is too thin to open on", () => {
+  const prompt = buildInterviewerInstructions({
+    guestName: "Ada",
+    memorySummary: "Interests and hobbies:\n- Gardening",
+  });
+
+  assert.match(prompt, /fall back to the preset icebreakers below/);
+  assert.match(prompt, /Tea or coffee\?/);
+});
+
 test("an interrupted conversation resumes instead of starting a memory icebreaker", () => {
   const prompt = buildInterviewerInstructions({
     guestName: "Ada",

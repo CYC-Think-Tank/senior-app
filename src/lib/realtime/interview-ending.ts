@@ -13,7 +13,7 @@ export const GUEST_FINISH_TOOL = {
   type: "function",
   name: GUEST_FINISH_TOOL_NAME,
   description:
-    "Finish the current interview only after the guest unmistakably authorizes ending it in their current turn: they directly say farewell to Rosie, directly ask to stop, or clearly confirm they are ready to finish after Rosie asks. Never call this because time has passed, the conversation feels complete, the guest is quiet, or a story contains a quoted, remembered, hypothetical, or discussed farewell. When uncertain, keep the interview going.",
+    "Finish the current interview only after the guest unmistakably authorizes ending it in their current turn: they directly say farewell to Rosie, directly ask to stop, or clearly confirm they are ready to finish after Rosie asks. Never call this because time has passed, the conversation feels complete, the guest is quiet, or a story contains a quoted, remembered, hypothetical, or discussed farewell. When uncertain, keep the interview going. Call this immediately and without speaking — no goodbye, no thanks, no announcement that the interview is ending. This call must be the whole turn; the closing words come back in the tool's response.",
   parameters: {
     type: "object",
     additionalProperties: false,

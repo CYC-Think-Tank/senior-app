@@ -1,23 +1,11 @@
 "use server";
 
-import { headers } from "next/headers";
 import { normalizeEmail } from "@/lib/email";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type PasswordResetRequestResult =
   | { ok: true }
   | { ok: false; error: string };
-
-function requestOrigin(headerStore: Awaited<ReturnType<typeof headers>>) {
-  const host =
-    headerStore.get("x-forwarded-host") ?? headerStore.get("host");
-  if (!host) return null;
-
-  const protocol =
-    headerStore.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
-}
 
 export async function requestPasswordReset(
   emailInput: string,
@@ -27,14 +15,7 @@ export async function requestPasswordReset(
     return { ok: false, error: "Enter a valid email address." };
   }
 
-  const origin = requestOrigin(await headers());
-  if (!origin) {
-    console.error("Could not determine the password-reset origin.");
-    return {
-      ok: false,
-      error: "We couldn’t send the reset link. Please try again.",
-    };
-  }
+  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {

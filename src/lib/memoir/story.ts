@@ -77,7 +77,14 @@ export async function generateMemoirStory({
 
   const openai = new OpenAI();
   const source = await condenseLongTranscript(openai, transcript);
-  const narrationLength = language.toLowerCase().includes("chinese")
+  // interviewLanguage() names the spoken variety, not the script, so a
+  // Cantonese or Mandarin memoir never contains the word "Chinese".
+  const spokenLanguage = language.toLowerCase();
+  const isChinese =
+    spokenLanguage.includes("chinese") ||
+    spokenLanguage.includes("cantonese") ||
+    spokenLanguage.includes("mandarin");
+  const narrationLength = isChinese
     ? `exactly ${MEMOIR_MIN_SCENES} short sentences totaling 324–396 Chinese characters; keep every sentence at 46 characters or fewer`
     : `exactly ${MEMOIR_MIN_SCENES} short sentences totaling 180–207 words; keep every sentence at 23 words or fewer`;
   const completion = await openai.chat.completions.create({
