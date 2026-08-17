@@ -49,13 +49,13 @@ export async function sendAuthEmail({
     subject,
     html: `<!doctype html>
 <html lang="en">
-  <body style="margin:0;background:#f7f2e9;color:#332b26;font-family:Arial,sans-serif;padding:32px 16px">
-    <div style="max-width:560px;margin:0 auto;background:#fffdf8;border:1px solid #e6ddd0;border-radius:16px;padding:32px">
-      <p style="margin:0 0 20px;color:#a85235;font-size:18px;font-weight:700">${APP_NAME}</p>
+  <body style="margin:0;background:#f6efeb;color:#34242a;font-family:Arial,sans-serif;padding:32px 16px">
+    <div style="max-width:560px;margin:0 auto;background:#fffaf5;border:1px solid #e2d4d7;border-radius:16px;padding:32px">
+      <p style="margin:0 0 20px;color:#a64f6d;font-size:18px;font-weight:700">${APP_NAME}</p>
       <h1 style="margin:0 0 12px;font-family:Georgia,serif;font-size:28px;line-height:1.2">${heading}</h1>
-      <p style="margin:0 0 24px;color:#625850;font-size:16px;line-height:1.6">${introduction}</p>
-      <a href="${safeActionLink}" style="display:inline-block;border-radius:10px;background:#a85235;color:#ffffff;padding:13px 20px;text-decoration:none;font-weight:700">${buttonLabel}</a>
-      <p style="margin:24px 0 0;color:#8a7f76;font-size:13px;line-height:1.5">If you didn’t request this email, you can safely ignore it.</p>
+      <p style="margin:0 0 24px;color:#745f66;font-size:16px;line-height:1.6">${introduction}</p>
+      <a href="${safeActionLink}" style="display:inline-block;border-radius:10px;background:#a64f6d;color:#ffffff;padding:13px 20px;text-decoration:none;font-weight:700">${buttonLabel}</a>
+      <p style="margin:24px 0 0;color:#a38e95;font-size:13px;line-height:1.5">If you didn’t request this email, you can safely ignore it.</p>
     </div>
   </body>
 </html>`,

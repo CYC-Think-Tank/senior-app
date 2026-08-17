@@ -32,7 +32,7 @@ export default function ResetPasswordPage() {
       if (result.ok) setSaved(true);
       else setError(result.error);
     } catch {
-      setError("We couldn’t update your password. Please try again.");
+      setError(t("passwordResetError"));
     } finally {
       setBusy(false);
     }
@@ -54,7 +54,7 @@ export default function ResetPasswordPage() {
         <div className={styles.wrap}>
           <div className={styles.panel}>
             <div className={styles.panelTop}>
-              <p className={styles.eyebrow}>WiseShare</p>
+              <p className={styles.eyebrow}>{locale === "en" ? "WiseShare" : "仁慧享"}</p>
               <LanguageSwitcher tone="bare" />
             </div>
             <h1 className={styles.heading}>{t("passwordResetTitle")}</h1>

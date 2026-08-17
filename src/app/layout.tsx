@@ -4,7 +4,7 @@ import {
   Geist,
   Playfair_Display,
 } from "next/font/google";
-import { APP_NAME, TAGLINE } from "@/lib/constants";
+import { APP_NAME, APP_NAME_ZH, TAGLINE } from "@/lib/constants";
 import { I18nProvider } from "@/components/i18n-provider";
 import { InterviewAtmosphere } from "@/components/interview-atmosphere";
 import { PageEntrance } from "@/components/page-entrance";
@@ -30,6 +30,7 @@ const geistSans = Geist({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getPreferredLocale();
   const headerStore = await headers();
   const forwardedHost = headerStore.get("x-forwarded-host");
   const host = forwardedHost?.split(",")[0]?.trim() || headerStore.get("host");
@@ -38,13 +39,15 @@ export async function generateMetadata(): Promise<Metadata> {
     forwardedProtocol?.split(",")[0]?.trim() ||
     (host?.startsWith("localhost") ? "http" : "https");
   const socialImage = host ? `${protocol}://${host}/og.png` : undefined;
-  const title = `${APP_NAME} — ${TAGLINE}`;
-  const description = translate("en", "appDescription");
+  const appName = locale === "en" ? APP_NAME : APP_NAME_ZH;
+  const tagline = locale === "en" ? TAGLINE : translate(locale, "landingFooterNote");
+  const title = `${appName} — ${tagline}`;
+  const description = translate(locale, "appDescription");
 
   return {
     title: {
       default: title,
-      template: `%s · ${APP_NAME}`,
+      template: `%s · ${appName}`,
     },
     description,
     openGraph: {
@@ -57,7 +60,7 @@ export async function generateMetadata(): Promise<Metadata> {
               url: socialImage,
               width: 1731,
               height: 909,
-              alt: `${APP_NAME} — ${TAGLINE}`,
+              alt: title,
             },
           ]
         : undefined,
@@ -85,7 +88,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <InterviewAtmosphere />
-        <I18nProvider locale={locale}>
+        <I18nProvider key={locale} locale={locale}>
           <div data-language-page className="contents">
             <PageEntrance>{children}</PageEntrance>
           </div>

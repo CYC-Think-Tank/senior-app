@@ -2,6 +2,8 @@
 
 import { validateNewPassword } from "@/lib/password";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 
 export type PasswordResetResult =
   | { ok: true }
@@ -10,8 +12,10 @@ export type PasswordResetResult =
 export async function resetPassword(
   password: string,
 ): Promise<PasswordResetResult> {
+  const locale = await getPreferredLocale();
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const passwordError = validateNewPassword(password);
-  if (passwordError) return { ok: false, error: passwordError };
+  if (passwordError) return { ok: false, error: t("authPasswordMin") };
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -22,7 +26,7 @@ export async function resetPassword(
   if (userError || !user) {
     return {
       ok: false,
-      error: "This reset link has expired. Request a new one.",
+      error: t("passwordResetExpired"),
     };
   }
 
@@ -31,7 +35,7 @@ export async function resetPassword(
     console.error("Could not update the password:", error);
     return {
       ok: false,
-      error: "We couldn’t update your password. Please try again.",
+      error: t("passwordResetError"),
     };
   }
 

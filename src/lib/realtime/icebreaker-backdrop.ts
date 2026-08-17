@@ -21,13 +21,15 @@ export type BackdropMatch = { key: BackdropKey; group: BackdropGroup };
 
 // Chinese writes no word boundaries, so those patterns match the bare
 // character; Cantonese and Mandarin share the written form.
+// "Springtime" and "summertime" are ordinary answers, so the seasons tolerate
+// that suffix. "Tea" stays strict: a loose prefix would fire on "teach".
 const PATTERNS: Array<BackdropMatch & { tests: RegExp[] }> = [
-  { key: "spring", group: "season", tests: [/\bspring\b/g, /春/g] },
-  { key: "summer", group: "season", tests: [/\bsummer\b/g, /夏/g] },
+  { key: "spring", group: "season", tests: [/\bspring(?:time)?\b/g, /春/g] },
+  { key: "summer", group: "season", tests: [/\bsummer(?:time)?\b/g, /夏/g] },
   { key: "autumn", group: "season", tests: [/\bautumn\b/g, /\bfall\b/g, /秋/g] },
-  { key: "winter", group: "season", tests: [/\bwinter\b/g, /冬/g] },
+  { key: "winter", group: "season", tests: [/\bwinter(?:time)?\b/g, /冬/g] },
   { key: "tea", group: "beverage", tests: [/\btea\b/g, /茶/g] },
-  { key: "coffee", group: "beverage", tests: [/\bcoffee\b/g, /咖啡/g] },
+  { key: "coffee", group: "beverage", tests: [/\bcoffees?\b/g, /咖啡/g] },
 ];
 
 /**

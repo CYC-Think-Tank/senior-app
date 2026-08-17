@@ -312,7 +312,7 @@ export async function startMyConversation() {
   const [{ data: existing }, { data: profile }] = await Promise.all([
     admin
       .from("guests")
-      .select("id, name")
+      .select("id, name, language")
       .eq("user_id", user.id)
       .maybeSingle(),
     admin
@@ -325,13 +325,17 @@ export async function startMyConversation() {
   let guestId: string;
   const email = profile?.email ?? user.email ?? "";
   const currentName = personName(profile?.display_name, email);
+  const currentLanguage = interviewLanguage(locale);
 
   if (existing) {
     guestId = existing.id;
-    if (existing.name !== currentName) {
+    if (
+      existing.name !== currentName ||
+      existing.language !== currentLanguage
+    ) {
       const { error: guestError } = await admin
         .from("guests")
-        .update({ name: currentName })
+        .update({ name: currentName, language: currentLanguage })
         .eq("id", guestId);
 
       if (guestError) {
@@ -347,7 +351,7 @@ export async function startMyConversation() {
       .insert({
         user_id: user.id,
         name: currentName,
-        language: interviewLanguage(locale),
+        language: currentLanguage,
         origin: "self_serve",
       })
       .select("id")

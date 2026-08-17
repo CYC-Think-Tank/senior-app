@@ -4,15 +4,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validateNewPassword } from "@/lib/password";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
-import { localeCookieName, normalizeLocale } from "@/lib/i18n";
+import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import { normalizeEmail } from "@/lib/email";
 
 export type SignUpResult =
   | { ok: true; redirectTo: string }
   | { ok: false; error: string };
-
-const SIGN_UP_ERROR =
-  "We couldn’t create your account. Please wait a moment and try again.";
 
 export async function signUpWithPassword(
   nameInput: string,
@@ -24,6 +21,7 @@ export async function signUpWithPassword(
   const locale = normalizeLocale(
     (await cookies()).get(localeCookieName)?.value,
   );
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
   if (
     name.length < 1 ||
@@ -31,15 +29,15 @@ export async function signUpWithPassword(
     !/\p{L}/u.test(name) ||
     /[\p{Cc}\p{Cf}]/u.test(name)
   ) {
-    return { ok: false, error: "Enter your name." };
+    return { ok: false, error: t("signupNameError") };
   }
 
   if (!email) {
-    return { ok: false, error: "Enter a valid email address." };
+    return { ok: false, error: t("authEmailInvalid") };
   }
 
   const passwordError = validateNewPassword(password);
-  if (passwordError) return { ok: false, error: passwordError };
+  if (passwordError) return { ok: false, error: t("authPasswordMin") };
 
   const admin = createSupabaseAdminClient();
   // Exact match, never `ilike`: `%` and `_` are legal in an email's local part
@@ -54,13 +52,13 @@ export async function signUpWithPassword(
 
   if (profileLookupError) {
     console.error("Could not check for an existing profile:", profileLookupError);
-    return { ok: false, error: SIGN_UP_ERROR };
+    return { ok: false, error: t("signupError") };
   }
 
   if (existingProfile) {
     return {
       ok: false,
-      error: "An account with this email already exists. Sign in instead.",
+      error: t("signupAccountExists"),
     };
   }
 
@@ -73,7 +71,7 @@ export async function signUpWithPassword(
 
   if (error || !data.user?.id) {
     console.error("Could not create a password account:", error);
-    return { ok: false, error: SIGN_UP_ERROR };
+    return { ok: false, error: t("signupError") };
   }
 
   // Exact match for the same reason as the profile lookup above, and here it
@@ -100,7 +98,7 @@ export async function signUpWithPassword(
 
   if (profileError) {
     console.error("Could not create the signed-up profile:", profileError);
-    return { ok: false, error: SIGN_UP_ERROR };
+    return { ok: false, error: t("signupError") };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -110,7 +108,7 @@ export async function signUpWithPassword(
   });
   if (signInError) {
     console.error("Could not sign in after password sign-up:", signInError);
-    return { ok: false, error: SIGN_UP_ERROR };
+    return { ok: false, error: t("signupError") };
   }
 
   return { ok: true, redirectTo: role === "admin" ? "/admin" : "/dashboard" };

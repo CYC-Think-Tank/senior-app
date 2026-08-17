@@ -4,6 +4,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import type { InterviewResume } from "@/lib/realtime/interview-client";
+import { I18nProvider } from "@/components/i18n-provider";
+import { localeForInterviewLanguage } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 import InterviewRoom from "./interview-room";
 
 // Token-gated page: the unguessable URL is the credential, so the senior
@@ -19,7 +22,7 @@ export default async function InterviewPage({
   const { data: session } = await admin
     .from("sessions")
     .select(
-      "id, status, topic, duration_ms, share_token, recording_consent_at, guests(name, user_id)"
+      "id, status, topic, duration_ms, share_token, recording_consent_at, guests(name, user_id, language)"
     )
     .eq("token", token)
     .single();
@@ -29,6 +32,7 @@ export default async function InterviewPage({
   const guest = session.guests as unknown as {
     name: string;
     user_id: string | null;
+    language: string;
   };
   const guestName = await resolveCurrentGuestName(admin, guest);
   const supabase = await createSupabaseServerClient();
@@ -76,17 +80,23 @@ export default async function InterviewPage({
     }
   }
 
+  const interviewLocale = guest.user_id
+    ? await getPreferredLocale()
+    : localeForInterviewLanguage(guest.language);
+
   return (
-    <InterviewRoom
-      token={token}
-      guestName={guestName}
-      topic={session.topic}
-      initialShareToken={session.share_token}
-      alreadyRecorded={session.status === "ready"}
-      isLoggedIn={Boolean(user)}
-      homeHref={homeHref}
-      resume={resume}
-      recordingConsentRequired={!session.recording_consent_at}
-    />
+    <I18nProvider key={interviewLocale} locale={interviewLocale}>
+      <InterviewRoom
+        token={token}
+        guestName={guestName}
+        topic={session.topic}
+        initialShareToken={session.share_token}
+        alreadyRecorded={session.status === "ready"}
+        isLoggedIn={Boolean(user)}
+        homeHref={homeHref}
+        resume={resume}
+        recordingConsentRequired={!session.recording_consent_at}
+      />
+    </I18nProvider>
   );
 }

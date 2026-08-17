@@ -12,6 +12,7 @@ import {
   type StartConversationState,
 } from "./actions";
 import theme from "@/components/interview-theme.module.css";
+import { useI18n } from "@/components/i18n-provider";
 
 const initialState: StartConversationState = {
   error: null,
@@ -24,6 +25,7 @@ function capitalizeName(value: string) {
 }
 
 export function StartForm() {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [focused, setFocused] = useState(true);
   const [leaving, setLeaving] = useState(false);
@@ -67,7 +69,7 @@ export function StartForm() {
         }}
       >
         <label htmlFor="name" className={theme.visuallyHidden}>
-          Your name
+          {t("interviewNameLabel")}
         </label>
         <div className={`${theme.formRow} ${!name ? theme.empty : ""}`}>
           <input
@@ -91,7 +93,11 @@ export function StartForm() {
             type="submit"
             disabled={pending || (leaving && !state.error)}
             className={theme.submitButton}
-            aria-label={pending || leaving ? "Getting ready..." : "Continue"}
+            aria-label={
+              pending || leaving
+                ? t("interviewPreparingGreeting")
+                : t("interviewContinue")
+            }
           >
             <ArrowRight aria-hidden="true" />
           </button>
@@ -110,7 +116,7 @@ export function StartForm() {
         <div
           className={theme.nameTransitionSkeleton}
           role="status"
-          aria-label="Preparing your greeting."
+          aria-label={t("interviewPreparingGreeting")}
         >
           <span className={theme.nameSkeletonLine} aria-hidden="true" />
         </div>

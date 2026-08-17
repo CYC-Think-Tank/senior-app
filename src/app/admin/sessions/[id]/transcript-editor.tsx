@@ -11,6 +11,7 @@ import {
   formatTimestamp,
 } from "@/components/ui";
 import type { Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
+import { useI18n } from "@/components/i18n-provider";
 
 type Props = {
   session: InterviewSession;
@@ -25,6 +26,12 @@ export default function TranscriptEditor({
   initialTurns,
   audioUrl,
 }: Props) {
+  const { locale } = useI18n();
+  const copy = locale === "en"
+    ? { recorded: "Recorded", raw: "raw", kept: "kept", noAudio: "Raw audio not available for this session.", instructions: "Click a line to mark it as cut. Click a timestamp to listen from there.", cut: "cut", empty: "No transcript was captured for this session.", play: "Play from here", restore: "Restore this line", cutLine: "Cut this line" }
+    : locale === "zh-Hans"
+      ? { recorded: "录制于", raw: "原始时长", kept: "保留时长", noAudio: "此访谈没有可用的原始音频。", instructions: "点击一行可将其标记为剪除；点击时间可从该处播放。", cut: "已剪除", empty: "此访谈没有文字记录。", play: "从这里播放", restore: "恢复这一行", cutLine: "剪除这一行" }
+      : { recorded: "錄製於", raw: "原始時長", kept: "保留時長", noAudio: "此訪談沒有可用的原始音訊。", instructions: "點擊一行可將其標記為剪除；點擊時間可從該處播放。", cut: "已剪除", empty: "此訪談沒有逐字稿。", play: "從這裡播放", restore: "還原這一行", cutLine: "剪除這一行" };
   const audioRef = useRef<HTMLAudioElement>(null);
   const durationPrimedRef = useRef(false);
   const [turns, setTurns] = useState(initialTurns);
@@ -90,11 +97,11 @@ export default function TranscriptEditor({
           {session.topic ? ` — ${session.topic}` : ""}
         </h1>
         <p className="mt-1 text-ink-soft">
-          Recorded{" "}
+          {copy.recorded}{" "}
           {session.started_at
-            ? new Date(session.started_at).toLocaleString()
+            ? new Date(session.started_at).toLocaleString(locale)
             : "—"}{" "}
-          · raw {formatDuration(session.duration_ms)} · kept ≈{" "}
+          · {copy.raw} {formatDuration(session.duration_ms)} · {copy.kept} ≈{" "}
           {formatDuration(keptMs)}
         </p>
       </div>
@@ -112,7 +119,7 @@ export default function TranscriptEditor({
         </Card>
       ) : (
         <Card className="p-4 text-sm text-ink-soft">
-          Raw audio not available for this session.
+          {copy.noAudio}
         </Card>
       )}
 
@@ -120,14 +127,13 @@ export default function TranscriptEditor({
         <div className="flex items-center justify-between px-5 py-3 text-sm text-ink-soft">
           <span>
             <Scissors className="mr-1.5 inline h-4 w-4" />
-            Click a line to mark it as cut. Click a timestamp to listen from
-            there.
+            {copy.instructions}
           </span>
-          <Badge>{turns.filter((t) => t.excluded).length} cut</Badge>
+          <Badge>{turns.filter((t) => t.excluded).length} {copy.cut}</Badge>
         </div>
         {turns.length === 0 && (
           <p className="px-5 py-8 text-center text-ink-soft">
-            No transcript was captured for this session.
+            {copy.empty}
           </p>
         )}
         {turns.map((turn) => (
@@ -140,7 +146,7 @@ export default function TranscriptEditor({
             <button
               onClick={() => seekTo(turn.start_ms)}
               className="mt-0.5 h-fit shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-ink-faint hover:bg-ember-soft hover:text-ember-deep"
-              title="Play from here"
+              title={copy.play}
             >
               <Play className="mr-1 inline h-3 w-3" />
               {formatTimestamp(turn.start_ms)}
@@ -148,7 +154,7 @@ export default function TranscriptEditor({
             <button
               onClick={() => toggle(turn)}
               className="flex-1 text-left"
-              title={turn.excluded ? "Restore this line" : "Cut this line"}
+              title={turn.excluded ? copy.restore : copy.cutLine}
             >
               <span
                 className={`mb-0.5 block text-xs font-semibold uppercase tracking-wide ${

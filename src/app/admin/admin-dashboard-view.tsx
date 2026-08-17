@@ -22,6 +22,8 @@ export type AdminDashboardCopy = {
   ready: string;
   recording: string;
   pending: string;
+  activityAria: string;
+  statsAria: string;
 };
 
 export type UsagePoint = { key: string; value: number };
@@ -39,7 +41,7 @@ type Props = {
 
 type LabeledUsagePoint = UsagePoint & { label: string };
 
-function ActivityChart({ usage }: { usage: LabeledUsagePoint[] }) {
+function ActivityChart({ usage, ariaLabel }: { usage: LabeledUsagePoint[]; ariaLabel: string }) {
   const width = 760;
   const height = 250;
   const left = 34;
@@ -62,7 +64,7 @@ function ActivityChart({ usage }: { usage: LabeledUsagePoint[] }) {
       className={styles.chart}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="Conversation activity over the last seven days"
+      aria-label={ariaLabel}
     >
       <defs>
         <linearGradient id="activity-area" x1="0" y1="0" x2="0" y2="1">
@@ -135,7 +137,7 @@ export function AdminDashboardView({
         </div>
       </header>
 
-      <section className={styles.statsGrid} aria-label="Dashboard statistics">
+      <section className={styles.statsGrid} aria-label={copy.statsAria}>
         {[
           { label: copy.totalUsers, value: numberFormatter.format(totalUsers), meta: `${registeredUsers} ${copy.registered.toLowerCase()}`, icon: Users },
           { label: copy.recordingsToday, value: numberFormatter.format(recordingsToday), meta: copy.lastSevenDays, icon: Mic2 },
@@ -161,7 +163,7 @@ export function AdminDashboardView({
             </div>
             <strong>{numberFormatter.format(localizedUsage.reduce((total, point) => total + point.value, 0))}</strong>
           </div>
-          <ActivityChart usage={localizedUsage} />
+          <ActivityChart usage={localizedUsage} ariaLabel={copy.activityAria} />
         </article>
 
         <div className={styles.breakdowns}>

@@ -82,7 +82,14 @@ export default function InterviewRoom({
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [backdrop, setBackdrop] = useState<BackdropKey | null>(null);
   const backdropGroupsRef = useRef(new Set<BackdropGroup>());
-  const backdropScannedAtRef = useRef(-1);
+  // Turns restored from an earlier sitting are already spoken; counting them as
+  // this session's would push the icebreaker window past its limit before the
+  // guest has said a word.
+  const resumedGuestTurns = (resume?.turns ?? []).filter(
+    (turn) => turn.speaker === "guest",
+  ).length;
+  const backdropScannedRef = useRef(resumedGuestTurns);
+  const backdropBaselineRef = useRef(resumedGuestTurns);
   const backdropShownAtRef = useRef(0);
   const backdropAiRepliedRef = useRef(false);
   const [shareToken, setShareToken] = useState(initialShareToken);
@@ -189,17 +196,35 @@ export default function InterviewRoom({
   useEffect(() => {
     if (phase !== "live") return;
     const guestTurns = turns.filter((turn) => turn.speaker === "guest");
-    if (guestTurns.length > ICEBREAKER_GUEST_TURNS) return;
-    const latest = guestTurns[guestTurns.length - 1];
-    if (!latest || latest.startMs === backdropScannedAtRef.current) return;
-    backdropScannedAtRef.current = latest.startMs;
+    // Measured from where this sitting began, so resuming a long conversation
+    // does not start already past the window.
+    if (guestTurns.length - backdropBaselineRef.current > ICEBREAKER_GUEST_TURNS) {
+      return;
+    }
+    // Every turn not yet looked at, rather than only the newest: React batches
+    // state updates, so two transcripts landing together would otherwise let
+    // the first one through unread.
+    const unscanned = guestTurns.slice(backdropScannedRef.current);
+    if (!unscanned.length) return;
+    const spokenBefore = backdropScannedRef.current;
+    backdropScannedRef.current = guestTurns.length;
 
-    const match = detectBackdrop(latest.text);
-    if (!match || backdropGroupsRef.current.has(match.group)) return;
-    backdropGroupsRef.current.add(match.group);
-    backdropAiRepliedRef.current = false;
-    backdropShownAtRef.current = Date.now();
-    setBackdrop(match.key);
+    for (const [offset, turn] of unscanned.entries()) {
+      const match = detectBackdrop(turn.text);
+      console.info(
+        "[backdrop] guest turn",
+        spokenBefore + offset + 1,
+        JSON.stringify(turn.text),
+        "->",
+        match ? `${match.key} (${match.group})` : "no match",
+        match && backdropGroupsRef.current.has(match.group) ? "(already used)" : "",
+      );
+      if (!match || backdropGroupsRef.current.has(match.group)) continue;
+      backdropGroupsRef.current.add(match.group);
+      backdropAiRepliedRef.current = false;
+      backdropShownAtRef.current = Date.now();
+      setBackdrop(match.key);
+    }
   }, [turns, phase]);
 
   // "The question is finished" is Rosie having answered and fallen silent. The
@@ -232,6 +257,7 @@ export default function InterviewRoom({
     // Derived rather than cleared on phase change: saving and the closing
     // screens belong to the plain dark room, whatever was raised during it.
     const active = phase === "live" ? backdrop : null;
+    console.info("[backdrop] data-interview-backdrop =", active ?? "(none)");
     if (active) {
       root.dataset.interviewBackdrop = active;
     } else {

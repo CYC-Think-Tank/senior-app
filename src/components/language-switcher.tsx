@@ -35,6 +35,11 @@ export function LanguageSwitcher({
   const swapTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
   const displayLocale = optimisticLocale ?? locale;
+  const languageLabel = displayLocale === "en"
+    ? "Language"
+    : displayLocale === "zh-Hans"
+      ? "语言"
+      : "語言";
 
   useEffect(
     () => () => {
@@ -192,7 +197,7 @@ export function LanguageSwitcher({
         aria-hidden={!open}
       >
         <span className={styles.menuClip}>
-          <span className={styles.menu} role="menu" aria-label="Language">
+          <span className={styles.menu} role="menu" aria-label={languageLabel}>
             {locales.map((availableLocale, index) => {
               const selected = availableLocale === displayLocale;
               return (
@@ -243,7 +248,7 @@ export function LanguageSwitcher({
         }}
         disabled={preparing || pending}
         aria-busy={preparing || pending}
-        aria-label="Language"
+        aria-label={languageLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}

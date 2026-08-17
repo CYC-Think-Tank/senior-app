@@ -1,7 +1,7 @@
 // Branding is a placeholder — swap APP_NAME/TAGLINE when a real name is chosen.
 export const APP_NAME = "WiseShare";
 // Both Chinese locales share one wordmark; only the surrounding copy differs.
-export const APP_NAME_ZH = "慧仁享";
+export const APP_NAME_ZH = "仁慧享";
 export const TAGLINE = "Every life is worth the telling.";
 
 // Use the faster, lower-cost distilled realtime model for interview sessions.

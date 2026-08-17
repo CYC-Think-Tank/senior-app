@@ -9,8 +9,6 @@ export function Wordmark({
   tone?: "ink" | "light";
   locale?: Locale;
 }) {
-  // The ember full stop is a Latin typographic flourish; after 慧仁享 it reads
-  // as a stray period, so the Chinese wordmark carries the name alone.
   const chinese = locale !== "en";
 
   return (
@@ -21,11 +19,6 @@ export function Wordmark({
       }`}
     >
       {chinese ? APP_NAME_ZH : APP_NAME}
-      {chinese ? null : (
-        <span className={tone === "light" ? "text-[#ffd19c]" : "text-ember"}>
-          .
-        </span>
-      )}
     </Link>
   );
 }

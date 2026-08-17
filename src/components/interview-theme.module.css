@@ -55,43 +55,66 @@
   position: fixed;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   opacity: 0;
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-  filter: saturate(0.82);
   transition: opacity 1100ms cubic-bezier(0.45, 0, 0.55, 1);
   pointer-events: none;
 }
 
+/**
+ * The photo carries the blur on its own layer. A filter on .backdrop would
+ * blur the grain along with it, and grain has to stay sharp to read as grain.
+ */
+.backdrop::before {
+  position: absolute;
+  /* Bleeds past the viewport so the blur pulls in image, not transparency. */
+  inset: -3%;
+  background-image: var(--backdrop-veil), var(--backdrop-photo, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: blur(7px) saturate(0.82);
+  content: "";
+}
+
+/* Fractal noise, inline so it costs no request. */
+.backdrop::after {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  content: "";
+}
+
 :global(html[data-interview-backdrop="spring"]) .backdrop {
   opacity: 1;
-  background-image: var(--backdrop-veil), url("/spring.jpg");
+  --backdrop-photo: url("/spring.jpg");
 }
 
 :global(html[data-interview-backdrop="summer"]) .backdrop {
   opacity: 1;
-  background-image: var(--backdrop-veil), url("/summer.jpg");
+  --backdrop-photo: url("/summer.jpg");
 }
 
 :global(html[data-interview-backdrop="autumn"]) .backdrop {
   opacity: 1;
-  background-image: var(--backdrop-veil), url("/autumn.jpg");
+  --backdrop-photo: url("/autumn.jpg");
 }
 
 :global(html[data-interview-backdrop="winter"]) .backdrop {
   opacity: 1;
-  background-image: var(--backdrop-veil), url("/winter.jpg");
+  --backdrop-photo: url("/winter.jpg");
 }
 
 :global(html[data-interview-backdrop="tea"]) .backdrop {
   opacity: 1;
-  background-image: var(--backdrop-veil), url("/tea.jpg");
+  --backdrop-photo: url("/tea.jpg");
 }
 
 :global(html[data-interview-backdrop="coffee"]) .backdrop {
   opacity: 1;
-  background-image: var(--backdrop-veil), url("/coffee.jpg");
+  --backdrop-photo: url("/coffee.jpg");
 }
 
 @media (prefers-reduced-motion: reduce) {

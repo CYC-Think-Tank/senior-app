@@ -47,7 +47,7 @@ const copy = {
   },
   "zh-Hans": {
     home: "首页",
-    eyebrow: "来自慧仁享的分享",
+    eyebrow: "来自仁慧享的分享",
     defaultTitle: (name: string) => `与${name}的对话`,
     intro: (name: string) =>
       `${name}与你分享了一段珍贵的录音。慢慢听，在故事里坐一会儿。`,
@@ -63,7 +63,7 @@ const copy = {
   },
   "zh-Hant": {
     home: "首頁",
-    eyebrow: "來自慧仁享的分享",
+    eyebrow: "來自仁慧享的分享",
     defaultTitle: (name: string) => `與${name}的對話`,
     intro: (name: string) =>
       `${name}與你分享了一段珍貴的錄音。慢慢聽，在故事裡坐一會兒。`,
@@ -127,7 +127,10 @@ export default async function SharedConversationPage({
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <Wordmark tone="light" locale={locale} />
-          <nav className={styles.nav} aria-label="Public navigation">
+          <nav
+            className={styles.nav}
+            aria-label={locale === "en" ? "Public navigation" : locale === "zh-Hans" ? "公开导航" : "公開導覽"}
+          >
             <Link href="/dashboard">{pageCopy.home}</Link>
           </nav>
           <div className={styles.headerTools}>

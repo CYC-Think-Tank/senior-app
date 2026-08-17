@@ -2,7 +2,12 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { interviewLanguage, localeCookieName, normalizeLocale } from "@/lib/i18n";
+import {
+  interviewLanguage,
+  localeCookieName,
+  normalizeLocale,
+  translate,
+} from "@/lib/i18n";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type StartConversationState = {
@@ -61,13 +66,18 @@ export async function startConversation(
   _previousState: StartConversationState,
   formData: FormData,
 ): Promise<StartConversationState> {
+  const locale = normalizeLocale(
+    (await cookies()).get(localeCookieName)?.value,
+  );
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+
   if (String(formData.get("website") ?? "").trim()) {
-    return { error: "We couldn't start the conversation. Please try again." };
+    return { error: t("interviewStartGenericError") };
   }
 
   if (await isRateLimited()) {
     return {
-      error: "Please wait a few minutes before starting another conversation.",
+      error: t("interviewStartRateLimit"),
     };
   }
 
@@ -82,12 +92,9 @@ export async function startConversation(
     !/\p{L}/u.test(name) ||
     /[\p{Cc}\p{Cf}]/u.test(name)
   ) {
-    return { error: "Enter the name you would like Rosie to use." };
+    return { error: t("interviewStartNameError") };
   }
 
-  const locale = normalizeLocale(
-    (await cookies()).get(localeCookieName)?.value,
-  );
   const language = interviewLanguage(locale);
   const admin = createSupabaseAdminClient();
   const { data: guest, error: guestError } = await admin
@@ -98,7 +105,7 @@ export async function startConversation(
 
   if (guestError || !guest) {
     console.error("Could not create a public conversation guest:", guestError);
-    return { error: "We couldn't start the conversation. Please try again." };
+    return { error: t("interviewStartGenericError") };
   }
 
   const { data: session, error: sessionError } = await admin
@@ -113,7 +120,7 @@ export async function startConversation(
       sessionError,
     );
     await admin.from("guests").delete().eq("id", guest.id);
-    return { error: "We couldn't start the conversation. Please try again." };
+    return { error: t("interviewStartGenericError") };
   }
 
   redirect(`/interview/${session.token}`);

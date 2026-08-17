@@ -3,28 +3,27 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { normalizeEmail } from "@/lib/email";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 
 export type PasswordSignInResult =
   | { ok: true; redirectTo: string }
   | { ok: false; error: string };
-
-const SIGN_IN_ERROR =
-  "We couldn’t sign you in. Please wait a moment and try again.";
-const ACCOUNT_NOT_FOUND = "Account not found";
-const INCORRECT_PASSWORD = "Incorrect password";
 
 export async function signInWithPassword(
   emailInput: string,
   password: string,
 ): Promise<PasswordSignInResult> {
   const email = normalizeEmail(emailInput);
+  const locale = await getPreferredLocale();
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
   if (!email) {
-    return { ok: false, error: "Enter a valid email address." };
+    return { ok: false, error: t("authEmailInvalid") };
   }
 
   if (!password) {
-    return { ok: false, error: "Enter your password." };
+    return { ok: false, error: t("authPasswordRequired") };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -47,11 +46,11 @@ export async function signInWithPassword(
       .maybeSingle();
     if (lookupError) {
       console.error("Could not check for an existing account:", lookupError);
-      return { ok: false, error: SIGN_IN_ERROR };
+      return { ok: false, error: t("loginError") };
     }
     return {
       ok: false,
-      error: account ? INCORRECT_PASSWORD : ACCOUNT_NOT_FOUND,
+      error: account ? t("loginIncorrectPassword") : t("loginAccountNotFound"),
     };
   }
 
@@ -66,7 +65,7 @@ export async function signInWithPassword(
   if (profileError || !profile) {
     await supabase.auth.signOut();
     console.error("Could not load the signed-in profile:", profileError);
-    return { ok: false, error: SIGN_IN_ERROR };
+    return { ok: false, error: t("loginError") };
   }
 
   return {

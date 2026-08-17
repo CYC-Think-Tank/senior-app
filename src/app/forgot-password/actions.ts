@@ -2,6 +2,8 @@
 
 import { normalizeEmail } from "@/lib/email";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { translate } from "@/lib/i18n";
+import { getPreferredLocale } from "@/lib/preferred-locale";
 
 export type PasswordResetRequestResult =
   | { ok: true }
@@ -11,8 +13,10 @@ export async function requestPasswordReset(
   emailInput: string,
 ): Promise<PasswordResetRequestResult> {
   const email = normalizeEmail(emailInput);
+  const locale = await getPreferredLocale();
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   if (!email) {
-    return { ok: false, error: "Enter a valid email address." };
+    return { ok: false, error: t("authEmailInvalid") };
   }
 
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -26,7 +30,7 @@ export async function requestPasswordReset(
     console.error("Could not send a password-reset email:", error);
     return {
       ok: false,
-      error: "We couldn’t send the reset link. Please try again.",
+      error: t("passwordResetRequestError"),
     };
   }
 

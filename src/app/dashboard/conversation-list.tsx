@@ -11,7 +11,63 @@ import { CircleShareToggle } from "./circle-share-toggle";
 import { ConfirmDialog } from "./confirm-dialog";
 import { formatDuration } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
+import type { Locale } from "@/lib/i18n";
 import styles from "./senior-dashboard.module.css";
+
+const copyByLocale: Record<Locale, {
+  name: string;
+  save: string;
+  cancel: string;
+  saveError: string;
+  inProgress: string;
+  unfinished: string;
+  listen: string;
+  rename: string;
+  export: string;
+  share: string;
+  delete: string;
+  emptyTitle: string;
+  emptyBody: string;
+  recording: string;
+  date: string;
+  actions: string;
+  deleteTitle: (name: string) => string;
+  deleteBody: string;
+  deleteError: string;
+  keep: string;
+  deleting: string;
+  deletePermanently: string;
+}> = {
+  en: {
+    name: "Conversation name", save: "Save", cancel: "Cancel", saveError: "Could not save",
+    inProgress: "In progress", unfinished: "Not finished yet · Select to continue", listen: "Select to listen",
+    rename: "Rename", export: "Export", share: "Share", delete: "Delete",
+    emptyTitle: "No conversations yet", emptyBody: "After your first conversation, the recording will appear here.",
+    recording: "Recording", date: "Date", actions: "Actions",
+    deleteTitle: (name) => `Delete “${name}”?`,
+    deleteBody: "This permanently deletes the recording and cannot be undone.",
+    deleteError: "Could not delete it. Please try again.", keep: "Keep recording",
+    deleting: "Deleting…", deletePermanently: "Delete permanently",
+  },
+  "zh-Hans": {
+    name: "对话名称", save: "保存", cancel: "取消", saveError: "无法保存",
+    inProgress: "进行中", unfinished: "尚未完成 · 点击继续", listen: "点击收听",
+    rename: "重命名", export: "导出", share: "分享", delete: "删除",
+    emptyTitle: "还没有对话", emptyBody: "开始第一次对话后，录音会显示在这里。",
+    recording: "录音", date: "日期", actions: "操作",
+    deleteTitle: (name) => `删除“${name}”？`, deleteBody: "这将永久删除录音，无法撤销。",
+    deleteError: "无法删除，请重试。", keep: "保留录音", deleting: "正在删除…", deletePermanently: "永久删除",
+  },
+  "zh-Hant": {
+    name: "對話名稱", save: "儲存", cancel: "取消", saveError: "無法儲存",
+    inProgress: "進行中", unfinished: "尚未完成 · 點擊繼續", listen: "點擊收聽",
+    rename: "重新命名", export: "匯出", share: "分享", delete: "刪除",
+    emptyTitle: "還沒有對話", emptyBody: "開始第一次對話後，錄音會顯示在這裡。",
+    recording: "錄音", date: "日期", actions: "操作",
+    deleteTitle: (name) => `刪除「${name}」？`, deleteBody: "這將永久刪除錄音，無法復原。",
+    deleteError: "無法刪除，請重試。", keep: "保留錄音", deleting: "正在刪除…", deletePermanently: "永久刪除",
+  },
+};
 
 function ConversationItem({
   conversation,
@@ -24,7 +80,7 @@ function ConversationItem({
 }) {
   const router = useRouter();
   const { locale } = useI18n();
-  const chinese = locale !== "en";
+  const copy = copyByLocale[locale];
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(conversation.title ?? "");
   const [busy, setBusy] = useState(false);
@@ -58,11 +114,11 @@ function ConversationItem({
             className={styles.editInput}
             value={value}
             maxLength={120}
-            aria-label={chinese ? "对话名称" : "Conversation name"}
+            aria-label={copy.name}
             onChange={(event) => setValue(event.target.value)}
           />
           <button className={styles.rowButton} type="submit" disabled={busy}>
-            <Save aria-hidden="true" /> {chinese ? "保存" : "Save"}
+            <Save aria-hidden="true" /> {copy.save}
           </button>
           <button
             className={styles.rowButton}
@@ -73,9 +129,9 @@ function ConversationItem({
               setError(false);
             }}
           >
-            <X aria-hidden="true" /> {chinese ? "取消" : "Cancel"}
+            <X aria-hidden="true" /> {copy.cancel}
           </button>
-          {error ? <span>{chinese ? "无法保存" : "Could not save"}</span> : null}
+          {error ? <span>{copy.saveError}</span> : null}
         </form>
       ) : (
         <Link className={styles.conversationMain} href={`/dashboard/${conversation.id}`}>
@@ -83,15 +139,13 @@ function ConversationItem({
             <span className={styles.conversationNameRow}>
               <span className={styles.conversationName}>{conversation.name}</span>
               {conversation.unfinished ? (
-                <span className={styles.statusPill}>{chinese ? "进行中" : "In progress"}</span>
+                <span className={styles.statusPill}>{copy.inProgress}</span>
               ) : null}
             </span>
             <span className={styles.conversationMeta}>
               {conversation.unfinished
-                ? chinese
-                  ? "尚未完成 · 点击继续"
-                  : "Not finished yet · Select to continue"
-                : `${formatDuration(conversation.durationMs)} · ${chinese ? "点击收听" : "Select to listen"}`}
+                ? copy.unfinished
+                : `${formatDuration(conversation.durationMs)} · ${copy.listen}`}
             </span>
           </span>
         </Link>
@@ -106,7 +160,7 @@ function ConversationItem({
       {!editing ? (
         <div className={styles.rowActions}>
           <button className={styles.rowButton} type="button" onClick={() => setEditing(true)}>
-            <Pencil aria-hidden="true" /> {chinese ? "重命名" : "Rename"}
+            <Pencil aria-hidden="true" /> {copy.rename}
           </button>
           <a
             className={styles.rowButton}
@@ -114,11 +168,7 @@ function ConversationItem({
             download
           >
             <Download aria-hidden="true" />{" "}
-            {locale === "zh-Hant"
-              ? "匯出"
-              : locale === "zh-Hans"
-                ? "导出"
-                : "Export"}
+            {copy.export}
           </a>
           {conversation.unfinished ? null : (
             <>
@@ -127,7 +177,7 @@ function ConversationItem({
                 initialToken={conversation.shareToken}
                 origin={origin}
                 buttonClassName={styles.rowButton}
-                label={chinese ? "分享" : "Share"}
+                label={copy.share}
               />
               <CircleShareToggle
                 sessionId={conversation.id}
@@ -141,7 +191,7 @@ function ConversationItem({
             type="button"
             onClick={onDelete}
           >
-            <Trash2 aria-hidden="true" /> {chinese ? "删除" : "Delete"}
+            <Trash2 aria-hidden="true" /> {copy.delete}
           </button>
         </div>
       ) : null}
@@ -158,7 +208,7 @@ export function ConversationList({
 }) {
   const router = useRouter();
   const { locale } = useI18n();
-  const chinese = locale !== "en";
+  const copy = copyByLocale[locale];
   const [deleteTarget, setDeleteTarget] = useState<FamilyConversation | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
@@ -186,8 +236,8 @@ export function ConversationList({
     return (
       <div className={`${styles.conversationTable} ${styles.emptyState}`}>
         <Headphones aria-hidden="true" />
-        <h2>{chinese ? "还没有对话" : "No conversations yet"}</h2>
-        <p>{chinese ? "开始第一次对话后，录音会显示在这里。" : "After your first conversation, the recording will appear here."}</p>
+        <h2>{copy.emptyTitle}</h2>
+        <p>{copy.emptyBody}</p>
       </div>
     );
   }
@@ -196,9 +246,9 @@ export function ConversationList({
     <>
       <div className={styles.conversationTable}>
         <div className={styles.conversationHeader} aria-hidden="true">
-          <span>{chinese ? "录音" : "Recording"}</span>
-          <span>{chinese ? "日期" : "Date"}</span>
-          <span>{chinese ? "操作" : "Actions"}</span>
+          <span>{copy.recording}</span>
+          <span>{copy.date}</span>
+          <span>{copy.actions}</span>
         </div>
         {conversations.map((conversation) => (
           <ConversationItem
@@ -215,28 +265,18 @@ export function ConversationList({
 
       {deleteTarget ? (
         <ConfirmDialog
-          title={chinese ? `删除“${deleteTarget.name}”？` : `Delete “${deleteTarget.name}”?`}
-          body={
-            chinese
-              ? "这将永久删除录音，无法撤销。"
-              : "This permanently deletes the recording and cannot be undone."
-          }
+          title={copy.deleteTitle(deleteTarget.name)}
+          body={copy.deleteBody}
           error={
             deleteError
-              ? chinese
-                ? "无法删除，请重试。"
-                : "Could not delete it. Please try again."
+              ? copy.deleteError
               : undefined
           }
-          cancelLabel={chinese ? "保留录音" : "Keep recording"}
+          cancelLabel={copy.keep}
           confirmLabel={
             deleting
-              ? chinese
-                ? "正在删除…"
-                : "Deleting…"
-              : chinese
-                ? "永久删除"
-                : "Delete permanently"
+              ? copy.deleting
+              : copy.deletePermanently
           }
           busy={deleting}
           onCancel={() => setDeleteTarget(null)}

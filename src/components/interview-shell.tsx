@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { useI18n } from "@/components/i18n-provider";
 import theme from "./interview-theme.module.css";
 
 export function InterviewShell({
@@ -11,6 +12,8 @@ export function InterviewShell({
   children: React.ReactNode;
   homeHref?: string;
 }) {
+  const { locale, t } = useI18n();
+
   useEffect(() => {
     document.documentElement.removeAttribute("data-page-transition");
     document.documentElement.removeAttribute("data-page-elements-leaving");
@@ -22,9 +25,9 @@ export function InterviewShell({
         <Link
           href={homeHref}
           className={theme.homeLink}
-          aria-label="WiseShare home"
+          aria-label={t("landingHomeAria")}
         >
-          WiseShare.
+          {locale === "en" ? "WiseShare" : "仁慧享"}
         </Link>
       ) : null}
       <div className={theme.content}>{children}</div>

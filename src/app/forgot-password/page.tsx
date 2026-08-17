@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
       if (result.ok) setSent(true);
       else setError(result.error);
     } catch {
-      setError("We couldn’t send the reset link. Please try again.");
+      setError(t("passwordResetRequestError"));
     } finally {
       setBusy(false);
     }
@@ -49,7 +49,7 @@ export default function ForgotPasswordPage() {
         <div className={styles.wrap}>
           <div className={styles.panel}>
             <div className={styles.panelTop}>
-              <p className={styles.eyebrow}>WiseShare</p>
+              <p className={styles.eyebrow}>{locale === "en" ? "WiseShare" : "仁慧享"}</p>
               <LanguageSwitcher tone="bare" />
             </div>
             <h1 className={styles.heading}>{t("passwordResetRequestTitle")}</h1>

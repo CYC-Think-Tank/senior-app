@@ -6,6 +6,7 @@ import { Check, Save } from "lucide-react";
 import { updateMyProfile } from "../actions";
 import { useI18n } from "@/components/i18n-provider";
 import { REALTIME_VOICE, REALTIME_VOICES } from "@/lib/constants";
+import type { Locale } from "@/lib/i18n";
 import styles from "../senior-dashboard.module.css";
 
 /**
@@ -15,6 +16,64 @@ import styles from "../senior-dashboard.module.css";
 function voiceLabel(voice: string) {
   return voice.charAt(0).toUpperCase() + voice.slice(1);
 }
+
+const copyByLocale: Record<Locale, {
+  name: string;
+  nameHint: string;
+  bio: string;
+  bioPlaceholder: string;
+  bioHint: string;
+  voice: string;
+  defaultVoice: string;
+  voiceHint: string;
+  saving: string;
+  save: string;
+  saved: string;
+  error: string;
+}> = {
+  en: {
+    name: "Your name",
+    nameHint: "Rosie calls you by this name, and your family sees it on your recordings.",
+    bio: "About you",
+    bioPlaceholder: "For example: I grew up in Guangzhou, taught school for thirty years, and have two grandchildren.",
+    bioHint: "A few sentences about your life. The more Rosie knows, the better her questions will be.",
+    voice: "Rosie’s voice",
+    defaultVoice: " (default)",
+    voiceHint: "Takes effect the next time a conversation starts. The voice cannot change partway through one.",
+    saving: "Saving…",
+    save: "Save changes",
+    saved: "Saved",
+    error: "Could not save your changes. Please try again.",
+  },
+  "zh-Hans": {
+    name: "您的名字",
+    nameHint: "Rosie 会这样称呼您，家人也会在录音列表里看到这个名字。",
+    bio: "关于您",
+    bioPlaceholder: "例如：我在广州长大，做了三十年老师，有两个孙子。",
+    bioHint: "写下几句关于您的生活。知道得越多，Rosie 的问题就越贴近您。",
+    voice: "Rosie 的声音",
+    defaultVoice: "（默认）",
+    voiceHint: "下次对话开始时生效。对话进行中无法更换声音。",
+    saving: "正在保存…",
+    save: "保存",
+    saved: "已保存",
+    error: "无法保存，请重试。",
+  },
+  "zh-Hant": {
+    name: "您的名字",
+    nameHint: "Rosie 會這樣稱呼您，家人也會在錄音列表裡看到這個名字。",
+    bio: "關於您",
+    bioPlaceholder: "例如：我在廣州長大，做了三十年老師，有兩個孫子。",
+    bioHint: "寫下幾句關於您的生活。知道得越多，Rosie 的問題就越貼近您。",
+    voice: "Rosie 的聲音",
+    defaultVoice: "（預設）",
+    voiceHint: "下次對話開始時生效。對話進行中無法更換聲音。",
+    saving: "正在儲存…",
+    save: "儲存",
+    saved: "已儲存",
+    error: "無法儲存，請重試。",
+  },
+};
 
 export function SettingsForm({
   name,
@@ -29,7 +88,7 @@ export function SettingsForm({
 }) {
   const router = useRouter();
   const { locale } = useI18n();
-  const chinese = locale !== "en";
+  const copy = copyByLocale[locale];
   const [nameValue, setNameValue] = useState(name);
   const [bioValue, setBioValue] = useState(bio);
   const [voiceValue, setVoiceValue] = useState(voice);
@@ -60,7 +119,7 @@ export function SettingsForm({
   return (
     <form className={styles.settingsCard} onSubmit={save}>
       <div className={styles.settingsField}>
-        <label htmlFor="settings-name">{chinese ? "您的名字" : "Your name"}</label>
+        <label htmlFor="settings-name">{copy.name}</label>
         <input
           id="settings-name"
           className={`${styles.settingsInput} ${styles.settingsControl}`}
@@ -74,39 +133,31 @@ export function SettingsForm({
           }}
         />
         <p className={styles.settingsHint}>
-          {chinese
-            ? "Rosie 会这样称呼您，家人也会在录音列表里看到这个名字。"
-            : "Rosie calls you by this name, and your family sees it on your recordings."}
+          {copy.nameHint}
         </p>
       </div>
 
       <div className={styles.settingsField}>
-        <label htmlFor="settings-bio">{chinese ? "关于您" : "About you"}</label>
+        <label htmlFor="settings-bio">{copy.bio}</label>
         <textarea
           id="settings-bio"
           className={`${styles.settingsTextarea} ${styles.settingsControl}`}
           value={bioValue}
           maxLength={1000}
           rows={6}
-          placeholder={
-            chinese
-              ? "例如：我在广州长大，做了三十年老师，有两个孙子。"
-              : "For example: I grew up in Guangzhou, taught school for thirty years, and have two grandchildren."
-          }
+          placeholder={copy.bioPlaceholder}
           onChange={(event) => {
             setBioValue(event.target.value);
             setSaved(false);
           }}
         />
         <p className={styles.settingsHint}>
-          {chinese
-            ? "写下几句关于您的生活。知道得越多，Rosie 的问题就越贴近您。"
-            : "A few sentences about your life. The more Rosie knows, the better her questions will be."}
+          {copy.bioHint}
         </p>
       </div>
 
       <div className={styles.settingsField}>
-        <label htmlFor="settings-voice">{chinese ? "Rosie 的声音" : "Rosie’s voice"}</label>
+        <label htmlFor="settings-voice">{copy.voice}</label>
         <select
           id="settings-voice"
           className={`${styles.settingsSelect} ${styles.settingsControl}`}
@@ -119,35 +170,31 @@ export function SettingsForm({
           {REALTIME_VOICES.map((option) => (
             <option value={option} key={option}>
               {voiceLabel(option)}
-              {option === REALTIME_VOICE
-                ? chinese ? "（默认）" : " (default)"
-                : ""}
+              {option === REALTIME_VOICE ? copy.defaultVoice : ""}
             </option>
           ))}
         </select>
         <p className={styles.settingsHint}>
-          {chinese
-            ? "下次对话开始时生效。对话进行中无法更换声音。"
-            : "Takes effect the next time a conversation starts. The voice cannot change partway through one."}
+          {copy.voiceHint}
         </p>
       </div>
 
       <div className={styles.settingsActions}>
         <button className={styles.settingsSaveButton} type="submit" disabled={busy}>
           <Save aria-hidden="true" />
-          {busy ? (chinese ? "正在保存…" : "Saving…") : chinese ? "保存" : "Save changes"}
+          {busy ? copy.saving : copy.save}
         </button>
         <p aria-live="polite" className={styles.settingsStatus}>
           {saved ? (
             <>
-              <Check aria-hidden="true" /> {chinese ? "已保存" : "Saved"}
+              <Check aria-hidden="true" /> {copy.saved}
             </>
           ) : null}
         </p>
       </div>
       {error ? (
         <p className={styles.settingsError}>
-          {chinese ? "无法保存，请重试。" : "Could not save your changes. Please try again."}
+          {copy.error}
         </p>
       ) : null}
     </form>

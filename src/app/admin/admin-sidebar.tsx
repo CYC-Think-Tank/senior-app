@@ -18,6 +18,8 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { locale, t } = useI18n();
+  const workspace = locale === "en" ? "Workspace" : locale === "zh-Hans" ? "工作区" : "工作區";
+  const navigation = locale === "en" ? "Admin navigation" : locale === "zh-Hans" ? "管理员导航" : "管理員導覽";
   const items = [
     {
       href: "/admin",
@@ -36,8 +38,8 @@ export function AdminSidebar() {
   return (
     <aside className={portalStyles.adminSidebar}>
       <div className={portalStyles.sidebarBrand}><Wordmark tone="light" locale={locale} /></div>
-      <p className={portalStyles.sidebarLabel}>Workspace</p>
-      <nav className={portalStyles.sidebarNav} aria-label="Admin navigation">
+      <p className={portalStyles.sidebarLabel}>{workspace}</p>
+      <nav className={portalStyles.sidebarNav} aria-label={navigation}>
         {items.map((item) => (
           <Link
             href={item.href}

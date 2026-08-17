@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Wordmark } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
+import type { Locale } from "@/lib/i18n";
 import { signOut } from "@/app/auth/actions";
 import styles from "./senior-dashboard.module.css";
 
@@ -41,6 +42,36 @@ const namedRoutes = [
   "/dashboard/circle",
 ];
 
+const sidebarCopy: Record<Locale, {
+  home: string;
+  conversations: string;
+  settings: string;
+  space: string;
+  navigation: string;
+}> = {
+  en: {
+    home: "Home",
+    conversations: "Conversations",
+    settings: "Settings",
+    space: "My space",
+    navigation: "Senior navigation",
+  },
+  "zh-Hans": {
+    home: "首页",
+    conversations: "我的对话",
+    settings: "设置",
+    space: "我的空间",
+    navigation: "长辈导航",
+  },
+  "zh-Hant": {
+    home: "首頁",
+    conversations: "我的對話",
+    settings: "設定",
+    space: "我的空間",
+    navigation: "長輩導覽",
+  },
+};
+
 export function SeniorSidebar({
   name,
   pendingRequests = 0,
@@ -51,19 +82,19 @@ export function SeniorSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const { locale, t } = useI18n();
-  const chinese = locale !== "en";
+  const copy = sidebarCopy[locale];
   const conversationDetail =
     /^\/dashboard\/[^/]+$/.test(pathname) && !namedRoutes.includes(pathname);
   const items = [
     {
       href: "/dashboard",
-      label: chinese ? "首页" : "Home",
+      label: copy.home,
       icon: Home,
       active: pathname === "/dashboard",
     },
     {
       href: "/dashboard/conversations",
-      label: chinese ? "我的对话" : "Conversations",
+      label: copy.conversations,
       icon: Headphones,
       active:
         pathname.startsWith("/dashboard/conversations") || conversationDetail,
@@ -80,7 +111,7 @@ export function SeniorSidebar({
     },
     {
       href: "/dashboard/settings",
-      label: chinese ? "设置" : "Settings",
+      label: copy.settings,
       icon: Settings,
       active: pathname.startsWith("/dashboard/settings"),
     },
@@ -95,8 +126,8 @@ export function SeniorSidebar({
         <LanguageSwitcher tone="bare" />
         <AccountActions name={name} />
       </div>
-      <p className={styles.sidebarLabel}>{chinese ? "我的空间" : "My space"}</p>
-      <nav className={styles.sidebarNav} aria-label={chinese ? "长辈导航" : "Senior navigation"}>
+      <p className={styles.sidebarLabel}>{copy.space}</p>
+      <nav className={styles.sidebarNav} aria-label={copy.navigation}>
         {items.map((item) => (
           <Link
             href={item.href}
