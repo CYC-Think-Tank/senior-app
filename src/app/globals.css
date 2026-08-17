@@ -5,16 +5,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* Warm editorial palette - cream paper, ink, ember accent */
+  /* Editorial palette - cream paper, ink, magenta-violet accent */
   --color-paper: #faf5ec;
   --color-paper-deep: #f1e9d9;
   --color-cream: #fffdf8;
   --color-ink: #2a2018;
   --color-ink-soft: #6e5f4e;
   --color-ink-faint: #a2937f;
-  --color-ember: #c05b33;
-  --color-ember-deep: #9e4626;
-  --color-ember-soft: #f4e3d9;
+  --color-ember: #d000a7;
+  --color-ember-deep: #7200d9;
+  --color-ember-soft: #fbe2f7;
   --color-sage: #5f7a5a;
   --color-sage-soft: #e4ecdf;
   --color-line: #e5dac7;
@@ -113,18 +113,18 @@ html[data-language-transition] [data-language-page] :where(h1, h2, h3, h4, p, li
   --card-foreground: #2a2018;
   --popover: #fffdf8;
   --popover-foreground: #2a2018;
-  --primary: #c05b33;
+  --primary: #d000a7;
   --primary-foreground: #fffdf8;
   --secondary: #f1e9d9;
   --secondary-foreground: #2a2018;
   --muted: #f1e9d9;
   --muted-foreground: #6e5f4e;
-  --accent: #f4e3d9;
-  --accent-foreground: #9e4626;
+  --accent: #fbe2f7;
+  --accent-foreground: #7200d9;
   --destructive: oklch(0.577 0.245 27.325);
   --border: #e5dac7;
   --input: #e5dac7;
-  --ring: #c05b33;
+  --ring: #d000a7;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

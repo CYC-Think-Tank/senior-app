@@ -3,7 +3,7 @@
   --room-muted: #a3a3a3;
   --room-faint: #666;
   --room-line: #2a2a2a;
-  --room-ember: #df7d3b;
+  --room-ember: #ff42c8;
   /* Dark enough to clear 5:1 against white label text. */
   --room-alert: #c4342e;
   --room-alert-hover: #d94b44;
@@ -30,10 +30,10 @@
   background:
     linear-gradient(
       180deg,
-      #462117 0%,
-      #552019 35%,
-      #9f3f22 70%,
-      #e87838 100%
+      #15002e 0%,
+      #3a087c 35%,
+      #a600e8 70%,
+      #ff1760 100%
     );
   transition: filter 900ms cubic-bezier(0.45, 0, 0.55, 1);
   pointer-events: none;
@@ -131,9 +131,9 @@
   background:
     radial-gradient(
       ellipse 44% 38% at 50% 51%,
-      rgb(255 225 143 / 0.76) 0%,
-      rgb(255 131 35 / 0.42) 42%,
-      rgb(207 57 16 / 0.18) 68%,
+      rgb(255 70 203 / 0.62) 0%,
+      rgb(223 0 255 / 0.38) 42%,
+      rgb(106 0 217 / 0.22) 68%,
       transparent 78%
     );
   filter: blur(8px) saturate(1.4);
@@ -196,7 +196,7 @@
   font-weight: 500;
   line-height: 1.02;
   letter-spacing: 0;
-  text-shadow: 0 0 3rem rgb(223 125 59 / 0.09);
+  text-shadow: 0 0 3rem rgb(255 66 200 / 0.12);
   text-wrap: balance;
 }
 
@@ -381,7 +381,7 @@
 
 .formError {
   margin-top: 0.75rem;
-  color: #e89a7b;
+  color: #ff91e4;
   font-size: 0.875rem;
   text-align: center;
 }
@@ -432,7 +432,7 @@
   background: rgb(255 255 255 / 0.035);
   border: 1px solid rgb(247 247 245 / 0.2);
   border-radius: 50%;
-  box-shadow: 0 0 2rem rgb(223 125 59 / 0.1);
+  box-shadow: 0 0 2rem rgb(255 66 200 / 0.14);
   transition:
     border-color 340ms ease,
     background 340ms ease,
@@ -445,7 +445,7 @@
   color: var(--room-white);
   background: rgb(255 255 255 / 0.09);
   border-color: rgb(247 247 245 / 0.58);
-  box-shadow: 0 0 2.75rem rgb(223 125 59 / 0.18);
+  box-shadow: 0 0 2.75rem rgb(223 0 255 / 0.22);
   transform: translateY(-2px);
 }
 
@@ -481,7 +481,7 @@
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-shadow: 0 1px 1px rgb(46 13 7 / 0.45);
+  text-shadow: 0 1px 1px rgb(18 0 42 / 0.45);
   transform: translateX(-50%);
 }
 
@@ -491,7 +491,7 @@
   font-size: clamp(1.5rem, 3vw, 2rem);
   font-weight: 500;
   letter-spacing: -0.01em;
-  text-shadow: 0 2px 2px rgb(46 13 7 / 0.4);
+  text-shadow: 0 2px 2px rgb(18 0 42 / 0.4);
 }
 
 .caption {
@@ -501,7 +501,7 @@
   font-weight: 500;
   line-height: 1.45;
   letter-spacing: -0.01em;
-  text-shadow: 0 2px 3px rgb(46 13 7 / 0.5);
+  text-shadow: 0 2px 3px rgb(18 0 42 / 0.5);
 }
 
 .nameTransitionSkeleton {
@@ -687,7 +687,7 @@
   width: min(32rem, 100%);
   margin: 2rem auto 0;
   padding: 1.25rem;
-  background: rgb(20 8 7 / 0.2);
+  background: rgb(18 0 42 / 0.2);
   border: 1px solid rgb(247 247 245 / 0.2);
   border-radius: 1rem;
   backdrop-filter: blur(12px);
@@ -753,8 +753,8 @@
   inset: 0;
   width: 20rem;
   height: 20rem;
-  filter: drop-shadow(0 0 1.25rem rgb(255 116 43 / 0.42))
-    drop-shadow(0 0 3.5rem rgb(223 66 27 / 0.24));
+  filter: drop-shadow(0 0 1.25rem rgb(255 44 178 / 0.45))
+    drop-shadow(0 0 3.5rem rgb(125 0 255 / 0.28));
   will-change: opacity;
 }
 

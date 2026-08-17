@@ -4,7 +4,7 @@
 
 :global(html:has([data-landing-page])),
 :global(body:has([data-landing-page])) {
-  background: #462117;
+  background: #15002e;
   overscroll-behavior-y: none;
 }
 
@@ -17,9 +17,9 @@
   --color-ink: #2f2018;
   --color-ink-soft: #715b4c;
   --color-ink-faint: #a48b78;
-  --color-ember: #c85d32;
-  --color-ember-deep: #9e4626;
-  --color-ember-soft: #f4e1d4;
+  --color-ember: #d000a7;
+  --color-ember-deep: #7200d9;
+  --color-ember-soft: #fbe2f7;
   --color-sage: #687b5d;
   --color-sage-soft: #e9efe3;
   --color-line: #e8d8c4;
@@ -36,7 +36,7 @@
   isolation: isolate;
   width: 100%;
   overflow-x: hidden;
-  background: #462117;
+  background: #15002e;
   color: var(--color-ink);
   font-family: var(--font-interface);
 }
@@ -48,10 +48,10 @@
   pointer-events: none;
   background: linear-gradient(
     90deg,
-    rgb(42 17 10 / 0.08),
+    rgb(18 0 42 / 0.08),
     transparent 12%,
     transparent 88%,
-    rgb(42 17 10 / 0.08)
+    rgb(18 0 42 / 0.08)
   );
   content: "";
 }
@@ -91,10 +91,10 @@
   background:
     radial-gradient(
       40rem 20rem at 50% 24%,
-      rgb(56 24 14 / 0.24),
+      rgb(38 0 70 / 0.24),
       transparent 76%
     ),
-    linear-gradient(180deg, rgb(42 17 10 / 0.18), transparent 46%);
+    linear-gradient(180deg, rgb(18 0 42 / 0.18), transparent 46%);
   content: "";
 }
 
@@ -158,7 +158,7 @@
   background: var(--color-haze);
   border: 1px solid var(--color-whiteout);
   border-radius: 8px;
-  box-shadow: 0 0.4rem 1.25rem rgb(57 24 14 / 0.14);
+  box-shadow: 0 0.4rem 1.25rem rgb(30 0 64 / 0.14);
   transition: background 160ms ease, transform 160ms ease;
 }
 
@@ -193,7 +193,7 @@
   font-size: clamp(3rem, 5vw, 4.4rem);
   font-weight: 500;
   line-height: 0.98;
-  text-shadow: 0 0.2rem 1.25rem rgb(48 20 12 / 0.18);
+  text-shadow: 0 0.2rem 1.25rem rgb(22 0 52 / 0.18);
   text-wrap: balance;
 }
 
@@ -236,7 +236,7 @@
   color: rgb(255 250 241 / 0.76);
   font-size: clamp(0.9rem, 1.2vw, 1.05rem);
   line-height: 1.55;
-  text-shadow: 0 0.15rem 1rem rgb(48 20 12 / 0.16);
+  text-shadow: 0 0.15rem 1rem rgb(22 0 52 / 0.16);
   text-wrap: balance;
 }
 
@@ -262,7 +262,7 @@
   background: var(--color-haze);
   border: 1px solid var(--color-whiteout);
   border-radius: 8px;
-  box-shadow: 0 0.6rem 1.6rem rgb(57 24 14 / 0.16);
+  box-shadow: 0 0.6rem 1.6rem rgb(30 0 64 / 0.16);
   transition: background 180ms ease, transform 180ms ease;
   animation: riseIn 900ms 180ms ease both;
 }
@@ -275,31 +275,6 @@
 .btnIcon {
   width: 1.15em;
   height: 1.15em;
-}
-
-/* ----------------------------- Demo video ------------------------ */
-
-.demoCard {
-  width: min(72rem, 100%);
-  margin: clamp(3.25rem, 8vh, 5rem) auto 0;
-  animation: riseIn 900ms 300ms ease both;
-}
-
-.demoMedia {
-  position: relative;
-  overflow: hidden;
-  aspect-ratio: 16 / 9;
-  background: #29140e;
-  border: 1px solid rgb(255 250 241 / 0.22);
-  border-radius: 0.8rem;
-}
-
-.demoVideo {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  background: #29140e;
 }
 
 /* ----------------------------- Companion -------------------------- */
@@ -415,7 +390,7 @@
   font-size: clamp(3rem, 6vw, 5.5rem);
   font-weight: 500;
   line-height: 0.98;
-  text-shadow: 0 0.25rem 1.5rem rgb(45 15 9 / 0.16);
+  text-shadow: 0 0.25rem 1.5rem rgb(20 0 48 / 0.16);
 }
 
 .companionSection .sectionLead {
@@ -645,7 +620,7 @@
 }
 
 .brandDot {
-  color: #ffd19c;
+  color: #ff8de3;
 }
 
 .footerNote {
@@ -704,7 +679,6 @@
 @media (prefers-reduced-motion: reduce) {
   .heroCopy,
   .btnPrimary,
-  .demoCard,
   .companionInner,
   .infoInner,
   .ctaPanel {
@@ -758,14 +732,6 @@
   .btnPrimary {
     justify-content: center;
     width: min(100%, 20rem);
-  }
-
-  .demoCard {
-    margin-top: 2rem;
-  }
-
-  .demoMedia {
-    border-radius: 0.65rem;
   }
 
   .companionSection,

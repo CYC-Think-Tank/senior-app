@@ -1,6 +1,6 @@
 :global(html:has([data-portal-theme])),
 :global(body:has([data-portal-theme])) {
-  background: #462117;
+  background: #15002e;
   overscroll-behavior-y: none;
 }
 
@@ -15,7 +15,7 @@
   min-height: 100svh;
   overflow: hidden;
   color: var(--portal-cream);
-  background: #462117;
+  background: #15002e;
 }
 
 .sky {
@@ -33,8 +33,8 @@
   inset: 0;
   z-index: 1;
   background:
-    radial-gradient(58rem 28rem at 50% 4%, rgb(42 17 10 / 0.26), transparent 74%),
-    linear-gradient(180deg, rgb(42 17 10 / 0.08), rgb(42 17 10 / 0.48));
+    radial-gradient(58rem 28rem at 50% 4%, rgb(18 0 42 / 0.26), transparent 74%),
+    linear-gradient(180deg, rgb(18 0 42 / 0.08), rgb(18 0 42 / 0.48));
   pointer-events: none;
 }
 
@@ -168,7 +168,7 @@
   align-self: start;
   overflow: hidden;
   padding: 1.5rem 1rem;
-  background: rgb(48 15 9 / 0.38);
+  background: rgb(20 0 46 / 0.38);
   border-right: 1px solid rgb(255 250 241 / 0.13);
   backdrop-filter: blur(18px) saturate(1.05);
 }
@@ -296,7 +296,7 @@
 
 .surface :global(.portal-card) {
   color: var(--portal-cream);
-  background: rgb(72 25 14 / 0.24);
+  background: rgb(38 0 78 / 0.24);
   border-color: rgb(255 250 241 / 0.16);
   box-shadow: none;
   backdrop-filter: blur(12px) saturate(1.05);
@@ -368,7 +368,7 @@
 
 .surface :global(.text-ember),
 .surface :global(.text-ember-deep) {
-  color: #ffd0ae;
+  color: #ff91e4;
 }
 
 .surface :global(.text-sage) {
@@ -380,7 +380,7 @@
 }
 
 .surface :global(.portal-audio-player) {
-  background: rgb(65 22 13 / 0.3);
+  background: rgb(32 0 68 / 0.3);
   border-color: rgb(255 250 241 / 0.16);
   backdrop-filter: blur(14px) saturate(1.05);
 }
@@ -484,7 +484,7 @@
   background: var(--portal-cream);
   border: 1px solid var(--portal-cream);
   border-radius: 8px;
-  box-shadow: 0 0.5rem 1.25rem rgb(89 34 18 / 0.12);
+  box-shadow: 0 0.5rem 1.25rem rgb(50 0 96 / 0.12);
   transition: background 180ms ease, transform 180ms ease;
 }
 
@@ -545,7 +545,7 @@
   background: rgb(255 250 241 / 0.93);
   border: 1px solid rgb(255 250 241 / 0.64);
   border-radius: 14px;
-  box-shadow: 0 2rem 6rem rgb(41 14 8 / 0.22);
+  box-shadow: 0 2rem 6rem rgb(16 0 38 / 0.22);
   backdrop-filter: blur(20px);
 }
 

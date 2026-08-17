@@ -3,7 +3,7 @@
 .eyebrow { margin: 0 0 .7rem; color: rgb(255 250 241 / .5); font-size: .68rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
 .title { margin: 0; font-family: var(--font-serif); font-size: clamp(2.8rem, 5vw, 4.8rem); font-weight: 400; line-height: .98; letter-spacing: -.045em; }
 .intro { max-width: 40rem; margin: 1rem 0 0; color: rgb(255 250 241 / .64); font-size: .92rem; line-height: 1.65; }
-.panel { overflow: hidden; background: rgb(65 22 13 / .3); border: 1px solid rgb(255 250 241 / .14); border-radius: 14px; backdrop-filter: blur(14px); }
+.panel { overflow: hidden; background: rgb(32 0 68 / .3); border: 1px solid rgb(255 250 241 / .14); border-radius: 14px; backdrop-filter: blur(14px); }
 .panelTop { display: flex; min-height: 4.5rem; align-items: center; justify-content: space-between; padding: 0 1.25rem; border-bottom: 1px solid rgb(255 250 241 / .1); }
 .panelTop h2 { margin: 0; font-size: .92rem; font-weight: 650; }
 .panelTop span { color: rgb(255 250 241 / .45); font-size: .72rem; }
@@ -16,13 +16,13 @@
 .deleteButton { display: inline-flex; min-height: 2.25rem; align-items: center; justify-content: center; padding: 0 .8rem; border-radius: 7px; color: rgb(255 250 241 / .58); background: transparent; font-size: .72rem; font-weight: 650; transition: background 180ms ease, color 180ms ease; }
 .deleteButton:hover { color: #fff; background: rgb(255 250 241 / .07); }
 .empty { margin: 0; padding: 3rem 1.25rem; color: rgb(255 250 241 / .48); text-align: center; }
-.modalBackdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1.25rem; background: rgb(24 7 3 / .68); backdrop-filter: blur(8px); }
-.modal { width: min(27rem, 100%); padding: 1.6rem; color: #382017; background: #fffaf1; border-radius: 13px; box-shadow: 0 2rem 7rem rgb(20 5 2 / .42); }
+.modalBackdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1.25rem; background: rgb(12 0 29 / .68); backdrop-filter: blur(8px); }
+.modal { width: min(27rem, 100%); padding: 1.6rem; color: #382017; background: #fffaf1; border-radius: 13px; box-shadow: 0 2rem 7rem rgb(10 0 26 / .42); }
 .modal h2 { margin: 0; font-family: var(--font-serif); font-size: 2rem; font-weight: 500; letter-spacing: -.03em; }
 .modal p { margin: .8rem 0 0; color: #735b4d; font-size: .85rem; line-height: 1.6; }
 .modalActions { display: flex; justify-content: flex-end; margin-top: 1.4rem; gap: .55rem; }
 .cancel, .confirm { min-height: 2.5rem; padding: 0 .9rem; border-radius: 7px; font-size: .75rem; font-weight: 650; }
 .cancel { color: #59443a; background: #f1e5d5; }
-.confirm { color: #fff; background: #8d321f; }
+.confirm { color: #fff; background: #d000a7; }
 @media (max-width: 560px) { .header { align-items: start; flex-direction: column; } .userRow { align-items: start; flex-direction: column; } .actions { width: 100%; } .actions > * { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { .deleteButton { transition: none; } }

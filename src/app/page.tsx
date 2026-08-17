@@ -4,7 +4,6 @@ import { HeroSky } from "@/components/hero-sky";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { AutoLoopVideo } from "@/components/auto-loop-video";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -13,7 +12,6 @@ import styles from "./page.module.css";
 export default async function LandingPage() {
   const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
-  const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? "/demo.mp4";
   let dashboardHref: string | null = null;
 
   if (
@@ -40,7 +38,7 @@ export default async function LandingPage() {
     <main className={styles.page} data-landing-page>
       <HeroSky
         key="mirrored-page-shader-v4"
-        shaderRevision="mirrored-page-shader-v4"
+        shaderRevision="magenta-violet-page-shader-v5"
         className={styles.pageSky}
       />
       <section className={styles.heroPanel} aria-label={t("landingWelcomeAria")}>
@@ -95,16 +93,6 @@ export default async function LandingPage() {
               </PageTransitionLink>
             </div>
 
-            <div className={styles.demoCard}>
-              <div className={styles.demoMedia}>
-                <AutoLoopVideo
-                  className={styles.demoVideo}
-                  src={demoVideoUrl}
-                  ariaLabel={t("landingDemoAria")}
-                  fallback={t("landingDemoFallback")}
-                />
-              </div>
-            </div>
           </div>
         </div>
       </section>

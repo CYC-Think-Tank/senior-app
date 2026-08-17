@@ -105,7 +105,7 @@
   gap: 0.2rem;
   border: 1px solid;
   border-radius: 12px;
-  box-shadow: 0 18px 50px rgb(25 6 3 / 0.28);
+  box-shadow: 0 18px 50px rgb(12 0 29 / 0.28);
   backdrop-filter: blur(18px) saturate(1.08);
 }
 
@@ -119,11 +119,11 @@
   background: linear-gradient(
     145deg,
     rgb(255 253 248 / 0.99),
-    rgb(247 235 219 / 0.98)
+    rgb(252 234 250 / 0.98)
   );
   border-color: rgb(255 250 241 / 0.72);
   box-shadow:
-    0 20px 52px rgb(25 6 3 / 0.3),
+    0 20px 52px rgb(12 0 29 / 0.3),
     inset 0 1px 0 #fff;
 }
 
@@ -157,7 +157,7 @@
 .menuDark .option:hover,
 .menuDark .option:focus-visible {
   color: #2f1d16;
-  background: rgb(141 50 31 / 0.08);
+  background: rgb(208 0 167 / 0.08);
 }
 
 .menuLight .option:hover,
@@ -173,13 +173,13 @@
 
 .menuBare .optionSelected,
 .menuDark .optionSelected {
-  color: #8d321f;
-  background: #f4e3d9;
+  color: #7200d9;
+  background: #fbe2f7;
 }
 
 .menuLight .optionSelected {
-  color: #8d321f;
-  background: #f4e3d9;
+  color: #7200d9;
+  background: #fbe2f7;
 }
 
 .optionCheck {

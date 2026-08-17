@@ -6,7 +6,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
     <div className={styles.root} data-portal-theme>
       <HeroSky
         key="portal-shader-v1"
-        shaderRevision="portal-shader-v1"
+        shaderRevision="magenta-violet-portal-shader-v2"
         className={styles.sky}
       />
       <div className={styles.atmosphere} aria-hidden="true" />

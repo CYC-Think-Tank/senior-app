@@ -4,7 +4,7 @@
 .title { margin: 0; font-family: var(--font-serif); font-size: clamp(2.75rem, 5vw, 4.8rem); font-weight: 400; line-height: .98; letter-spacing: -.045em; }
 .intro { max-width: 40rem; margin: 1rem 0 0; color: rgb(255 250 241 / .68); font-size: .98rem; line-height: 1.65; }
 .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; }
-.statCard, .chartCard, .breakdownCard { background: rgb(65 22 13 / .3); border: 1px solid rgb(255 250 241 / .15); box-shadow: 0 18px 70px rgb(39 12 6 / .08); backdrop-filter: blur(14px) saturate(1.05); }
+.statCard, .chartCard, .breakdownCard { background: rgb(32 0 68 / .3); border: 1px solid rgb(255 250 241 / .15); box-shadow: 0 18px 70px rgb(16 0 38 / .08); backdrop-filter: blur(14px) saturate(1.05); }
 .statCard { display: flex; min-height: 11rem; flex-direction: column; padding: 1.25rem 1.35rem; border-radius: 14px; }
 .statTop { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .statLabel { color: rgb(255 250 241 / .7); font-size: .82rem; font-weight: 600; }
@@ -22,7 +22,7 @@
 .chart { display: block; width: 100%; height: auto; margin-top: .7rem; overflow: visible; }
 .gridLine { stroke: rgb(255 250 241 / .1); stroke-width: 1; }
 .chartLine { fill: none; stroke: #fffaf1; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.3; }
-.chartPoint { fill: #f3a15f; stroke: #fffaf1; stroke-width: 2; }
+.chartPoint { fill: #ff42c8; stroke: #fffaf1; stroke-width: 2; }
 .chartLabel { fill: rgb(255 250 241 / .48); font-family: var(--font-sans); font-size: 11px; }
 .breakdowns { display: grid; grid-template-rows: 1fr 1fr; gap: .8rem; }
 .breakdownCard { padding: 1.25rem; }
