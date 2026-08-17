@@ -1,0 +1,36 @@
+.page { display: grid; gap: 2rem; }
+.header { display: flex; align-items: end; justify-content: space-between; gap: 2rem; }
+.header p { margin: 0 0 0.7rem; color: #ffb5ea; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; }
+.header h1 { margin: 0; font-family: var(--font-serif); font-size: clamp(2.8rem, 5vw, 4.8rem); font-weight: 400; line-height: 0.98; letter-spacing: -0.045em; }
+.header span { display: block; max-width: 42rem; margin-top: 1rem; color: rgb(255 250 241 / 0.64); font-size: 0.92rem; line-height: 1.65; }
+.header > strong { flex: none; padding: 0.55rem 0.8rem; color: #342018; background: #fffaf1; border-radius: 999px; font-size: 0.75rem; }
+.queue { display: grid; gap: 1rem; }
+.requestCard { overflow: hidden; background: rgb(32 0 68 / 0.32); border: 1px solid rgb(255 250 241 / 0.15); border-radius: 16px; backdrop-filter: blur(14px); }
+.cardTop { display: flex; min-height: 3.5rem; align-items: center; justify-content: space-between; padding: 0 1.25rem; gap: 1rem; background: rgb(255 250 241 / 0.04); border-bottom: 1px solid rgb(255 250 241 / 0.1); }
+.cardTop > div { display: flex; align-items: center; gap: 0.65rem; }
+.cardTop > strong { color: rgb(255 250 241 / 0.58); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.status { padding: 0.25rem 0.55rem; color: #2f2018; background: #fffaf1; border-radius: 999px; font-size: 0.65rem; font-weight: 750; text-transform: capitalize; }
+.status_resolved { color: #e5f7df; background: rgb(73 127 60 / 0.5); }
+.status_escalated { color: #fff2d7; background: rgb(190 89 34 / 0.52); }
+.status_matched { color: #fce7fa; background: rgb(208 0 167 / 0.38); }
+.date { color: rgb(255 250 241 / 0.42); font-size: 0.7rem; }
+.requestCard blockquote { margin: 0; padding: 1.5rem 1.25rem; font-family: var(--font-serif); font-size: clamp(1.35rem, 3vw, 2rem); line-height: 1.3; }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0 1.25rem 1.25rem; gap: 0.8rem; }
+.facts div { min-width: 0; padding: 0.8rem; background: rgb(255 250 241 / 0.05); border-radius: 9px; }
+.facts span, .assessmentGrid span { display: flex; align-items: center; gap: 0.35rem; color: rgb(255 250 241 / 0.43); font-size: 0.63rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
+.facts span svg, .assessmentGrid span svg { width: 0.8rem; height: 0.8rem; }
+.facts strong { display: block; overflow: hidden; margin-top: 0.4rem; color: rgb(255 250 241 / 0.86); font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
+.assessmentGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid rgb(255 250 241 / 0.1); }
+.assessmentGrid > div { min-width: 0; padding: 1.25rem; }
+.assessmentGrid > div + div { border-left: 1px solid rgb(255 250 241 / 0.1); }
+.assessmentGrid p { margin: 0.65rem 0 0; color: rgb(255 250 241 / 0.88); font-size: 0.82rem; line-height: 1.55; }
+.assessmentGrid small { display: block; margin-top: 0.45rem; color: rgb(255 250 241 / 0.46); font-size: 0.7rem; line-height: 1.45; }
+.assessmentGrid .safetyHigh { background: rgb(190 89 34 / 0.1); }
+.actions { display: flex; justify-content: flex-end; padding: 0.9rem 1.25rem; gap: 0.45rem; }
+.actions button { min-height: 2.4rem; padding: 0 0.8rem; color: rgb(255 250 241 / 0.72); background: rgb(255 250 241 / 0.07); border: 1px solid rgb(255 250 241 / 0.12); border-radius: 8px; font-size: 0.7rem; font-weight: 680; }
+.actions button:hover { color: #fff; background: rgb(255 250 241 / 0.12); }
+.actions .resolve { color: #2f2018; background: #fffaf1; }
+.actions .escalate { color: #ffd7ad; }
+.empty { margin: 0; padding: 5rem 1rem; color: rgb(255 250 241 / 0.48); text-align: center; background: rgb(32 0 68 / 0.28); border: 1px solid rgb(255 250 241 / 0.12); border-radius: 14px; }
+@media (max-width: 850px) { .facts { grid-template-columns: repeat(2, 1fr); } .assessmentGrid { grid-template-columns: 1fr; } .assessmentGrid > div + div { border-top: 1px solid rgb(255 250 241 / 0.1); border-left: 0; } }
+@media (max-width: 560px) { .header { align-items: start; flex-direction: column; } .facts { grid-template-columns: 1fr; } .actions { align-items: stretch; flex-direction: column; } .actions button, .actions form { width: 100%; } }

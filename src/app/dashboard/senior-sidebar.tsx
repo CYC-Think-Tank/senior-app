@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { Headphones, Home, LogOut, Settings, Users } from "lucide-react";
+import { HandHeart, Headphones, Home, LogOut, Settings, Users } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Wordmark } from "@/components/ui";
@@ -40,12 +40,14 @@ const namedRoutes = [
   "/dashboard/settings",
   "/dashboard/friends",
   "/dashboard/circle",
+  "/dashboard/support",
 ];
 
 const sidebarCopy: Record<Locale, {
   home: string;
   conversations: string;
   settings: string;
+  support: string;
   space: string;
   navigation: string;
 }> = {
@@ -53,6 +55,7 @@ const sidebarCopy: Record<Locale, {
     home: "Home",
     conversations: "Conversations",
     settings: "Settings",
+    support: "Get help",
     space: "My space",
     navigation: "Senior navigation",
   },
@@ -60,6 +63,7 @@ const sidebarCopy: Record<Locale, {
     home: "首页",
     conversations: "我的对话",
     settings: "设置",
+    support: "寻求帮助",
     space: "我的空间",
     navigation: "长辈导航",
   },
@@ -67,6 +71,7 @@ const sidebarCopy: Record<Locale, {
     home: "首頁",
     conversations: "我的對話",
     settings: "設定",
+    support: "尋求協助",
     space: "我的空間",
     navigation: "長輩導覽",
   },
@@ -108,6 +113,12 @@ export function SeniorSidebar({
         pathname.startsWith("/dashboard/circle") ||
         pathname.startsWith("/dashboard/friends"),
       badge: pendingRequests,
+    },
+    {
+      href: "/dashboard/support",
+      label: copy.support,
+      icon: HandHeart,
+      active: pathname.startsWith("/dashboard/support"),
     },
     {
       href: "/dashboard/settings",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { LayoutDashboard, LogOut, UserRound } from "lucide-react";
+import { HandHeart, LayoutDashboard, LogOut, UserRound } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { portalStyles } from "@/components/portal-shell";
 import { Wordmark } from "@/components/ui";
@@ -32,6 +32,12 @@ export function AdminSidebar() {
       label: locale === "en" ? "Users" : locale === "zh-Hans" ? "用户" : "使用者",
       icon: UserRound,
       active: pathname.startsWith("/admin/users"),
+    },
+    {
+      href: "/admin/support",
+      label: locale === "en" ? "Human support" : locale === "zh-Hans" ? "人工支持" : "人工支援",
+      icon: HandHeart,
+      active: pathname.startsWith("/admin/support"),
     },
   ];
 

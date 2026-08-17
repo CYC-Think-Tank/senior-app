@@ -126,8 +126,12 @@ export async function POST(request: NextRequest) {
     })
     .eq("id", session.id);
 
+  // The model rides along for clients that have to name it themselves. The
+  // browser does not — WebRTC carries it in the offer — but a WebSocket
+  // transport puts it in the connect URL, and reading it back from the same
+  // response that minted the secret is what keeps the two from drifting.
   return NextResponse.json(
-    { clientSecret: data.value },
+    { clientSecret: data.value, model: REALTIME_MODEL },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

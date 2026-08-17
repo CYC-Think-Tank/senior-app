@@ -13,6 +13,21 @@ import { isValidAttemptId, partPath } from "@/lib/audio/parts";
  * land plaintext in the bucket; only the server holds the encryption key, so
  * the ~160KB chunks now route through here.
  */
+
+/**
+ * Which container the chunks of this sitting are in.
+ *
+ * The browser sends whatever `MediaRecorder` produced — WebM/Opus, or fMP4 on
+ * Safari. The iOS app has no `MediaRecorder`: it mixes both sides of the call
+ * itself and sends the result as bare 24 kHz mono PCM16, which has no header
+ * to stitch around and concatenates by simple byte order. `stitchSessionParts`
+ * reads the extension back off the filename to know which it is dealing with.
+ */
+function extensionFor(contentType: string): string {
+  if (contentType.includes("pcm") || contentType.includes("L16")) return "pcm";
+  if (contentType.includes("mp4")) return "m4a";
+  return "webm";
+}
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -52,8 +67,7 @@ export async function POST(
     return NextResponse.json({ error: "Empty chunk." }, { status: 400 });
   }
 
-  const ext = contentType.includes("mp4") ? "m4a" : "webm";
-  const path = partPath(session.id, attemptId, part, ext);
+  const path = partPath(session.id, attemptId, part, extensionFor(contentType));
 
   const { error } = await admin.storage
     .from(RAW_BUCKET)

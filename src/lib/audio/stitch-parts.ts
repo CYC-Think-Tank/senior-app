@@ -56,13 +56,47 @@ function startsNewRun(buffer: Buffer): boolean {
   return buffer.length >= 8 && buffer.subarray(4, 8).toString("latin1") === "ftyp";
 }
 
-/** Groups the chunks into the sittings they were recorded in, in order. */
-function splitRuns(buffers: Buffer[]): Buffer[][] {
-  const runs: Buffer[][] = [];
-  for (const buffer of buffers) {
-    if (runs.length === 0 || startsNewRun(buffer)) runs.push([]);
-    runs[runs.length - 1].push(buffer);
-  }
+/**
+ * The format a chunk was uploaded in, read back off its filename. The iOS app
+ * sends bare PCM16; browsers send whatever `MediaRecorder` produced.
+ */
+function extensionOf(name: string): PartExtension {
+  if (name.endsWith(".pcm")) return "pcm";
+  if (name.endsWith(".m4a")) return "m4a";
+  return "webm";
+}
+
+type PartExtension = "webm" | "m4a" | "pcm";
+type Run = { ext: PartExtension; buffers: Buffer[] };
+
+/**
+ * Groups the chunks into the sittings they were recorded in, in order.
+ *
+ * A run ends for either of two reasons. A container chunk carrying its own
+ * header opens a new one, as before. So does a change of format: one
+ * conversation can be started in a browser and picked back up in the iOS app,
+ * and WebM clusters cannot be glued onto raw PCM.
+ *
+ * Raw PCM has no header at all, which is exactly why it needs the second rule
+ * — every one of its chunks looks like a continuation, including the first.
+ */
+function splitRuns(parts: PartFile[], buffers: Buffer[]): Run[] {
+  const runs: Run[] = [];
+
+  buffers.forEach((buffer, index) => {
+    const ext = extensionOf(parts[index].name);
+    const current = runs[runs.length - 1];
+    // PCM concatenates cleanly across sittings, so only a format change starts
+    // a new run for it.
+    const opensRun = ext === "pcm" ? false : startsNewRun(buffer);
+
+    if (!current || current.ext !== ext || opensRun) {
+      runs.push({ ext, buffers: [buffer] });
+    } else {
+      current.buffers.push(buffer);
+    }
+  });
+
   return runs;
 }
 
@@ -125,20 +159,36 @@ function reportedDurationMs(stderr: string): number | null {
   );
 }
 
+/** How the iOS app's chunks are laid out; see PCMMixRecorder in that project. */
+const PCM_SAMPLE_RATE = "24000";
+
 /**
  * Remuxes one run's chunk stream into a well-formed container and reports the
- * duration ffmpeg saw. The concatenated MediaRecorder output is already a
- * valid stream (WebM clusters, or fMP4 fragments behind their init segment),
- * but it carries no duration in its header, which breaks seeking in the
- * admin player. `-c copy` fixes the header without re-encoding.
+ * duration ffmpeg saw.
+ *
+ * Concatenated MediaRecorder output is already a valid stream (WebM clusters,
+ * or fMP4 fragments behind their init segment) but carries no duration in its
+ * header, which breaks seeking in the player — `-c copy` fixes the header
+ * without re-encoding. Raw PCM has no header to fix and no codec to copy, so
+ * it is described on the way in and encoded on the way out.
  */
 async function remux(
   inputPath: string,
-  outputPath: string
+  outputPath: string,
+  sourceExt: PartExtension,
+  targetExt: PartExtension
 ): Promise<number | null> {
-  return reportedDurationMs(
-    await runFfmpeg(["-y", "-i", inputPath, "-c", "copy", outputPath])
-  );
+  const input =
+    sourceExt === "pcm"
+      ? ["-f", "s16le", "-ar", PCM_SAMPLE_RATE, "-ac", "1", "-i", inputPath]
+      : ["-i", inputPath];
+
+  const codec =
+    sourceExt === targetExt && sourceExt !== "pcm"
+      ? ["-c", "copy"]
+      : ["-c:a", targetExt === "webm" ? "libopus" : "aac"];
+
+  return reportedDurationMs(await runFfmpeg(["-y", ...input, ...codec, outputPath]));
 }
 
 /**
