@@ -246,9 +246,13 @@ export async function stitchSessionParts(
   const parts = await listParts(admin, sessionId);
   if (parts.length === 0) return null;
 
-  const ext = parts[0].name.endsWith(".m4a") ? "m4a" : "webm";
   const buffers = await downloadParts(admin, sessionId, parts);
-  const runs = splitRuns(buffers);
+  const runs = splitRuns(parts, buffers);
+
+  // WebM only survives as the output when every sitting was already WebM;
+  // anything else lands in an MP4, which holds AAC from a Safari sitting and
+  // from an encoded PCM one alike.
+  const ext: PartExtension = runs.every((run) => run.ext === "webm") ? "webm" : "m4a";
 
   const workDir = await mkdtemp(path.join(tmpdir(), "stitch-"));
   try {
@@ -256,16 +260,17 @@ export async function stitchSessionParts(
     let durationMs: number | null;
 
     if (runs.length === 1) {
-      const joinedPath = path.join(workDir, `joined.${ext}`);
-      await writeFile(joinedPath, Buffer.concat(runs[0]));
-      durationMs = await remux(joinedPath, outputPath);
+      const run = runs[0];
+      const joinedPath = path.join(workDir, `joined.${run.ext}`);
+      await writeFile(joinedPath, Buffer.concat(run.buffers));
+      durationMs = await remux(joinedPath, outputPath, run.ext, ext);
     } else {
       const runPaths: string[] = [];
       for (const [index, run] of runs.entries()) {
-        const joinedPath = path.join(workDir, `run-${index}-joined.${ext}`);
+        const joinedPath = path.join(workDir, `run-${index}-joined.${run.ext}`);
         const runPath = path.join(workDir, `run-${index}.${ext}`);
-        await writeFile(joinedPath, Buffer.concat(run));
-        await remux(joinedPath, runPath);
+        await writeFile(joinedPath, Buffer.concat(run.buffers));
+        await remux(joinedPath, runPath, run.ext, ext);
         runPaths.push(runPath);
       }
       durationMs = await concatRuns(runPaths, outputPath, ext);
