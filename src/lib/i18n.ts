@@ -31,6 +31,27 @@ export function interviewLanguage(locale: Locale) {
   }
 }
 
+/**
+ * The language code the transcriber should assume, from the language stored on
+ * a conversation. Naming the language stops it guessing per utterance, which is
+ * where background noise turns into confident gibberish in whichever language
+ * the noise happened to resemble.
+ *
+ * Cantonese gets `yue` rather than `zh`: the field takes selected ISO-639-3
+ * codes alongside ISO-639-1 ones, and `zh` would bias a Cantonese speaker's
+ * transcript toward Mandarin — the exact mistake the parameter exists to stop.
+ */
+export function transcriptionLanguage(language: string | null | undefined) {
+  switch (language) {
+    case "Cantonese":
+      return "yue";
+    case "Mandarin":
+      return "zh";
+    default:
+      return "en";
+  }
+}
+
 /** Restores the written UI locale from the language stored on a conversation. */
 export function localeForInterviewLanguage(language: string | null | undefined): Locale {
   switch (language) {

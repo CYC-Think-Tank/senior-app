@@ -7,6 +7,11 @@ export const TAGLINE = "Every life is worth the telling.";
 // Use the faster, lower-cost distilled realtime model for interview sessions.
 export const REALTIME_MODEL = "gpt-realtime-2.1-mini";
 export const REALTIME_VOICE = "marin";
+// Transcription of the storyteller's own turns, alongside the realtime model.
+// `gpt-live-transcribe` is the live-stream transcriber: it emits deltas as
+// speech arrives rather than after a turn closes. Note it takes `languages`
+// (plural, an array) and rejects being sent the singular `language` as well.
+export const TRANSCRIBE_MODEL = "gpt-live-transcribe";
 export const CHAT_MODEL = "gpt-5-mini";
 
 // Distilling a finished transcript into one sentence is a small, offline job

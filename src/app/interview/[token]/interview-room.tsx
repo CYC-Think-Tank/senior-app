@@ -79,7 +79,6 @@ export default function InterviewRoom({
   const [userSpeaking, setUserSpeaking] = useState(false);
   const [wrappingUp, setWrappingUp] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [backdrop, setBackdrop] = useState<BackdropKey | null>(null);
   const backdropGroupsRef = useRef(new Set<BackdropGroup>());
   // Turns restored from an earlier sitting are already spoken; counting them as
@@ -174,22 +173,17 @@ export default function InterviewRoom({
     if (clientRef.current?.setMuted(next)) setMuted(next);
   }, [muted]);
 
+  // The first press asks Rosie for a closing — she reflects the sitting back
+  // and says goodbye, and is never cut off mid-sentence. While she is closing
+  // the button becomes "tap again to end", because someone who wants out now
+  // should not have to sit through it.
   const endCall = useCallback(() => {
-    if (!confirmingEnd) {
-      setConfirmingEnd(true);
+    if (!wrappingUp) {
+      clientRef.current?.requestWrapUp();
       return;
     }
-    setConfirmingEnd(false);
     void clientRef.current?.stop();
-  }, [confirmingEnd]);
-
-  // A confirm that waits forever would eventually be tapped by accident, which
-  // is the thing it exists to prevent.
-  useEffect(() => {
-    if (!confirmingEnd) return;
-    const timeout = window.setTimeout(() => setConfirmingEnd(false), 4000);
-    return () => window.clearTimeout(timeout);
-  }, [confirmingEnd]);
+  }, [wrappingUp]);
 
   // Raise the matching backdrop once the guest answers an icebreaker. Each
   // icebreaker fires at most once, so a second mention cannot repaint the room.
@@ -458,11 +452,11 @@ export default function InterviewRoom({
               <button
                 type="button"
                 onClick={endCall}
-                data-confirming={confirmingEnd}
+                data-confirming={wrappingUp}
                 className={theme.endAction}
               >
                 <PhoneOff className="h-5 w-5" aria-hidden="true" />
-                {t(confirmingEnd ? "interviewEndConfirm" : "interviewEndSave")}
+                {t(wrappingUp ? "interviewEndConfirm" : "interviewEndSave")}
               </button>
             </div>
 

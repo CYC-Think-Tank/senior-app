@@ -5,11 +5,14 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { getGuestMemorySummary } from "@/lib/memory/summary";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
+import { transcriptionLanguage } from "@/lib/i18n";
+import { transcriptionKeywords } from "@/lib/realtime/transcription-keywords";
 import { GUEST_FINISH_TOOL } from "@/lib/realtime/interview-ending";
 import {
   isRealtimeVoice,
   REALTIME_MODEL,
   REALTIME_VOICE,
+  TRANSCRIBE_MODEL,
 } from "@/lib/constants";
 import type { Guest } from "@/lib/types";
 
@@ -69,6 +72,12 @@ export async function POST(request: NextRequest) {
     priorTurns: decryptTurns(session.id, savedTurns ?? []),
   });
 
+  const keywords = transcriptionKeywords({
+    guestName,
+    topics: guest.topics,
+    topic: session.topic,
+  });
+
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     cache: "no-store",
@@ -86,7 +95,27 @@ export async function POST(request: NextRequest) {
         tool_choice: "auto",
         audio: {
           input: {
-            transcription: { model: "gpt-4o-transcribe" },
+            // Filters the buffer before it reaches turn detection or the
+            // transcriber, so a cough or a television is less likely to become
+            // a turn at all. `near_field` is the close-microphone profile,
+            // which fits a phone in the hand and a laptop on the desk; both
+            // clients also have room noise rather than a conference hall.
+            noise_reduction: { type: "near_field" },
+            // Naming the language stops the transcriber picking one per
+            // utterance — background noise transcribed as fluent nonsense in
+            // an unrelated language is what that looks like from the outside.
+            transcription: {
+              model: TRANSCRIBE_MODEL,
+              languages: [transcriptionLanguage(language)],
+              // Omitted entirely rather than sent empty when a storyteller has
+              // named neither a topic nor themselves.
+              ...(keywords.length ? { keywords } : {}),
+              // Trades latency for accuracy. An interview is not a support
+              // call: a beat before the transcript catches up costs nothing
+              // here, and the storyteller is waiting on Rosie's voice rather
+              // than on text appearing.
+              delay: "medium",
+            },
             // Semantic VAD understands when a thought is finished while still
             // allowing natural pauses. Medium eagerness closes the turn after
             // a reasonable silence instead of leaving Rosie waiting forever.
