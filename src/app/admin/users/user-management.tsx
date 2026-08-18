@@ -15,8 +15,8 @@ export function UserManagement({ users }: { users: ManagedUser[] }) {
   const copy = locale === "en"
     ? { delete: "Delete", empty: "No users yet.", title: (name: string) => `Delete ${name}?`, body: "This removes their WiseShare account and access. Their recorded conversations will remain.", cancel: "Cancel", confirm: "Delete user" }
     : locale === "zh-Hans"
-      ? { delete: "删除", empty: "还没有用户。", title: (name: string) => `删除 ${name}？`, body: "这会移除其仁慧享账户和访问权限，但已录制的对话会保留。", cancel: "取消", confirm: "删除用户" }
-      : { delete: "刪除", empty: "還沒有使用者。", title: (name: string) => `刪除 ${name}？`, body: "這會移除其仁慧享帳戶和存取權限，但已錄製的對話會保留。", cancel: "取消", confirm: "刪除使用者" };
+      ? { delete: "删除", empty: "还没有用户。", title: (name: string) => `删除 ${name}？`, body: "这会移除其慧享账户和访问权限，但已录制的对话会保留。", cancel: "取消", confirm: "删除用户" }
+      : { delete: "刪除", empty: "還沒有使用者。", title: (name: string) => `刪除 ${name}？`, body: "這會移除其慧享帳戶和存取權限，但已錄製的對話會保留。", cancel: "取消", confirm: "刪除使用者" };
   const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
 
   return (

@@ -49,7 +49,7 @@ export default function ForgotPasswordPage() {
         <div className={styles.wrap}>
           <div className={styles.panel}>
             <div className={styles.panelTop}>
-              <p className={styles.eyebrow}>{locale === "en" ? "WiseShare" : "仁慧享"}</p>
+              <p className={styles.eyebrow}>{locale === "en" ? "WiseShare" : "慧享"}</p>
               <LanguageSwitcher tone="bare" />
             </div>
             <h1 className={styles.heading}>{t("passwordResetRequestTitle")}</h1>

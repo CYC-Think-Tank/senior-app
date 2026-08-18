@@ -14,8 +14,8 @@ export default async function UsersPage() {
   const copy = locale === "en"
     ? { eyebrow: "People", title: "Users", intro: "A private, name-only directory of everyone with a WiseShare account.", all: "All users", total: "total" }
     : locale === "zh-Hans"
-      ? { eyebrow: "人员", title: "用户", intro: "所有仁慧享账户的私密姓名目录。", all: "所有用户", total: "人" }
-      : { eyebrow: "人員", title: "使用者", intro: "所有仁慧享帳戶的私人姓名目錄。", all: "所有使用者", total: "人" };
+      ? { eyebrow: "人员", title: "用户", intro: "所有慧享账户的私密姓名目录。", all: "所有用户", total: "人" }
+      : { eyebrow: "人員", title: "使用者", intro: "所有慧享帳戶的私人姓名目錄。", all: "所有使用者", total: "人" };
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, display_name, email")

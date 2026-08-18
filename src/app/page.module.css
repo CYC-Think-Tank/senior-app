@@ -114,6 +114,7 @@
   font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 600;
+  white-space: nowrap;
   text-decoration: none;
 }
 
@@ -736,11 +737,17 @@
   }
 
   .heroTop {
+    grid-template-columns: auto 1fr;
     padding-top: 1.25rem;
   }
 
   .wordmark {
-    font-size: 1.3rem;
+    grid-column: 1;
+    font-size: 1.15rem;
+  }
+
+  .authNav {
+    grid-column: 2;
   }
 
   .navGhost {

@@ -47,7 +47,7 @@ const copy = {
   },
   "zh-Hans": {
     home: "首页",
-    eyebrow: "来自仁慧享的分享",
+    eyebrow: "来自慧享的分享",
     defaultTitle: (name: string) => `与${name}的对话`,
     intro: (name: string) =>
       `${name}与你分享了一段珍贵的录音。慢慢听，在故事里坐一会儿。`,
@@ -63,7 +63,7 @@ const copy = {
   },
   "zh-Hant": {
     home: "首頁",
-    eyebrow: "來自仁慧享的分享",
+    eyebrow: "來自慧享的分享",
     defaultTitle: (name: string) => `與${name}的對話`,
     intro: (name: string) =>
       `${name}與你分享了一段珍貴的錄音。慢慢聽，在故事裡坐一會兒。`,

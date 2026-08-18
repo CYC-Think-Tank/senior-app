@@ -45,7 +45,7 @@ export default async function LandingPage() {
       <section className={styles.heroPanel} aria-label={t("landingWelcomeAria")}>
         <div className={styles.heroTop}>
           <Link href="/" className={styles.wordmark} aria-label={t("landingHomeAria")}>
-            {locale === "en" ? "WiseShare" : "仁慧享"}
+            {locale === "en" ? "WiseShare AI" : "慧享 AI"}
           </Link>
           <nav className={styles.authNav} aria-label={t("landingAccountAria")}>
             <LanguageSwitcher tone="bare" />
@@ -207,10 +207,10 @@ export default async function LandingPage() {
           <span className={styles.brandName}>
             {locale === "en" ? (
               <>
-                WiseShare
+                WiseShare AI
               </>
             ) : (
-              "仁慧享"
+              "慧享 AI"
             )}
           </span>
         </Link>

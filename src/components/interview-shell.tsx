@@ -27,7 +27,7 @@ export function InterviewShell({
           className={theme.homeLink}
           aria-label={t("landingHomeAria")}
         >
-          {locale === "en" ? "WiseShare" : "仁慧享"}
+          {locale === "en" ? "WiseShare" : "慧享"}
         </Link>
       ) : null}
       <div className={theme.content}>{children}</div>

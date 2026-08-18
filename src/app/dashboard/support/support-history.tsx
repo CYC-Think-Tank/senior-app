@@ -20,11 +20,11 @@ const copy: Record<Locale, {
     statuses: { open: "Matching", matched: "Match found", accepted: "Accepted", in_progress: "In progress", resolved: "Resolved", escalated: "Staff review" },
   },
   "zh-Hans": {
-    title: "您的帮助请求", empty: "您的请求会显示在这里。", helper: "匹配人员", waiting: "仁慧享正在寻找合适的人。", followUp: "您的问题解决了吗？", yes: "是的，已解决", no: "没有，我仍需帮助",
+    title: "您的帮助请求", empty: "您的请求会显示在这里。", helper: "匹配人员", waiting: "慧享正在寻找合适的人。", followUp: "您的问题解决了吗？", yes: "是的，已解决", no: "没有，我仍需帮助",
     statuses: { open: "正在匹配", matched: "已找到人选", accepted: "已接受", in_progress: "处理中", resolved: "已解决", escalated: "员工审核" },
   },
   "zh-Hant": {
-    title: "您的協助請求", empty: "您的請求會顯示在這裡。", helper: "配對人員", waiting: "仁慧享正在尋找合適的人。", followUp: "您的問題解決了嗎？", yes: "是的，已解決", no: "沒有，我仍需協助",
+    title: "您的協助請求", empty: "您的請求會顯示在這裡。", helper: "配對人員", waiting: "慧享正在尋找合適的人。", followUp: "您的問題解決了嗎？", yes: "是的，已解決", no: "沒有，我仍需協助",
     statuses: { open: "正在配對", matched: "已找到人選", accepted: "已接受", in_progress: "處理中", resolved: "已解決", escalated: "職員審核" },
   },
 };

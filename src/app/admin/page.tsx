@@ -32,9 +32,9 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
     statsAria: "Dashboard statistics",
   },
   "zh-Hans": {
-    eyebrow: "仁慧享概览",
+    eyebrow: "慧享概览",
     title: "欢迎回来。",
-    intro: "清晰了解仁慧享中不断增长的用户、故事和对话。",
+    intro: "清晰了解慧享中不断增长的用户、故事和对话。",
     totalUsers: "用户总数",
     recordingsToday: "今日录音",
     averageTime: "平均对话时长",
@@ -52,9 +52,9 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
     statsAria: "控制台统计数据",
   },
   "zh-Hant": {
-    eyebrow: "仁慧享概覽",
+    eyebrow: "慧享概覽",
     title: "歡迎回來。",
-    intro: "清楚掌握仁慧享中持續成長的使用者、故事和對話。",
+    intro: "清楚掌握慧享中持續成長的使用者、故事和對話。",
     totalUsers: "使用者總數",
     recordingsToday: "今日錄音",
     averageTime: "平均對話時長",
