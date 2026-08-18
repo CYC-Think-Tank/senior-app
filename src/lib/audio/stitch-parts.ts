@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { RAW_BUCKET } from "@/lib/constants";
 import { decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import { partsPrefix } from "@/lib/audio/parts";
+import { splitRuns, type PartExtension } from "@/lib/audio/part-runs";
 
 const DOWNLOAD_CONCURRENCY = 8;
 const LIST_PAGE = 1000;
@@ -37,67 +38,6 @@ export async function listParts(
   }
 
   return all.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-const WEBM_MAGIC = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]); // EBML header
-
-/**
- * True when a chunk opens a new recorder run rather than continuing one.
- *
- * Every sitting of a conversation is its own `MediaRecorder`, and its first
- * chunk carries the container header — EBML for WebM, an `ftyp` box for fMP4.
- * Later chunks in the same run are bare Clusters or `moof`s, which is why they
- * can simply be glued together.
- */
-function startsNewRun(buffer: Buffer): boolean {
-  if (buffer.length >= 4 && buffer.subarray(0, 4).equals(WEBM_MAGIC)) {
-    return true;
-  }
-  return buffer.length >= 8 && buffer.subarray(4, 8).toString("latin1") === "ftyp";
-}
-
-/**
- * The format a chunk was uploaded in, read back off its filename. The iOS app
- * sends bare PCM16; browsers send whatever `MediaRecorder` produced.
- */
-function extensionOf(name: string): PartExtension {
-  if (name.endsWith(".pcm")) return "pcm";
-  if (name.endsWith(".m4a")) return "m4a";
-  return "webm";
-}
-
-type PartExtension = "webm" | "m4a" | "pcm";
-type Run = { ext: PartExtension; buffers: Buffer[] };
-
-/**
- * Groups the chunks into the sittings they were recorded in, in order.
- *
- * A run ends for either of two reasons. A container chunk carrying its own
- * header opens a new one, as before. So does a change of format: one
- * conversation can be started in a browser and picked back up in the iOS app,
- * and WebM clusters cannot be glued onto raw PCM.
- *
- * Raw PCM has no header at all, which is exactly why it needs the second rule
- * — every one of its chunks looks like a continuation, including the first.
- */
-function splitRuns(parts: PartFile[], buffers: Buffer[]): Run[] {
-  const runs: Run[] = [];
-
-  buffers.forEach((buffer, index) => {
-    const ext = extensionOf(parts[index].name);
-    const current = runs[runs.length - 1];
-    // PCM concatenates cleanly across sittings, so only a format change starts
-    // a new run for it.
-    const opensRun = ext === "pcm" ? false : startsNewRun(buffer);
-
-    if (!current || current.ext !== ext || opensRun) {
-      runs.push({ ext, buffers: [buffer] });
-    } else {
-      current.buffers.push(buffer);
-    }
-  });
-
-  return runs;
 }
 
 /** Downloads parts in order, a few at a time so a long interview is not serial. */
@@ -247,7 +187,7 @@ export async function stitchSessionParts(
   if (parts.length === 0) return null;
 
   const buffers = await downloadParts(admin, sessionId, parts);
-  const runs = splitRuns(parts, buffers);
+  const runs = splitRuns(parts.map((part) => part.name), buffers);
 
   // WebM only survives as the output when every sitting was already WebM;
   // anything else lands in an MP4, which holds AAC from a Safari sitting and

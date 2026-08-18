@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { HeroSky } from "@/components/hero-sky";
+import { AutoLoopVideo } from "@/components/auto-loop-video";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -92,7 +93,16 @@ export default async function LandingPage() {
                 <ArrowRight className={styles.btnIcon} aria-hidden="true" />
               </PageTransitionLink>
             </div>
-
+            <ScrollReveal className={styles.demoReveal} distance={20}>
+              <div className={styles.demoFrame}>
+                <AutoLoopVideo
+                  src="/demo.mp4"
+                  className={styles.demoVideo}
+                  ariaLabel={t("landingDemoAria")}
+                  fallback={t("landingDemoFallback")}
+                />
+              </div>
+            </ScrollReveal>
           </div>
         </div>
       </section>
