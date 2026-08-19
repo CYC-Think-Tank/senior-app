@@ -54,29 +54,28 @@ export const SEEGEN_MODEL = "sd2-mini";
 // cadence without imitating the storyteller's real voice.
 export const MEMOIR_TTS_MODEL = "gpt-4o-mini-tts-2025-12-15";
 export const MEMOIR_TTS_VOICE = "cedar";
-// Seven to nine 14-second scenes, overlapped by 0.75 seconds at each join,
-// produce films from 93.5 to 120 seconds. Each shot still has a stable
-// 12.5-second area for its narration sentence, within Seedance Mini's limit.
+// Seven or eight complete 14-second SeeGen scenes produce films from 98 to
+// 112 seconds. Visual transitions use padded freeze-frame handles, so none of
+// the native scene audio has to be shortened or discarded.
 export const MEMOIR_MIN_OUTPUT_SECONDS = 90;
 export const MEMOIR_MAX_OUTPUT_SECONDS = 120;
 export const MEMOIR_SCENE_DURATION_SECONDS = 14;
 export const MEMOIR_TRANSITION_SECONDS = 0.75;
+export const MEMOIR_AUDIO_TRANSITION_SECONDS = 0.25;
 export const MEMOIR_MIN_SCENES = 7;
-export const MEMOIR_MAX_SCENES = 9;
+export const MEMOIR_MAX_SCENES = 8;
 export const MEMOIR_OUTPUT_WIDTH = 854;
 export const MEMOIR_OUTPUT_HEIGHT = 480;
+export const MEMOIR_OUTPUT_FPS = 24;
 
 export function memoirOutputSeconds(sceneCount: number) {
-  return sceneCount * MEMOIR_SCENE_DURATION_SECONDS
-    - Math.max(0, sceneCount - 1) * MEMOIR_TRANSITION_SECONDS;
+  return sceneCount * MEMOIR_SCENE_DURATION_SECONDS;
 }
 
-/** Short conversations get a concise film; richer conversations use the full two minutes. */
+/** Short conversations get seven scenes; richer conversations get eight. */
 export function memoirSceneCountForConversation(durationMs: number | null) {
   const durationSeconds = Math.max(0, (durationMs ?? 0) / 1000);
-  if (durationSeconds < 6 * 60) return MEMOIR_MIN_SCENES;
-  if (durationSeconds < 12 * 60) return MEMOIR_MIN_SCENES + 1;
-  return MEMOIR_MAX_SCENES;
+  return durationSeconds < 8 * 60 ? MEMOIR_MIN_SCENES : MEMOIR_MAX_SCENES;
 }
 
 // A live interview heartbeats every 15s, so a session still marked

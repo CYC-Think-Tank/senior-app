@@ -46,7 +46,21 @@ function rawTaskId(taskId: string) {
   return taskId.slice(PROVIDER_PREFIX.length);
 }
 
-export async function createSeedanceScene(prompt: string, duration = MEMOIR_SCENE_DURATION_SECONDS) {
+/** Keeps every independently generated scene in one film on the same model seed. */
+export function seedForMemoirVideo(continuityKey: string) {
+  let hash = 0x811c9dc5;
+  for (const character of continuityKey) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0) & 0x7fffffff;
+}
+
+export async function createSeedanceScene(
+  prompt: string,
+  duration = MEMOIR_SCENE_DURATION_SECONDS,
+  continuityKey?: string,
+) {
   const { key, base, model, outputResolution } = config();
   const response = await fetch(`${base}/jobs/createTask`, {
     method: "POST",
@@ -63,10 +77,8 @@ export async function createSeedanceScene(prompt: string, duration = MEMOIR_SCEN
         duration: `${Math.max(4, Math.min(MEMOIR_SCENE_DURATION_SECONDS, Math.round(duration)))}s`,
         resolution: "1280x720",
         outputResolution,
-        // Narration is generated once on a separate master timeline. Asking
-        // Seedance for scene audio would reintroduce voice and word boundaries
-        // at every generated clip.
-        generateAudio: false,
+        seed: continuityKey ? seedForMemoirVideo(continuityKey) : undefined,
+        generateAudio: true,
       },
     }),
     signal: AbortSignal.timeout(60_000),

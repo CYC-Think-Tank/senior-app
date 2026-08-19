@@ -12,9 +12,10 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
-    const { sessionId, regenerate } = await request.json() as {
+    const { sessionId, regenerate, repair } = await request.json() as {
       sessionId?: string;
       regenerate?: boolean;
+      repair?: boolean;
     };
     if (!sessionId) return NextResponse.json({ error: "A conversation is required." }, { status: 400 });
     if (!isSeegenConfigured()) {
@@ -32,7 +33,10 @@ export async function POST(request: Request) {
       .eq("guests.user_id", user.id)
       .single();
     if (!session) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
-    const video = await startConversationVideo(sessionId, { regenerate: regenerate === true });
+    const video = await startConversationVideo(sessionId, {
+      regenerate: regenerate === true,
+      repair: repair === true,
+    });
     if (["planning", "generating", "rendering"].includes(video.status)) {
       after(async () => {
         try {

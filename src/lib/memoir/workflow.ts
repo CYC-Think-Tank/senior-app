@@ -150,24 +150,12 @@ async function prepareConversationVideo(videoId: string) {
     if (story.narration.length > 4096) throw new Error("The generated narration was too long to voice safely.");
 
     const scenes = await generateMemoirStoryboard({ ...story, sceneCount });
-    // Voice the approved storyboard before buying any Seedance tasks. If the
-    // script cannot fit naturally, the job fails without spending video credits.
-    const narrationMaster = await generateNarrationMaster(story.narration, sceneCount);
-    const narrationPath = narrationArchivePath(video);
-    const { error: narrationUploadError } = await admin.storage
-      .from(STORY_VIDEOS_BUCKET)
-      .upload(narrationPath, encryptAudio(narrationMaster.buffer), {
-        contentType: "application/octet-stream",
-        upsert: true,
-      });
-    if (narrationUploadError) throw narrationUploadError;
-
     await updateVideo(admin, video.id, {
       title: story.title,
       story_ciphertext: encryptMemoirText(video.id, "story", story.story),
       narration_ciphertext: encryptMemoirText(video.id, "narration", story.narration),
       visual_bible_ciphertext: encryptMemoirText(video.id, "visual-bible", story.visualBible),
-      narration_path: narrationPath,
+      narration_path: null,
       duration_ms: memoirOutputSeconds(sceneCount) * 1000,
     });
 
@@ -198,7 +186,7 @@ async function submitQueuedScenes(admin: SupabaseClient, videoId: string, scenes
   const batch = scenes.filter((scene) => scene.status === "queued").slice(0, openSlots);
   await mapLimit(batch, Math.max(1, openSlots), async (scene) => {
       const prompt = decryptMemoirText(videoId, `scene-${scene.idx}`, scene.prompt_ciphertext);
-      const taskId = await createSeedanceScene(prompt, scene.duration_seconds);
+      const taskId = await createSeedanceScene(prompt, scene.duration_seconds, videoId);
       const { error } = await admin.from("conversation_video_scenes").update({
         provider_task_id: taskId,
         status: "running",
@@ -210,7 +198,10 @@ async function submitQueuedScenes(admin: SupabaseClient, videoId: string, scenes
 
 export async function startConversationVideo(
   sessionId: string,
-  { regenerate = false }: { regenerate?: boolean } = {},
+  {
+    regenerate = false,
+    repair = false,
+  }: { regenerate?: boolean; repair?: boolean } = {},
 ) {
   const admin = createSupabaseAdminClient();
   const { data: existing } = await admin
@@ -223,7 +214,23 @@ export async function startConversationVideo(
   if (existing) {
     video = existing as ConversationVideo;
     const canRegenerate = regenerate && video.status === "ready";
-    if (video.status !== "failed" && !canRegenerate) return video;
+    const canRepair = repair && video.status === "ready";
+    if (video.status !== "failed" && !canRegenerate && !canRepair) return video;
+    if (canRepair) {
+      // Rebuild only the combined MP4 from archived clips. Marking it as
+      // generating lets the normal worker claim and render it without
+      // submitting any new provider tasks.
+      const { data: repairing, error: repairError } = await admin
+        .from("conversation_videos")
+        .update({ status: "generating", error_message: null, updated_at: now() })
+        .eq("id", video.id)
+        .eq("status", "ready")
+        .select("*")
+        .maybeSingle();
+      if (repairError) throw repairError;
+      if (!repairing) throw new Error("Wait for the current video job to finish before repairing playback.");
+      return repairing as ConversationVideo;
+    }
     const { data: reusableScenes } = await admin
       .from("conversation_video_scenes")
       .select("*")
@@ -250,6 +257,18 @@ export async function startConversationVideo(
       })
     );
     if (!canRegenerate && video.narration_ciphertext && hasReusableStoryboard) {
+      if (sceneRows.every((scene) => scene.status === "succeeded")) {
+        // Rendering failed after every paid clip was archived. Keep the scene
+        // rows succeeded so the next worker goes directly to the local FFmpeg
+        // pass without querying or purchasing anything from SeeGen.
+        await updateVideo(admin, video.id, { status: "generating", error_message: null });
+        const { data: rerendering } = await admin
+          .from("conversation_videos")
+          .select("*")
+          .eq("id", video.id)
+          .single();
+        return rerendering as ConversationVideo;
+      }
       // Keep the completed story, script, and storyboard on every provider
       // retry. Keep paid SeeGen tasks, but discard task IDs from the previous
       // provider so they are never queried through the wrong API.
@@ -447,7 +466,17 @@ async function renderCompletedVideo(admin: SupabaseClient, video: ConversationVi
   const sceneBuffers = await Promise.all(
     ordered.map((scene) => readArchivedScene(admin, video, scene)),
   );
-  const narrationAudio = await readNarrationMaster(admin, video, ordered);
+  const usesNativeSceneAudio = ordered.every((scene) => {
+    const prompt = decryptMemoirText(video.id, `scene-${scene.idx}`, scene.prompt_ciphertext);
+    return prompt.includes(LEGACY_SEEGEN_AUDIO_PROMPT_MARKER)
+      && !prompt.includes(SEEGEN_SILENT_PROMPT_MARKER);
+  });
+  // Silent storyboards made during the master-narrator release remain
+  // playable. New and original native-audio storyboards keep their full
+  // SeeGen tracks instead.
+  const narrationAudio = usesNativeSceneAudio
+    ? undefined
+    : await readNarrationMaster(admin, video, ordered);
   const rendered = await renderMemoirVideo(sceneBuffers, {
     sceneDurationSeconds,
     narrationAudio,
