@@ -54,16 +54,30 @@ export const SEEGEN_MODEL = "sd2-mini";
 // cadence without imitating the storyteller's real voice.
 export const MEMOIR_TTS_MODEL = "gpt-4o-mini-tts-2025-12-15";
 export const MEMOIR_TTS_VOICE = "cedar";
-// Nine 14-second scenes, overlapped by 0.75 seconds at each of eight joins,
-// produce exactly 120 seconds. Each shot still has a stable 12.5-second area
-// for its full narration sentence, within Seedance Mini's 15-second limit.
+// Seven to nine 14-second scenes, overlapped by 0.75 seconds at each join,
+// produce films from 93.5 to 120 seconds. Each shot still has a stable
+// 12.5-second area for its narration sentence, within Seedance Mini's limit.
+export const MEMOIR_MIN_OUTPUT_SECONDS = 90;
 export const MEMOIR_MAX_OUTPUT_SECONDS = 120;
 export const MEMOIR_SCENE_DURATION_SECONDS = 14;
 export const MEMOIR_TRANSITION_SECONDS = 0.75;
-export const MEMOIR_MIN_SCENES = 9;
+export const MEMOIR_MIN_SCENES = 7;
 export const MEMOIR_MAX_SCENES = 9;
 export const MEMOIR_OUTPUT_WIDTH = 854;
 export const MEMOIR_OUTPUT_HEIGHT = 480;
+
+export function memoirOutputSeconds(sceneCount: number) {
+  return sceneCount * MEMOIR_SCENE_DURATION_SECONDS
+    - Math.max(0, sceneCount - 1) * MEMOIR_TRANSITION_SECONDS;
+}
+
+/** Short conversations get a concise film; richer conversations use the full two minutes. */
+export function memoirSceneCountForConversation(durationMs: number | null) {
+  const durationSeconds = Math.max(0, (durationMs ?? 0) / 1000);
+  if (durationSeconds < 6 * 60) return MEMOIR_MIN_SCENES;
+  if (durationSeconds < 12 * 60) return MEMOIR_MIN_SCENES + 1;
+  return MEMOIR_MAX_SCENES;
+}
 
 // A live interview heartbeats every 15s, so a session still marked
 // 'recording' after this long lost its tab. Kept in step with the family

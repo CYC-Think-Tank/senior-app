@@ -324,6 +324,12 @@ export default function InterviewRoom({
           {t("interviewAlreadyBody", { guestName })}
         </p>
         {shareToken && <CompletionShareLink shareToken={shareToken} />}
+        {isLoggedIn && (
+          <Link href={homeHref} className={`${theme.primaryAction} mx-auto mt-6`}>
+            {t("interviewBackToDashboard")}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        )}
       </InterviewShell>
     );
   }
@@ -502,6 +508,12 @@ export default function InterviewRoom({
               {t(isLoggedIn ? "interviewDone" : "interviewDoneAnonymous")}
             </p>
             {shareToken && <CompletionShareLink shareToken={shareToken} />}
+            {isLoggedIn && (
+              <Link href={homeHref} className={`${theme.primaryAction} mt-6`}>
+                {t("interviewBackToDashboard")}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            )}
             {!isLoggedIn && (
               <Link href="/login" className={`${theme.primaryAction} mt-6`}>
                 {t("interviewLogInToSave")}

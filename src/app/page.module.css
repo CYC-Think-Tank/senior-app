@@ -191,7 +191,7 @@
   margin-inline: auto;
   color: var(--color-whiteout);
   font-family: var(--font-display);
-  font-size: clamp(3rem, 5vw, 4.4rem);
+  font-size: clamp(2.5rem, 4.2vw, 3.7rem);
   font-weight: 500;
   line-height: 0.98;
   text-shadow: 0 0.2rem 1.25rem rgb(22 0 52 / 0.18);
@@ -199,12 +199,16 @@
 }
 
 .sloganLine {
-  display: inline;
+  display: block;
+}
+
+.sloganSegment {
+  display: block;
 }
 
 .flipSlot {
-  display: inline;
-  margin-left: 0.16em;
+  display: block;
+  margin-top: 0.08em;
 }
 
 .flipWord {
@@ -232,11 +236,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 42rem;
+  max-width: 48rem;
   margin: 1.55rem auto 0;
   color: rgb(255 250 241 / 0.76);
-  font-size: clamp(0.9rem, 1.2vw, 1.05rem);
-  line-height: 1.55;
+  font-size: clamp(1.05rem, 1.5vw, 1.3rem);
+  line-height: 1.45;
   text-shadow: 0 0.15rem 1rem rgb(22 0 52 / 0.16);
   text-wrap: balance;
 }
@@ -426,11 +430,11 @@
 }
 
 .companionSection .sectionLead {
-  max-width: 38rem;
+  max-width: 44rem;
   margin-top: 2rem;
   color: rgb(255 250 241 / 0.76);
-  font-size: 1.05rem;
-  line-height: 1.75;
+  font-size: clamp(1.15rem, 1.5vw, 1.3rem);
+  line-height: 1.65;
 }
 
 .featureList {
@@ -468,11 +472,11 @@
 }
 
 .featureItem p {
-  max-width: 18rem;
+  max-width: 20rem;
   margin-top: 0.8rem;
   color: rgb(255 250 241 / 0.68);
-  font-size: 0.95rem;
-  line-height: 1.65;
+  font-size: clamp(1.05rem, 1.25vw, 1.15rem);
+  line-height: 1.6;
 }
 
 /* ---------------------------- How it works ------------------------ */
@@ -759,7 +763,7 @@
   }
 
   .slogan {
-    font-size: 2.5rem;
+    font-size: 2.2rem;
   }
 
   .heroCtas {

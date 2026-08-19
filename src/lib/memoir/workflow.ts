@@ -3,11 +3,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { createAudioUrl, decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import {
-  MEMOIR_MAX_OUTPUT_SECONDS,
   MEMOIR_MAX_SCENES,
   MEMOIR_MIN_SCENES,
   MEMOIR_SCENE_DURATION_SECONDS,
   STORY_VIDEOS_BUCKET,
+  memoirOutputSeconds,
+  memoirSceneCountForConversation,
 } from "@/lib/constants";
 import type { ConversationVideo, Guest, TranscriptTurn } from "@/lib/types";
 import { decryptMemoirText, encryptMemoirText } from "./encryption";
@@ -133,16 +134,21 @@ async function prepareConversationVideo(videoId: string) {
     if (!video) return;
 
     const [{ data: session }, { data: rows }] = await Promise.all([
-      admin.from("sessions").select("id, status, guests(*)").eq("id", video.session_id).single(),
+      admin.from("sessions").select("id, status, duration_ms, guests(*)").eq("id", video.session_id).single(),
       admin.from("transcript_turns").select("*").eq("session_id", video.session_id).order("idx"),
     ]);
     if (!session || session.status !== "ready") throw new Error("Only finished conversations can become films.");
     const guest = session.guests as unknown as Guest;
     const turns = decryptTurns(video.session_id, (rows ?? []) as TranscriptTurn[]);
-    const story = await generateMemoirStory({ guestName: guest.name, language: guest.language, turns });
+    const sceneCount = memoirSceneCountForConversation(session.duration_ms);
+    const story = await generateMemoirStory({
+      guestName: guest.name,
+      language: guest.language,
+      sceneCount,
+      turns,
+    });
     if (story.narration.length > 4096) throw new Error("The generated narration was too long to voice safely.");
 
-    const sceneCount = MEMOIR_MIN_SCENES;
     const scenes = await generateMemoirStoryboard({ ...story, sceneCount });
     // Voice the approved storyboard before buying any Seedance tasks. If the
     // script cannot fit naturally, the job fails without spending video credits.
@@ -162,7 +168,7 @@ async function prepareConversationVideo(videoId: string) {
       narration_ciphertext: encryptMemoirText(video.id, "narration", story.narration),
       visual_bible_ciphertext: encryptMemoirText(video.id, "visual-bible", story.visualBible),
       narration_path: narrationPath,
-      duration_ms: MEMOIR_MAX_OUTPUT_SECONDS * 1000,
+      duration_ms: memoirOutputSeconds(sceneCount) * 1000,
     });
 
     const sceneRows = scenes.map((scene, idx) => ({
@@ -301,6 +307,60 @@ export async function startConversationVideo(
   return video;
 }
 
+/**
+ * Reuses the saved storyboard prompt for one scene, then lets the normal
+ * generation pipeline replace that clip and rebuild the finished film.
+ */
+export async function regenerateConversationVideoScene(
+  videoId: string,
+  sceneNumber: number,
+) {
+  if (!Number.isInteger(sceneNumber) || sceneNumber < 1) {
+    throw new Error("Choose a valid scene to regenerate.");
+  }
+
+  const admin = createSupabaseAdminClient();
+  const sceneIndex = sceneNumber - 1;
+  const { data: scene } = await admin
+    .from("conversation_video_scenes")
+    .select("id, status")
+    .eq("video_id", videoId)
+    .eq("idx", sceneIndex)
+    .maybeSingle();
+  if (!scene) throw new Error("Scene not found.");
+
+  // Claim the ready film so double-clicks and overlapping regeneration jobs
+  // cannot purchase two replacements for the same scene.
+  const { data: video, error: claimError } = await admin
+    .from("conversation_videos")
+    .update({ status: "generating", error_message: null, updated_at: now() })
+    .eq("id", videoId)
+    .eq("status", "ready")
+    .select("*")
+    .maybeSingle();
+  if (claimError) throw claimError;
+  if (!video) throw new Error("Wait for the current video job to finish before regenerating a scene.");
+
+  const { error: sceneError } = await admin
+    .from("conversation_video_scenes")
+    .update({
+      status: "queued",
+      provider_task_id: null,
+      result_url: null,
+      error_message: null,
+      updated_at: now(),
+    })
+    .eq("id", scene.id)
+    .eq("video_id", videoId);
+
+  if (sceneError) {
+    await updateVideo(admin, videoId, { status: "ready" });
+    throw sceneError;
+  }
+
+  return video as ConversationVideo;
+}
+
 async function downloadScene(url: string) {
   const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
   if (!response.ok) throw new Error(`Could not download a completed scene (${response.status}).`);
@@ -399,6 +459,12 @@ async function renderCompletedVideo(admin: SupabaseClient, video: ConversationVi
     { contentType: "application/octet-stream", upsert: true },
   );
   if (uploadError) throw uploadError;
+  if (video.video_path && video.video_path !== videoPath) {
+    const { error: cleanupError } = await admin.storage
+      .from(STORY_VIDEOS_BUCKET)
+      .remove([video.video_path]);
+    if (cleanupError) console.error("Could not remove the replaced memoir video:", cleanupError);
+  }
   await admin.from("conversation_video_scenes").update({ result_url: null, updated_at: now() }).eq("video_id", video.id);
   await updateVideo(admin, video.id, {
     status: "ready",

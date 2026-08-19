@@ -100,7 +100,7 @@ const en = {
   landingLogin: "Log in",
   landingGetStarted: "Get started",
   landingHeroLine:
-    "Turn your stories into videos, connect generations and pass on wisdom.",
+    "Turn your stories into videos,\nconnect generations and pass on wisdom.",
   landingHeroForever: "Preserve family history.",
   landingHeroDescription:
     "Your AI Companion — Chat, Connect & Enjoy Every Day.",
@@ -267,6 +267,7 @@ const en = {
     "Your stories are saved. Your family is going to love this. Share the conversation with them below.",
   interviewDoneAnonymous:
     "Your conversation is complete. Share it below, or log in to save it to your WiseShare account.",
+  interviewBackToDashboard: "Back to dashboard",
   interviewLogInToSave: "Log in to save your conversation",
   interviewConsentNotice: "By selecting Begin & consent, you agree to recording and AI processing of this conversation. Publishing requires separate approval.",
   interviewBeginConsent: "Begin & consent",
@@ -571,6 +572,7 @@ const zhHans: typeof en = {
   interviewThanks: "谢谢你，{guestName}。",
   interviewDone: "你的故事已经保存。家人一定会喜欢。请在下方分享这次对话。",
   interviewDoneAnonymous: "对话已经完成。你可以在下方分享，或登录慧享账户保存对话。",
+  interviewBackToDashboard: "返回控制台",
   interviewLogInToSave: "登录以保存这次对话",
   interviewConsentNotice: "选择“开始并同意”即表示您同意录制并使用 AI 处理这次对话。公开发布仍需另行批准。",
   interviewBeginConsent: "开始并同意",
@@ -864,6 +866,7 @@ const zhHant: typeof en = {
   interviewKeepOpen: "請保持此頁面開啟。",
   interviewDone: "你的故事已經儲存。家人一定會喜歡。請在下方分享這次對話。",
   interviewDoneAnonymous: "對話已經完成。你可以在下方分享，或登入慧享帳戶儲存對話。",
+  interviewBackToDashboard: "返回控制台",
   interviewLogInToSave: "登入以儲存這次對話",
   interviewConsentNotice: "選擇「開始並同意」即表示您同意錄製並使用 AI 處理這次對話。公開發布仍需另行批准。",
   interviewBeginConsent: "開始並同意",

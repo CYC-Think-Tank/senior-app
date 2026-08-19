@@ -74,7 +74,11 @@ export default async function LandingPage() {
               }`}
             >
               <span className={styles.sloganLine}>
-                {t("landingHeroLine")}
+                {t("landingHeroLine").split("\n").map((line) => (
+                  <span key={line} className={styles.sloganSegment}>
+                    {line}
+                  </span>
+                ))}
               </span>
               <span className={styles.flipSlot}>
                 <span className={styles.flipWord}>{t("landingHeroForever")}</span>

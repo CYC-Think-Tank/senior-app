@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import {
   CHAT_MODEL,
-  MEMOIR_MIN_SCENES,
   MEMOIR_SCENE_DURATION_SECONDS,
 } from "@/lib/constants";
 import type { TranscriptTurn } from "@/lib/types";
@@ -66,10 +65,12 @@ async function condenseLongTranscript(openai: OpenAI, transcript: string) {
 export async function generateMemoirStory({
   guestName,
   language,
+  sceneCount,
   turns,
 }: {
   guestName: string;
   language: string;
+  sceneCount: number;
   turns: TranscriptTurn[];
 }): Promise<MemoirStory> {
   const transcript = storytellerTranscript(turns);
@@ -85,8 +86,8 @@ export async function generateMemoirStory({
     spokenLanguage.includes("cantonese") ||
     spokenLanguage.includes("mandarin");
   const narrationLength = isChinese
-    ? `exactly ${MEMOIR_MIN_SCENES} short sentences totaling 324–396 Chinese characters; keep every sentence at 46 characters or fewer`
-    : `exactly ${MEMOIR_MIN_SCENES} short sentences totaling 180–207 words; keep every sentence at 23 words or fewer`;
+    ? `exactly ${sceneCount} short sentences totaling ${sceneCount * 36}–${sceneCount * 44} Chinese characters; keep every sentence at 46 characters or fewer`
+    : `exactly ${sceneCount} short sentences totaling ${sceneCount * 20}–${sceneCount * 23} words; keep every sentence at 23 words or fewer`;
   const completion = await openai.chat.completions.create({
     model: CHAT_MODEL,
     response_format: { type: "json_object" },

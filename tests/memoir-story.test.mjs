@@ -11,9 +11,12 @@ const {
 const {
   MEMOIR_MAX_OUTPUT_SECONDS,
   MEMOIR_MAX_SCENES,
+  MEMOIR_MIN_OUTPUT_SECONDS,
   MEMOIR_MIN_SCENES,
   MEMOIR_SCENE_DURATION_SECONDS,
   MEMOIR_TRANSITION_SECONDS,
+  memoirOutputSeconds,
+  memoirSceneCountForConversation,
 } = await import("../src/lib/constants.ts");
 const { buildMemoirRenderPlan } = await import(
   "../src/lib/memoir/render-plan.ts"
@@ -52,20 +55,20 @@ test("Seedance prompt requires original family animation and silent visuals", ()
   assert.doesNotMatch(prompt, /Generate synchronized audio/i);
 });
 
-test("overlapped memoir timing stays at exactly two minutes", () => {
-  assert.equal(MEMOIR_MIN_SCENES, 9);
+test("new memoir timing stays between 90 seconds and two minutes", () => {
+  assert.equal(MEMOIR_MIN_SCENES, 7);
   assert.equal(MEMOIR_MAX_SCENES, 9);
-  assert.equal(
-    MEMOIR_MIN_SCENES * MEMOIR_SCENE_DURATION_SECONDS -
-      (MEMOIR_MIN_SCENES - 1) * MEMOIR_TRANSITION_SECONDS,
-    MEMOIR_MAX_OUTPUT_SECONDS,
-  );
+  assert.ok(memoirOutputSeconds(MEMOIR_MIN_SCENES) >= MEMOIR_MIN_OUTPUT_SECONDS);
+  assert.equal(memoirOutputSeconds(MEMOIR_MAX_SCENES), MEMOIR_MAX_OUTPUT_SECONDS);
   assert.equal(MEMOIR_MAX_OUTPUT_SECONDS, 2 * 60);
+  assert.equal(memoirSceneCountForConversation(5 * 60 * 1000), 7);
+  assert.equal(memoirSceneCountForConversation(8 * 60 * 1000), 8);
+  assert.equal(memoirSceneCountForConversation(15 * 60 * 1000), 9);
 });
 
 test("renderer transitions video without touching master narration", () => {
   const plan = buildMemoirRenderPlan({
-    sceneCount: MEMOIR_MIN_SCENES,
+    sceneCount: MEMOIR_MAX_SCENES,
     sceneDurationSeconds: MEMOIR_SCENE_DURATION_SECONDS,
     transitionSeconds: MEMOIR_TRANSITION_SECONDS,
     width: 854,
@@ -162,7 +165,7 @@ test("English narration is included exactly once and fits every scene", () => {
     { length: 207 },
     (_, index) => `word-${index + 1}`,
   ).join(" ");
-  const segments = splitNarrationIntoScenes(narration, MEMOIR_MIN_SCENES);
+  const segments = splitNarrationIntoScenes(narration, MEMOIR_MAX_SCENES);
 
   assert.equal(segments.length, 9);
   assert.ok(segments.every((segment) => segment.split(/\s+/).length <= 24));
@@ -171,7 +174,7 @@ test("English narration is included exactly once and fits every scene", () => {
 
 test("Chinese narration is included exactly once and fits every scene", () => {
   const narration = "春夏秋冬".repeat(99);
-  const segments = splitNarrationIntoScenes(narration, MEMOIR_MIN_SCENES);
+  const segments = splitNarrationIntoScenes(narration, MEMOIR_MAX_SCENES);
 
   assert.equal(segments.length, 9);
   assert.ok(segments.every((segment) => Array.from(segment).length <= 46));
@@ -184,7 +187,7 @@ test("narration that cannot be spoken in the available scenes is rejected", () =
     (_, index) => `word-${index + 1}`,
   ).join(" ");
   assert.throws(
-    () => splitNarrationIntoScenes(narration, MEMOIR_MIN_SCENES),
+    () => splitNarrationIntoScenes(narration, MEMOIR_MAX_SCENES),
     /too long to fit/i,
   );
 });
