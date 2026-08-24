@@ -13,6 +13,7 @@ import {
 } from "./actions";
 import theme from "@/components/interview-theme.module.css";
 import { useI18n } from "@/components/i18n-provider";
+import type { Locale } from "@/lib/i18n";
 
 const initialState: StartConversationState = {
   error: null,
@@ -24,8 +25,12 @@ function capitalizeName(value: string) {
   );
 }
 
-export function StartForm() {
-  const { t } = useI18n();
+export function StartForm({
+  conversationLocale,
+}: {
+  conversationLocale: Locale | null;
+}) {
+  const { locale, t } = useI18n();
   const [name, setName] = useState("");
   const [focused, setFocused] = useState(true);
   const [leaving, setLeaving] = useState(false);
@@ -44,6 +49,9 @@ export function StartForm() {
 
   return (
     <>
+      <h1 className={`${theme.heading} ${theme.startQuestion} text-4xl sm:text-6xl`}>
+        {t("interviewNameQuestion")}
+      </h1>
       <form
         action={formAction}
         className={theme.form}
@@ -68,6 +76,11 @@ export function StartForm() {
           }, 760);
         }}
       >
+        <input
+          name="locale"
+          type="hidden"
+          value={conversationLocale ?? locale}
+        />
         <label htmlFor="name" className={theme.visuallyHidden}>
           {t("interviewNameLabel")}
         </label>

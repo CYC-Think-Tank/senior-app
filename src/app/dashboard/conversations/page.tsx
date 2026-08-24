@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Download, Mic } from "lucide-react";
 import { startMyConversation } from "../actions";
 import { ConversationList } from "../conversation-list";
@@ -39,7 +40,7 @@ const copyByLocale: Record<Locale, {
 };
 
 export default async function ConversationsPage() {
-  const [{ conversations, origin }, locale] = await Promise.all([
+  const [{ conversations, hasStartedConversation, origin }, locale] = await Promise.all([
     getFamilyConversations(),
     getPreferredLocale(),
   ]);
@@ -64,11 +65,17 @@ export default async function ConversationsPage() {
               {copy.exportAll}
             </a>
           ) : null}
-          <form action={startMyConversation}>
-            <button className={styles.smallStartButton} type="submit">
+          {hasStartedConversation ? (
+            <form action={startMyConversation}>
+              <button className={styles.smallStartButton} type="submit">
+                <Mic aria-hidden="true" /> {copy.newConversation}
+              </button>
+            </form>
+          ) : (
+            <Link className={styles.smallStartButton} href="/interview">
               <Mic aria-hidden="true" /> {copy.newConversation}
-            </button>
-          </form>
+            </Link>
+          )}
         </div>
       </header>
 

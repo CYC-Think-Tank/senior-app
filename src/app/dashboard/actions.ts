@@ -1,11 +1,18 @@
 "use server";
 
 import { randomBytes } from "crypto";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { interviewLanguage } from "@/lib/i18n";
+import {
+  conversationLanguageChosenCookieName,
+  conversationLanguageDraftCookieName,
+  interviewLanguage,
+  localeCookieName,
+  localeFromValue,
+} from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { personName } from "@/lib/names";
 import {
@@ -304,10 +311,25 @@ export async function updateMyProfile(
  * single reusable "self" guest (plus family access to it, so the finished
  * recording shows up on their own dashboard), then a fresh session per run.
  */
-export async function startMyConversation() {
+export async function startMyConversation(formData: FormData) {
   const { user } = await requireUser();
-  const locale = await getPreferredLocale();
   const admin = createSupabaseAdminClient();
+  const submittedLocale = localeFromValue(
+    String(formData.get("locale") ?? ""),
+  );
+  const locale = submittedLocale ?? await getPreferredLocale();
+
+  if (submittedLocale) {
+    const { error: localeError } = await admin
+      .from("profiles")
+      .update({ locale: submittedLocale })
+      .eq("id", user.id);
+
+    if (localeError) {
+      console.error("Could not save the conversation language:", localeError);
+      throw new Error("Could not start the conversation.");
+    }
+  }
 
   const [{ data: existing }, { data: profile }] = await Promise.all([
     admin
@@ -374,6 +396,32 @@ export async function startMyConversation() {
     console.error("Could not create a self conversation:", sessionError);
     throw new Error("Could not start the conversation.");
   }
+
+  const { error: firstLanguageError } = await admin
+    .from("profiles")
+    .update({ conversation_language_chosen_at: new Date().toISOString() })
+    .eq("id", user.id)
+    .is("conversation_language_chosen_at", null);
+
+  if (firstLanguageError) {
+    console.error(
+      "Could not mark the first conversation language as chosen:",
+      firstLanguageError,
+    );
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(localeCookieName, locale, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  cookieStore.set(conversationLanguageChosenCookieName, "1", {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  cookieStore.delete(conversationLanguageDraftCookieName);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/conversations");

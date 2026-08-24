@@ -7,11 +7,27 @@ export const localeLabels: Record<Locale, string> = {
   "zh-Hant": "繁體中文",
 };
 
+export const conversationLanguageLabels: Record<Locale, string> = {
+  en: "English",
+  "zh-Hans": "普通话",
+  "zh-Hant": "廣東話",
+};
+
 export const defaultLocale: Locale = "en";
 export const localeCookieName = "fireside-locale";
+export const conversationLanguageChosenCookieName =
+  "fireside-conversation-language-chosen";
+export const conversationLanguageDraftCookieName =
+  "fireside-conversation-language-draft";
+
+export function localeFromValue(
+  value: string | undefined | null,
+): Locale | null {
+  return locales.includes(value as Locale) ? (value as Locale) : null;
+}
 
 export function normalizeLocale(value: string | undefined | null): Locale {
-  return locales.includes(value as Locale) ? (value as Locale) : defaultLocale;
+  return localeFromValue(value) ?? defaultLocale;
 }
 
 /**
@@ -226,6 +242,10 @@ const en = {
   transcriptEditError: "That edit couldn't be saved. Please try again.",
   interviewNameQuestion: "What should I call you?",
   interviewNameLabel: "Your name",
+  interviewFirstConversationTitle: "Before your first conversation",
+  interviewLanguageQuestion: "What language should this conversation be in?",
+  interviewLanguageHint:
+    "Your selection will also change the language used throughout WiseShare.",
   interviewPreparingGreeting: "Preparing your greeting.",
   interviewStartGenericError:
     "We couldn't start the conversation. Please try again.",
@@ -537,6 +557,9 @@ const zhHans: typeof en = {
   transcriptEditError: "无法保存这次编辑，请重试。",
   interviewNameQuestion: "我该怎么称呼您？",
   interviewNameLabel: "您的姓名",
+  interviewFirstConversationTitle: "开始第一次对话前",
+  interviewLanguageQuestion: "您希望这次对话使用哪种语言？",
+  interviewLanguageHint: "您的选择也会更改 WiseShare 的网站显示语言。",
   interviewPreparingGreeting: "正在准备问候语。",
   interviewStartGenericError: "无法开始对话，请重试。",
   interviewStartRateLimit: "请稍等几分钟后再开始新的对话。",
@@ -840,6 +863,9 @@ const zhHant: typeof en = {
   transcriptEditError: "無法儲存這次編輯，請重試。",
   interviewNameQuestion: "我該怎麼稱呼您？",
   interviewNameLabel: "您的姓名",
+  interviewFirstConversationTitle: "開始第一次對話前",
+  interviewLanguageQuestion: "您希望這次對話使用哪種語言？",
+  interviewLanguageHint: "您的選擇也會更改 WiseShare 的網站顯示語言。",
   interviewPreparingGreeting: "正在準備問候語。",
   interviewStartGenericError: "無法開始對話，請重試。",
   interviewStartRateLimit: "請稍等幾分鐘後再開始新的對話。",

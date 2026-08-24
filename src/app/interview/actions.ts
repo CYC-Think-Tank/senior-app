@@ -3,8 +3,11 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  conversationLanguageChosenCookieName,
+  conversationLanguageDraftCookieName,
   interviewLanguage,
   localeCookieName,
+  localeFromValue,
   normalizeLocale,
   translate,
 } from "@/lib/i18n";
@@ -66,8 +69,12 @@ export async function startConversation(
   _previousState: StartConversationState,
   formData: FormData,
 ): Promise<StartConversationState> {
-  const locale = normalizeLocale(
-    (await cookies()).get(localeCookieName)?.value,
+  const cookieStore = await cookies();
+  const submittedLocale = localeFromValue(
+    String(formData.get("locale") ?? ""),
+  );
+  const locale = submittedLocale ?? normalizeLocale(
+    cookieStore.get(localeCookieName)?.value,
   );
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
@@ -122,6 +129,18 @@ export async function startConversation(
     await admin.from("guests").delete().eq("id", guest.id);
     return { error: t("interviewStartGenericError") };
   }
+
+  cookieStore.set(localeCookieName, locale, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  cookieStore.set(conversationLanguageChosenCookieName, "1", {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  cookieStore.delete(conversationLanguageDraftCookieName);
 
   redirect(`/interview/${session.token}`);
 }

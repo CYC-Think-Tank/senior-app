@@ -75,7 +75,7 @@ function timeGreeting(name: string, locale: Locale) {
 }
 
 export default async function FamilyPage() {
-  const [{ conversations, origin }, locale, { supabase, user }] = await Promise.all([
+  const [{ conversations, hasStartedConversation, origin }, locale, { supabase, user }] = await Promise.all([
     getFamilyConversations(),
     getPreferredLocale(),
     requireUser(),
@@ -112,11 +112,17 @@ export default async function FamilyPage() {
             {copy.readyBody}
           </p>
         </div>
-        <form action={startMyConversation}>
-          <button className={styles.startButton} type="submit">
+        {hasStartedConversation ? (
+          <form action={startMyConversation}>
+            <button className={styles.startButton} type="submit">
+              <Mic aria-hidden="true" /> {copy.start}
+            </button>
+          </form>
+        ) : (
+          <Link className={styles.startButton} href="/interview">
             <Mic aria-hidden="true" /> {copy.start}
-          </button>
-        </form>
+          </Link>
+        )}
       </section>
 
       <section className={styles.section} aria-labelledby="past-conversations-title">

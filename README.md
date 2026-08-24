@@ -22,6 +22,21 @@ An AI interviewer (OpenAI Realtime API) holds warm voice conversations with a se
 3. **Run**: `npm install && npm run dev`
 4. Sign in at `/login` with your admin email (magic link), and you'll land on `/admin`.
 
+### Wix CMS API
+
+The read-only `GET /api/wix-cms` endpoint returns rows from one configured Wix
+CMS collection. Add `WIX_API_KEY`, `WIX_SITE_ID`, `WIX_CMS_COLLECTION_ID`, and
+`WIX_CMS_READ_TOKEN` to `.env.local`. The Wix key needs the **Read Data Items**
+permission and stays on the server.
+
+```bash
+curl -H "Authorization: Bearer $WIX_CMS_READ_TOKEN" \
+  "http://localhost:3000/api/wix-cms?limit=50&offset=0"
+```
+
+`limit` defaults to 50 and is capped at 100. Use the returned
+`pagingMetadata` with `offset` to request the next page.
+
 ### Optional Krisp background voice cancellation
 
 The interview room automatically uses Krisp BVC when the browser SDK assets are present. Download the packed Web Browser SDK from the Krisp SDK Portal and place it under `public/krisp`:

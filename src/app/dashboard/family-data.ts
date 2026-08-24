@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { requireUser } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
@@ -28,12 +29,26 @@ export const getFamilyConversations = cache(async () => {
   const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
-  const { data } = await supabase
-    .from("sessions")
-    .select("id, title, status, created_at, duration_ms, share_token, guests!inner(name, user_id)")
-    .in("status", ["ready", "recording"])
-    .eq("guests.user_id", user.id)
-    .order("created_at", { ascending: false });
+  const admin = createSupabaseAdminClient();
+  const [{ data }, { data: firstSession }, { data: profile }] = await Promise.all([
+    supabase
+      .from("sessions")
+      .select("id, title, status, created_at, duration_ms, share_token, guests!inner(name, user_id)")
+      .in("status", ["ready", "recording"])
+      .eq("guests.user_id", user.id)
+      .order("created_at", { ascending: false }),
+    admin
+      .from("sessions")
+      .select("id, guests!inner(user_id)")
+      .eq("guests.user_id", user.id)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("profiles")
+      .select("conversation_language_chosen_at")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
 
   type SessionRow = Pick<
     InterviewSession,
@@ -81,6 +96,8 @@ export const getFamilyConversations = cache(async () => {
 
   return {
     conversations,
+    hasStartedConversation:
+      Boolean(profile?.conversation_language_chosen_at) || Boolean(firstSession),
     locale,
     origin: host ? `${protocol}://${host}` : "",
   };

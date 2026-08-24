@@ -5,6 +5,7 @@ export type Profile = {
   email: string;
   display_name: string | null;
   locale: "en" | "zh-Hans" | "zh-Hant";
+  conversation_language_chosen_at: string | null;
   role: Role;
   created_at: string;
 };

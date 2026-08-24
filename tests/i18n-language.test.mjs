@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  conversationLanguageLabels,
   dictionaries,
   interviewLanguage,
+  localeFromValue,
   localeForInterviewLanguage,
 } from "../src/lib/i18n.ts";
 import { buildInterviewerInstructions } from "../src/lib/realtime/interviewer-prompt.ts";
@@ -30,4 +32,17 @@ test("Traditional Chinese starts a Cantonese interview", () => {
 test("English keeps the English interview", () => {
   assert.equal(interviewLanguage("en"), "English");
   assert.equal(localeForInterviewLanguage("English"), "en");
+});
+
+test("only supported site languages can become conversation languages", () => {
+  assert.equal(localeFromValue("en"), "en");
+  assert.equal(localeFromValue("zh-Hans"), "zh-Hans");
+  assert.equal(localeFromValue("zh-Hant"), "zh-Hant");
+  assert.equal(localeFromValue("fr"), null);
+  assert.equal(localeFromValue(null), null);
+});
+
+test("conversation choices name Mandarin and Cantonese in their own scripts", () => {
+  assert.equal(conversationLanguageLabels["zh-Hans"], "普通话");
+  assert.equal(conversationLanguageLabels["zh-Hant"], "廣東話");
 });
