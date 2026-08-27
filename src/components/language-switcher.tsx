@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Check, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { setLocaleAction } from "@/app/language/actions";
 import {
@@ -12,6 +12,10 @@ import {
   type Locale,
 } from "@/lib/i18n";
 import styles from "@/components/language-switcher.module.css";
+
+// Chinese is offered as one choice that still needs a script behind it, so the
+// menu only ever holds these two.
+const chineseLocales = locales.filter((locale) => locale !== "en");
 
 export function LanguageSwitcher({
   tone = "light",
@@ -40,6 +44,11 @@ export function LanguageSwitcher({
     : displayLocale === "zh-Hans"
       ? "语言"
       : "語言";
+  // The button names the language it switches to, not the current one. From
+  // English that is Chinese, which still needs a Simplified or Traditional
+  // choice; from either Chinese it goes straight back to English.
+  const hasMenu = displayLocale === "en";
+  const triggerLabel = hasMenu ? "中文" : localeLabels.en;
 
   useEffect(
     () => () => {
@@ -67,7 +76,7 @@ export function LanguageSwitcher({
     return () => document.removeEventListener("pointerdown", closeFromOutside);
   }, [open]);
 
-  function openMenu(focusIndex = locales.indexOf(displayLocale)) {
+  function openMenu(focusIndex = 0) {
     if (preparing || pending) return;
     setOpen(true);
     window.requestAnimationFrame(() => {
@@ -76,7 +85,8 @@ export function LanguageSwitcher({
   }
 
   function moveOptionFocus(currentIndex: number, direction: 1 | -1) {
-    const nextIndex = (currentIndex + direction + locales.length) % locales.length;
+    const nextIndex =
+      (currentIndex + direction + chineseLocales.length) % chineseLocales.length;
     optionRefs.current[nextIndex]?.focus();
   }
 
@@ -92,7 +102,7 @@ export function LanguageSwitcher({
       optionRefs.current[0]?.focus();
     } else if (event.key === "End") {
       event.preventDefault();
-      optionRefs.current[locales.length - 1]?.focus();
+      optionRefs.current[chineseLocales.length - 1]?.focus();
     } else if (event.key === "Escape") {
       event.preventDefault();
       setOpen(false);
@@ -184,6 +194,7 @@ export function LanguageSwitcher({
       className={`${styles.wrapper} ${openUp ? styles.openUp : ""}`}
       data-open={open}
     >
+      {hasMenu ? (
       <span
         id={menuId}
         className={`${styles.menuRegion} ${
@@ -198,46 +209,44 @@ export function LanguageSwitcher({
       >
         <span className={styles.menuClip}>
           <span className={styles.menu} role="menu" aria-label={languageLabel}>
-            {locales.map((availableLocale, index) => {
-              const selected = availableLocale === displayLocale;
-              return (
-                <button
-                  ref={(element) => {
-                    optionRefs.current[index] = element;
-                  }}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={selected}
-                  tabIndex={-1}
-                  className={`${styles.option} ${
-                    selected ? styles.optionSelected : ""
-                  }`}
-                  onClick={() => {
-                    selectLocale(availableLocale);
-                    setOpen(false);
-                    triggerRef.current?.focus();
-                  }}
-                  onKeyDown={(event) => optionKeyDown(event, index)}
-                  key={availableLocale}
-                >
-                  <span>{localeLabels[availableLocale]}</span>
-                  <Check
-                    className={styles.optionCheck}
-                    data-visible={selected}
-                    aria-hidden="true"
-                  />
-                </button>
-              );
-            })}
+            {chineseLocales.map((availableLocale, index) => (
+              <button
+                ref={(element) => {
+                  optionRefs.current[index] = element;
+                }}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                className={styles.option}
+                onClick={() => {
+                  selectLocale(availableLocale);
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                }}
+                onKeyDown={(event) => optionKeyDown(event, index)}
+                key={availableLocale}
+              >
+                <span>{localeLabels[availableLocale]}</span>
+              </button>
+            ))}
           </span>
         </span>
       </span>
+      ) : null}
 
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => (open ? setOpen(false) : openMenu())}
+        onClick={() => {
+          if (!hasMenu) {
+            selectLocale("en");
+            return;
+          }
+          if (open) setOpen(false);
+          else openMenu();
+        }}
         onKeyDown={(event) => {
+          if (!hasMenu) return;
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
             openMenu();
@@ -248,10 +257,9 @@ export function LanguageSwitcher({
         }}
         disabled={preparing || pending}
         aria-busy={preparing || pending}
-        aria-label={languageLabel}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={menuId}
+        aria-haspopup={hasMenu ? "menu" : undefined}
+        aria-expanded={hasMenu ? open : undefined}
+        aria-controls={hasMenu ? menuId : undefined}
         className={`${styles.control} inline-flex min-h-10 cursor-pointer items-center rounded-lg border text-sm disabled:cursor-wait disabled:opacity-60 ${
           tone === "bare"
             ? `${styles.bare} border-transparent bg-transparent px-3 py-0 font-medium`
@@ -260,17 +268,19 @@ export function LanguageSwitcher({
               : "border-line bg-cream px-3 py-0 font-semibold text-ink-soft hover:bg-paper-deep hover:text-ink"
         }`}
       >
-        <span>{localeLabels[displayLocale]}</span>
-        <ChevronDown
-          aria-hidden="true"
-          className={`${styles.chevron} ${
-            tone === "bare"
-              ? styles.chevronBare
-              : tone === "dark"
-                ? styles.chevronDark
-                : styles.chevronLight
-          }`}
-        />
+        <span>{triggerLabel}</span>
+        {hasMenu ? (
+          <ChevronDown
+            aria-hidden="true"
+            className={`${styles.chevron} ${
+              tone === "bare"
+                ? styles.chevronBare
+                : tone === "dark"
+                  ? styles.chevronDark
+                  : styles.chevronLight
+            }`}
+          />
+        ) : null}
       </button>
     </span>
   );

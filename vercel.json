@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/trash-anonymous",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/sync-cyc-registrations",
+      "schedule": "0 5 * * *"
     }
   ]
 }

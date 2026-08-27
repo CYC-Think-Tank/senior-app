@@ -2,6 +2,7 @@ import "server-only";
 
 const WIX_QUERY_ITEMS_URL = "https://www.wixapis.com/wix-data/v2/items/query";
 const WIX_REQUEST_TIMEOUT_MS = 15_000;
+const WIX_MAX_PAGE_SIZE = 100;
 
 export type WixDataItem = {
   id?: string;
@@ -60,14 +61,21 @@ function wixErrorMessage(body: WixErrorBody | null): string {
   );
 }
 
-/** Reads one page from the single Wix CMS collection configured for this app. */
+/**
+ * Reads one page from a Wix CMS collection. Without `collectionId` this reads
+ * the single collection named by WIX_CMS_COLLECTION_ID.
+ */
 export async function queryWixCmsCollection(options: {
   limit: number;
   offset: number;
+  collectionId?: string;
+  filter?: Record<string, unknown>;
 }): Promise<WixCmsQueryResult> {
   const apiKey = requiredEnvironmentVariable("WIX_API_KEY");
   const siteId = requiredEnvironmentVariable("WIX_SITE_ID");
-  const collectionId = requiredEnvironmentVariable("WIX_CMS_COLLECTION_ID");
+  const collectionId =
+    options.collectionId?.trim() ||
+    requiredEnvironmentVariable("WIX_CMS_COLLECTION_ID");
 
   let response: Response;
   try {
@@ -81,6 +89,7 @@ export async function queryWixCmsCollection(options: {
       body: JSON.stringify({
         dataCollectionId: collectionId,
         query: {
+          ...(options.filter ? { filter: options.filter } : {}),
           paging: {
             limit: options.limit,
             offset: options.offset,
@@ -114,4 +123,31 @@ export async function queryWixCmsCollection(options: {
   }
 
   return result;
+}
+
+/**
+ * Reads every matching item from a Wix CMS collection, one page at a time.
+ * `maxItems` bounds the work so a runaway collection cannot stall a request.
+ */
+export async function queryAllWixCmsItems(options: {
+  collectionId: string;
+  filter?: Record<string, unknown>;
+  maxItems: number;
+}): Promise<WixDataItem[]> {
+  const items: WixDataItem[] = [];
+
+  while (items.length < options.maxItems) {
+    const limit = Math.min(WIX_MAX_PAGE_SIZE, options.maxItems - items.length);
+    const page = await queryWixCmsCollection({
+      collectionId: options.collectionId,
+      filter: options.filter,
+      limit,
+      offset: items.length,
+    });
+
+    items.push(...page.dataItems);
+    if (page.dataItems.length < limit) break;
+  }
+
+  return items;
 }

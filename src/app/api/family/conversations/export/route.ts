@@ -2,6 +2,7 @@ import { PassThrough, Readable } from "node:stream";
 import { ZipArchive, type ArchiverError } from "archiver";
 import type { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { conversationAudio, conversationMp3 } from "@/lib/audio/conversation-mp3";
 import {
   audioExtension,
   conversationArchiveFolder,
@@ -9,7 +10,6 @@ import {
   conversationTranscript,
   type ExportableConversation,
 } from "@/lib/conversation-export";
-import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { conversationNames } from "@/lib/names";
 import { getPreferredLocale } from "@/lib/preferred-locale";
@@ -128,12 +128,24 @@ function readme(locale: string, conversationCount: number) {
     : "This WiseShare export contains all of your conversations. Each folder includes the original recording (when available), a transcript, and conversation details.\n";
 }
 
+/**
+ * Conversation names carry the storyteller's own words, Chinese included, so
+ * the header pairs an ASCII-safe fallback with the real UTF-8 name.
+ */
+function attachment(filename: string) {
+  const ascii = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(
+    filename,
+  )}`;
+}
+
 async function fillArchive(
   archive: ZipArchive,
   conversations: ExportableConversation[],
   locale: string,
-  signedUrls: Map<string, string>,
 ) {
+  const admin = createSupabaseAdminClient();
+
   archive.append(readme(locale, conversations.length), { name: "README.txt" });
 
   for (const conversation of conversations) {
@@ -152,23 +164,11 @@ async function fillArchive(
       continue;
     }
 
-    const signedUrl = signedUrls.get(conversation.raw_audio_path);
-    if (!signedUrl) {
-      archive.append("The audio recording could not be included.\n", {
-        name: `${folder}/audio-unavailable.txt`,
-      });
-      continue;
-    }
-
     try {
-      const response = await fetch(signedUrl);
-      if (!response.ok || !response.body) {
-        throw new Error(`Storage returned ${response.status}.`);
-      }
+      // Storage holds ciphertext, so the recording has to be decrypted here
+      // rather than copied straight out of the bucket.
       archive.append(
-        Readable.fromWeb(
-          response.body as import("node:stream/web").ReadableStream,
-        ),
+        await conversationAudio(admin, conversation.raw_audio_path),
         {
           name: `${folder}/recording${audioExtension(
             conversation.raw_audio_path,
@@ -211,6 +211,55 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const t = (key: Parameters<typeof translate>[1], values = {}) =>
+    translate(locale, key, values);
+  // Number names against the complete list so an individual export keeps the
+  // same "Conversation N" label shown in the dashboard.
+  const names = conversationNames(allSessions, (number) =>
+    t("familyConversationNumbered", { number }),
+  );
+
+  // Exporting one conversation hands back just its recording as an MP3. The
+  // archive below is what the "export everything" download still builds.
+  if (conversationId) {
+    const session = sessions[0];
+    if (!session.raw_audio_path) {
+      return new Response(
+        "That conversation has no recording to export.",
+        { status: 404 },
+      );
+    }
+
+    const name = names.get(session.id) ?? t("familyConversationLabel");
+    let mp3: Buffer;
+    try {
+      mp3 = await conversationMp3(
+        createSupabaseAdminClient(),
+        session.raw_audio_path,
+      );
+    } catch (error) {
+      console.error(
+        `Could not prepare the MP3 for conversation ${session.id}:`,
+        error,
+      );
+      return new Response("The recording could not be prepared.", {
+        status: 500,
+      });
+    }
+
+    return new Response(new Uint8Array(mp3), {
+      headers: {
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": attachment(
+          `${conversationArchiveFolder({ ...session, name })}.mp3`,
+        ),
+        "Content-Length": String(mp3.byteLength),
+        "Content-Type": "audio/mpeg",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+
   const turns = await getTurnsForAuthorizedSessions(
     sessions.map((session) => session.id),
   );
@@ -221,38 +270,12 @@ export async function GET(request: NextRequest) {
     turnsBySession.set(turn.session_id, existing);
   }
 
-  const t = (key: Parameters<typeof translate>[1], values = {}) =>
-    translate(locale, key, values);
-  // Number names against the complete list so an individual export keeps the
-  // same "Conversation N" label shown in the dashboard.
-  const names = conversationNames(allSessions, (number) =>
-    t("familyConversationNumbered", { number }),
-  );
   const conversations: ExportableConversation[] = sessions.map((session) => ({
     ...session,
     name: names.get(session.id) ?? t("familyConversationLabel"),
     guestName: session.guests.name,
     turns: turnsBySession.get(session.id) ?? [],
   }));
-
-  const audioPaths = conversations.flatMap((conversation) =>
-    conversation.raw_audio_path ? [conversation.raw_audio_path] : [],
-  );
-  const signedUrls = new Map<string, string>();
-  if (audioPaths.length) {
-    const admin = createSupabaseAdminClient();
-    const { data, error } = await admin.storage
-      .from(RAW_BUCKET)
-      .createSignedUrls(audioPaths, 15 * 60);
-    if (error) {
-      console.error("Could not sign conversation audio for export:", error);
-    }
-    for (const item of data ?? []) {
-      if (item.path && item.signedUrl) {
-        signedUrls.set(item.path, item.signedUrl);
-      }
-    }
-  }
 
   const output = new PassThrough();
   const archive = new ZipArchive({ zlib: { level: 1 } });
@@ -266,7 +289,7 @@ export async function GET(request: NextRequest) {
   archive.on("error", (error) => output.destroy(error));
   archive.pipe(output);
 
-  void fillArchive(archive, conversations, locale, signedUrls).catch(
+  void fillArchive(archive, conversations, locale).catch(
     (error) => {
       console.error("Could not build conversation export:", error);
       archive.abort();
@@ -275,15 +298,12 @@ export async function GET(request: NextRequest) {
   );
 
   const date = new Date().toISOString().slice(0, 10);
-  const filename = conversationId
-    ? `wiseshare-conversation-${conversationId.slice(0, 8)}-${date}.zip`
-    : `wiseshare-conversations-${date}.zip`;
   return new Response(
     Readable.toWeb(output) as ReadableStream<Uint8Array>,
     {
       headers: {
         "Cache-Control": "private, no-store",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": attachment(`wiseshare-conversations-${date}.zip`),
         "Content-Type": "application/zip",
         "X-Content-Type-Options": "nosniff",
       },

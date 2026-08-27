@@ -171,31 +171,6 @@
   transform: translateX(1px);
 }
 
-.menuBare .optionSelected,
-.menuDark .optionSelected {
-  color: #7200d9;
-  background: #fbe2f7;
-}
-
-.menuLight .optionSelected {
-  color: #7200d9;
-  background: #fbe2f7;
-}
-
-.optionCheck {
-  width: 1rem;
-  height: 1rem;
-  flex: none;
-  opacity: 0;
-  transform: scale(0.75);
-  transition: opacity 150ms ease, transform 180ms ease;
-}
-
-.optionCheck[data-visible="true"] {
-  opacity: 1;
-  transform: scale(1);
-}
-
 .openUp {
   width: 100%;
 }
@@ -223,8 +198,7 @@
   .chevron,
   .menuRegion,
   .openUp .menuRegion,
-  .option,
-  .optionCheck {
+  .option {
     transition: none;
   }
 }

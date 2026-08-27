@@ -37,6 +37,29 @@ curl -H "Authorization: Bearer $WIX_CMS_READ_TOKEN" \
 `limit` defaults to 50 and is capped at 100. Use the returned
 `pagingMetadata` with `offset` to request the next page.
 
+### Senior Care sign-ups from thecyc.org
+
+Students who choose the **Senior Care** project option on the thecyc.org
+registration form become WiseShare support workers. The sync reads the Wix
+`Registrations` collection (override the name with
+`WIX_REGISTRATIONS_COLLECTION_ID`) and writes matching people into
+`support_providers`, keyed on the Wix item id so re-runs never duplicate anyone.
+
+Imported people arrive **unverified and inactive**: matching only ever considers
+verified, active providers, so nobody reaches a senior until an admin verifies
+them under **Admin → Human support → Senior Care sign-ups**. Re-runs refresh only
+what the registration form owns (name, contact details, school, grade, postal
+area) — staff edits to languages, skills, availability, and verification survive.
+
+The sync runs nightly from `/api/cron/sync-cyc-registrations` (Vercel Cron, using
+`CRON_SECRET`) and on demand from the **Sync from thecyc.org** button on that
+admin page.
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  "http://localhost:3000/api/cron/sync-cyc-registrations"
+```
+
 ### Optional Krisp background voice cancellation
 
 The interview room automatically uses Krisp BVC when the browser SDK assets are present. Download the packed Web Browser SDK from the Krisp SDK Portal and place it under `public/krisp`:
