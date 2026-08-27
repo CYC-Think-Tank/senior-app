@@ -68,6 +68,12 @@ export const MEMOIR_OUTPUT_WIDTH = 854;
 export const MEMOIR_OUTPUT_HEIGHT = 480;
 export const MEMOIR_OUTPUT_FPS = 24;
 
+// Every complete film buys a fresh set of clips from SeeGen, so an account
+// only gets a few. Starting a film and remaking a whole film each spend one;
+// repairing playback and redoing a single part reuse what was already bought
+// and are free.
+export const MEMOIR_MAX_GENERATIONS_PER_ACCOUNT = 3;
+
 export function memoirOutputSeconds(sceneCount: number) {
   return sceneCount * MEMOIR_SCENE_DURATION_SECONDS;
 }

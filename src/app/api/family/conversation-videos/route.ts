@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
 import {
+  getVideoGenerationQuota,
   progressConversationVideo,
   publicConversationVideo,
   startConversationVideo,
+  VideoGenerationLimitError,
 } from "@/lib/memoir/workflow";
 import { isSeegenConfigured } from "@/lib/memoir/seedance";
 
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
       .single();
     if (!session) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
     const video = await startConversationVideo(sessionId, {
+      userId: user.id,
       regenerate: regenerate === true,
       repair: repair === true,
     });
@@ -46,8 +49,16 @@ export async function POST(request: Request) {
         }
       });
     }
-    return NextResponse.json({ video: await publicConversationVideo(video) });
+    return NextResponse.json({
+      video: await publicConversationVideo(video),
+      quota: await getVideoGenerationQuota(supabase, user.id),
+    });
   } catch (error) {
+    // Running out of films is an answer, not a fault: say so with a 403 so
+    // the dashboard can show the allowance instead of an error.
+    if (error instanceof VideoGenerationLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     console.error("Could not start memoir video:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not start the video." },

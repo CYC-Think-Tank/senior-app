@@ -17,7 +17,7 @@ import { CommentThread } from "../circle/comment-thread";
 import { getConversationComments } from "../circle/circle-data";
 import type { Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
 import type { ConversationVideo } from "@/lib/types";
-import { publicConversationVideo } from "@/lib/memoir/workflow";
+import { getVideoGenerationQuota, publicConversationVideo } from "@/lib/memoir/workflow";
 import { MemoirVideoCard } from "./memoir-video-card";
 import { ConversationTranscriptEditor } from "./transcript-editor";
 
@@ -86,6 +86,11 @@ export default async function FamilyConversationPage({
   const initialVideo = videoRow
     ? await publicConversationVideo(videoRow as ConversationVideo)
     : null;
+  // How many complete films this account has left, so the card can say so
+  // before the storyteller commits to one.
+  const videoQuota = finished
+    ? await getVideoGenerationQuota(supabase, user.id)
+    : null;
 
   // Only finished conversations can be shared, and the comment thread is only
   // worth showing once there is a circle that could have written in it.
@@ -152,7 +157,11 @@ export default async function FamilyConversationPage({
       )}
 
       {finished ? (
-        <MemoirVideoCard sessionId={s.id} initialVideo={initialVideo} />
+        <MemoirVideoCard
+          sessionId={s.id}
+          initialVideo={initialVideo}
+          initialQuota={videoQuota}
+        />
       ) : null}
 
       {/* Sharing is switched from the Friends button in the conversations

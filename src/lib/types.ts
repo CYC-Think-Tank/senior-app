@@ -6,6 +6,9 @@ export type Profile = {
   display_name: string | null;
   locale: "en" | "zh-Hans" | "zh-Hant";
   conversation_language_chosen_at: string | null;
+  /** Complete memoir films this account has generated, against the cap in
+      MEMOIR_MAX_GENERATIONS_PER_ACCOUNT. */
+  video_generations_used: number;
   role: Role;
   created_at: string;
 };

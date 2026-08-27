@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { createAudioUrl, decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import {
+  MEMOIR_MAX_GENERATIONS_PER_ACCOUNT,
   MEMOIR_MAX_SCENES,
   MEMOIR_MIN_SCENES,
   MEMOIR_SCENE_DURATION_SECONDS,
@@ -60,6 +61,75 @@ function sceneArchivePath(video: Pick<ConversationVideo, "id" | "session_id">, s
 
 function narrationArchivePath(video: Pick<ConversationVideo, "id" | "session_id">) {
   return `${video.session_id}/${video.id}/narration.m4a`;
+}
+
+export type VideoGenerationQuota = {
+  used: number;
+  limit: number;
+  remaining: number;
+};
+
+/**
+ * Raised when an account asks for one film more than it is allowed. Routes
+ * turn this into a 403 rather than a 500 — nothing went wrong, the answer is
+ * simply no.
+ */
+export class VideoGenerationLimitError extends Error {
+  readonly limit = MEMOIR_MAX_GENERATIONS_PER_ACCOUNT;
+
+  constructor() {
+    super(
+      `This account has used all ${MEMOIR_MAX_GENERATIONS_PER_ACCOUNT} of its film generations.`,
+    );
+    this.name = "VideoGenerationLimitError";
+  }
+}
+
+/**
+ * How many complete films this account has left. Safe to call with the
+ * caller's own RLS-bound client: "read own profile" covers it.
+ */
+export async function getVideoGenerationQuota(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<VideoGenerationQuota> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("video_generations_used")
+    .eq("id", userId)
+    .maybeSingle();
+  const used = Math.max(0, Number(data?.video_generations_used ?? 0));
+  return {
+    used,
+    limit: MEMOIR_MAX_GENERATIONS_PER_ACCOUNT,
+    remaining: Math.max(0, MEMOIR_MAX_GENERATIONS_PER_ACCOUNT - used),
+  };
+}
+
+/**
+ * Takes one generation from the account, or refuses. The counter moves inside
+ * a single guarded UPDATE, so two racing requests cannot both take the last
+ * one however fast the storyteller double-clicks.
+ */
+async function claimVideoGeneration(admin: SupabaseClient, userId: string) {
+  const { data, error } = await admin.rpc("claim_video_generation", {
+    p_user_id: userId,
+    p_limit: MEMOIR_MAX_GENERATIONS_PER_ACCOUNT,
+  });
+  if (error) throw error;
+  // -1 is the function's "no" — and anything that is not a number at all
+  // means the counter did not move, so refuse rather than give a free film.
+  const remaining = typeof data === "number" ? data : -1;
+  if (remaining < 0) throw new VideoGenerationLimitError();
+  return remaining;
+}
+
+/** Returns a claimed generation after the job failed to start. */
+async function releaseVideoGeneration(admin: SupabaseClient, userId: string) {
+  const { error } = await admin.rpc("release_video_generation", { p_user_id: userId });
+  // Best effort: the caller is already handling a failure, and losing the
+  // refund must not mask it.
+  if (error) console.error("Could not return an unused video generation:", error);
 }
 
 export async function publicConversationVideo(video: ConversationVideo): Promise<PublicConversationVideo> {
@@ -196,12 +266,21 @@ async function submitQueuedScenes(admin: SupabaseClient, videoId: string, scenes
     });
 }
 
+/**
+ * Starts, resumes, remakes, or repairs the film for one conversation.
+ *
+ * `userId` is the storyteller the work is billed to. Only the two paths that
+ * buy a fresh set of clips — the first film for a conversation, and remaking
+ * a finished one — spend a generation from that account's allowance; resuming
+ * a failed job and repairing playback reuse clips already paid for.
+ */
 export async function startConversationVideo(
   sessionId: string,
   {
+    userId,
     regenerate = false,
     repair = false,
-  }: { regenerate?: boolean; repair?: boolean } = {},
+  }: { userId: string; regenerate?: boolean; repair?: boolean },
 ) {
   const admin = createSupabaseAdminClient();
   const { data: existing } = await admin
@@ -286,40 +365,58 @@ export async function startConversationVideo(
       const { data: resumed } = await admin.from("conversation_videos").select("*").eq("id", video.id).single();
       return resumed as ConversationVideo;
     }
-    const prefix = `${sessionId}/${video.id}`;
-    const [{ data: objects }, { data: sceneObjects }] = await Promise.all([
-      admin.storage.from(STORY_VIDEOS_BUCKET).list(prefix),
-      admin.storage.from(STORY_VIDEOS_BUCKET).list(`${prefix}/scenes`),
-    ]);
-    const storedPaths = [
-      ...(objects ?? []).filter((o) => o.id).map((o) => `${prefix}/${o.name}`),
-      ...(sceneObjects ?? []).filter((o) => o.id).map((o) => `${prefix}/scenes/${o.name}`),
-    ];
-    if (storedPaths.length) {
-      await admin.storage.from(STORY_VIDEOS_BUCKET).remove(storedPaths);
+    // Everything below replans the film from scratch. A remake pays for that;
+    // a retry after a failure does not, because the generation was already
+    // spent when this film was first started.
+    if (canRegenerate) await claimVideoGeneration(admin, userId);
+
+    let reset: ConversationVideo;
+    try {
+      const prefix = `${sessionId}/${video.id}`;
+      const [{ data: objects }, { data: sceneObjects }] = await Promise.all([
+        admin.storage.from(STORY_VIDEOS_BUCKET).list(prefix),
+        admin.storage.from(STORY_VIDEOS_BUCKET).list(`${prefix}/scenes`),
+      ]);
+      const storedPaths = [
+        ...(objects ?? []).filter((o) => o.id).map((o) => `${prefix}/${o.name}`),
+        ...(sceneObjects ?? []).filter((o) => o.id).map((o) => `${prefix}/scenes/${o.name}`),
+      ];
+      if (storedPaths.length) {
+        await admin.storage.from(STORY_VIDEOS_BUCKET).remove(storedPaths);
+      }
+      await admin.from("conversation_video_scenes").delete().eq("video_id", video.id);
+      await updateVideo(admin, video.id, {
+        status: "planning", title: null, story_ciphertext: null,
+        narration_ciphertext: null, visual_bible_ciphertext: null,
+        narration_path: null, video_path: null, duration_ms: null, error_message: null,
+      });
+      const { data: reloaded, error: resetError } = await admin
+        .from("conversation_videos")
+        .select("*")
+        .eq("id", video.id)
+        .single();
+      if (resetError || !reloaded) {
+        throw resetError ?? new Error("Could not reload the reset video job.");
+      }
+      reset = reloaded as ConversationVideo;
+    } catch (error) {
+      // The remake never got as far as ordering anything, so give the
+      // generation back instead of charging for a server-side failure.
+      if (canRegenerate) await releaseVideoGeneration(admin, userId);
+      throw error;
     }
-    await admin.from("conversation_video_scenes").delete().eq("video_id", video.id);
-    await updateVideo(admin, video.id, {
-      status: "planning", title: null, story_ciphertext: null,
-      narration_ciphertext: null, visual_bible_ciphertext: null,
-      narration_path: null, video_path: null, duration_ms: null, error_message: null,
-    });
-    const { data: reset, error: resetError } = await admin
-      .from("conversation_videos")
-      .select("*")
-      .eq("id", video.id)
-      .single();
-    if (resetError || !reset) {
-      throw resetError ?? new Error("Could not reload the reset video job.");
-    }
-    video = reset as ConversationVideo;
+    video = reset;
   } else {
+    await claimVideoGeneration(admin, userId);
     const { data, error } = await admin
       .from("conversation_videos")
       .insert({ session_id: sessionId, status: "planning" })
       .select("*")
       .single();
-    if (error || !data) throw error ?? new Error("Could not create the video job.");
+    if (error || !data) {
+      await releaseVideoGeneration(admin, userId);
+      throw error ?? new Error("Could not create the video job.");
+    }
     video = data as ConversationVideo;
   }
 

@@ -7,9 +7,11 @@ import {
   unauthorized,
 } from "@/lib/mobile/auth";
 import {
+  getVideoGenerationQuota,
   progressConversationVideo,
   publicConversationVideo,
   startConversationVideo,
+  VideoGenerationLimitError,
 } from "@/lib/memoir/workflow";
 import { isSeegenConfigured } from "@/lib/memoir/seedance";
 import type { ConversationVideo } from "@/lib/types";
@@ -35,7 +37,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   try {
     const auth = await requireMobileUser(request);
     if (!auth) return unauthorized();
-    const { supabase } = auth;
+    const { supabase, user } = auth;
     const { id } = await params;
 
     // The RLS policy on this table is the whole access check: a row only comes
@@ -46,9 +48,13 @@ export async function GET(request: NextRequest, { params }: Params) {
       .eq("session_id", id)
       .maybeSingle();
 
+    // The app labels its create/remake button with what is left, so the
+    // allowance travels with the film on every refresh.
+    const quota = await getVideoGenerationQuota(supabase, user.id);
+
     // Nothing made yet is not an error — it is the state the app offers the
     // "create a film" button in.
-    if (!data) return NextResponse.json({ video: null });
+    if (!data) return NextResponse.json({ video: null, quota });
 
     const video = data as ConversationVideo;
     if (ACTIVE.includes(video.status)) {
@@ -60,7 +66,7 @@ export async function GET(request: NextRequest, { params }: Params) {
         }
       });
     }
-    return NextResponse.json({ video: await publicConversationVideo(video) });
+    return NextResponse.json({ video: await publicConversationVideo(video), quota });
   } catch (error) {
     console.error("Could not refresh memoir video:", error);
     return serverError("Could not refresh the video.");
@@ -96,7 +102,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       .maybeSingle();
     if (!session) return notFound("This conversation could not be opened.");
 
-    const video = await startConversationVideo(id, { regenerate });
+    const video = await startConversationVideo(id, { userId: user.id, regenerate });
     if (ACTIVE.includes(video.status)) {
       after(async () => {
         try {
@@ -106,8 +112,15 @@ export async function POST(request: NextRequest, { params }: Params) {
         }
       });
     }
-    return NextResponse.json({ video: await publicConversationVideo(video) });
+    return NextResponse.json({
+      video: await publicConversationVideo(video),
+      quota: await getVideoGenerationQuota(supabase, user.id),
+    });
   } catch (error) {
+    // Out of films is a plain answer, not a server fault.
+    if (error instanceof VideoGenerationLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     console.error("Could not start memoir video:", error);
     return serverError(
       error instanceof Error ? error.message : "Could not start the video.",
