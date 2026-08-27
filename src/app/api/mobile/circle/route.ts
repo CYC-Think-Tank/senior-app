@@ -1,4 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { circleSharesFilter, friendIds } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  circleShares,
+  profiles as profilesTable,
+  sessions as sessionsTable,
+} from "@/lib/db/schema";
 import { requireMobileUser, unauthorized } from "@/lib/mobile/auth";
 import { editedAudioDurationMs } from "@/lib/audio/cuts";
 import { personName } from "@/lib/names";
@@ -11,56 +19,79 @@ export const dynamic = "force-dynamic";
  * Everything a friend has shared with their circle, newest first. Port of
  * `getCircleFeed()`.
  *
- * The first read is the authorisation: "friends read circle shares" means a
- * row only comes back if the caller is a friend of its owner. Only then does
- * the service role fetch the sessions — see migration 015 for why friends
- * never read `sessions` directly.
+ * The first read is the authorisation: `circleSharesFilter` narrows to shares
+ * owned by the caller's friends, which is what "friends read circle shares"
+ * used to do. Only then are the sessions themselves fetched — see migration
+ * 015 for why friends must never query `sessions` directly (it would hand them
+ * `token` and `share_token` along with everything else).
  */
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
-  const { data: shares } = await supabase
-    .from("circle_shares")
-    .select("session_id, owner_id, created_at")
-    // Your own conversations live on your own screens, not in the feed.
-    .neq("owner_id", user.id)
-    .order("created_at", { ascending: false });
+  const friends = await friendIds(user.id);
+  if (friends.length === 0) return NextResponse.json([]);
 
-  const rows = shares ?? [];
+  const rows = await db
+    .select({
+      session_id: circleShares.session_id,
+      owner_id: circleShares.owner_id,
+      created_at: circleShares.created_at,
+    })
+    .from(circleShares)
+    .where(
+      and(
+        circleSharesFilter(user.id, friends),
+        // Your own conversations live on your own screens, not in the feed.
+        ne(circleShares.owner_id, user.id)
+      )
+    )
+    .orderBy(desc(circleShares.created_at));
+
   if (rows.length === 0) return NextResponse.json([]);
 
-  // "read connected profiles" (migration 014) is what allows this, so it
-  // silently returns nothing for anyone the caller is not connected to.
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, display_name, email")
-    .in("id", [...new Set(rows.map((row) => row.owner_id))]);
+  // Every id here came out of a share the caller is a friend of, which is the
+  // same ground "read connected profiles" (migration 014) stood on.
+  const ownerProfiles = (await db
+    .select({
+      id: profilesTable.id,
+      display_name: profilesTable.display_name,
+      email: profilesTable.email,
+    })
+    .from(profilesTable)
+    .where(
+      inArray(profilesTable.id, [...new Set(rows.map((row) => row.owner_id))])
+    )) as Pick<Profile, "id" | "display_name" | "email">[];
 
   const names = new Map<string, string>();
-  for (const profile of (profiles ?? []) as Pick<
-    Profile,
-    "id" | "display_name" | "email"
-  >[]) {
+  for (const profile of ownerProfiles) {
     names.set(profile.id, personName(profile.display_name, profile.email));
   }
 
-  const { data: sessions } = await admin
-    .from("sessions")
-    .select("id, title, topic, duration_ms, created_at")
-    .in(
-      "id",
-      rows.map((row) => row.session_id)
-    )
-    .eq("status", "ready");
+  const shared = (await db
+    .select({
+      id: sessionsTable.id,
+      title: sessionsTable.title,
+      topic: sessionsTable.topic,
+      duration_ms: sessionsTable.duration_ms,
+      created_at: sessionsTable.created_at,
+    })
+    .from(sessionsTable)
+    .where(
+      and(
+        inArray(
+          sessionsTable.id,
+          rows.map((row) => row.session_id)
+        ),
+        eq(sessionsTable.status, "ready")
+      )
+    )) as Pick<
+    InterviewSession,
+    "id" | "title" | "topic" | "duration_ms" | "created_at"
+  >[];
 
-  const byId = new Map(
-    ((sessions ?? []) as Pick<
-      InterviewSession,
-      "id" | "title" | "topic" | "duration_ms" | "created_at"
-    >[]).map((session) => [session.id, session])
-  );
+  const byId = new Map(shared.map((session) => [session.id, session]));
   const cuts = await getExcludedAudioCuts([...byId.keys()]);
 
   const feed = [];

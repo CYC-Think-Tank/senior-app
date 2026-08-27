@@ -7,7 +7,9 @@ import {
   LockKeyhole,
   Sprout,
 } from "lucide-react";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions as sessionsTable } from "@/lib/db/schema";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { editedAudioDurationMs } from "@/lib/audio/cuts";
 import { ensureMoral } from "@/lib/moral/generate";
@@ -91,18 +93,25 @@ export default async function SharedConversationPage({
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const pageCopy = copy[locale];
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("sessions")
-    .select("*, guests(name)")
-    .eq("share_token", token)
-    .eq("status", "ready")
-    .single();
-  if (!session) notFound();
+  // The unguessable share token is the credential; there is no signed-in user
+  // to authorise, which is the whole point of the link.
+  const [found] = await db
+    .select({ session: sessionsTable, guest_name: guests.name })
+    .from(sessionsTable)
+    .innerJoin(guests, eq(guests.id, sessionsTable.guest_id))
+    .where(
+      and(
+        eq(sessionsTable.share_token, token),
+        eq(sessionsTable.status, "ready")
+      )
+    )
+    .limit(1);
+  if (!found) notFound();
 
-  const s = session as unknown as InterviewSession & {
-    guests: Pick<Guest, "name">;
-  };
+  const s = {
+    ...found.session,
+    guests: { name: found.guest_name },
+  } as unknown as InterviewSession & { guests: Pick<Guest, "name"> };
 
   const audioUrl = s.raw_audio_path
     ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
@@ -113,7 +122,7 @@ export default async function SharedConversationPage({
   // Written on the first view that needs it, then read from the row forever
   // after. Null for a conversation too short — or too unreadable — to have a
   // point, and the section simply does not appear.
-  const moral = await ensureMoral(admin, s, s.guests.name);
+  const moral = await ensureMoral(s, s.guests.name);
 
   const title = s.topic?.trim() || pageCopy.defaultTitle(s.guests.name);
   const recordedDate = new Date(s.created_at).toLocaleDateString(locale, {

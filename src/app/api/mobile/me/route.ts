@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { and, count, eq, ne } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { friendships, guests, profiles } from "@/lib/db/schema";
+import { friendshipsFilter } from "@/lib/authz";
 import {
   readJson,
   readString,
@@ -16,26 +20,29 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, user } = auth;
+  const { user } = auth;
 
-  const [{ data: profile }, { data: guest }, { count }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, email, locale, role")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("guests")
-      .select("bio, voice, language")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("friendships")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending")
-      .neq("requester_id", user.id),
+  const [profileRows, guestRows, pending] = await Promise.all([
+    db
+      .select({
+        display_name: profiles.display_name,
+        email: profiles.email,
+        locale: profiles.locale,
+        role: profiles.role,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    db
+      .select({ bio: guests.bio, voice: guests.voice, language: guests.language })
+      .from(guests)
+      .where(eq(guests.user_id, user.id))
+      .limit(1),
+    pendingRequestCount(user.id),
   ]);
 
+  const profile = profileRows[0];
+  const guest = guestRows[0];
   const email = profile?.email ?? user.email;
 
   return NextResponse.json({
@@ -48,21 +55,42 @@ export async function GET(request: NextRequest) {
     bio: guest?.bio ?? null,
     voice: guest?.voice ?? null,
     language: guest?.language ?? null,
-    pendingRequests: count ?? 0,
+    pendingRequests: pending,
   });
+}
+
+/**
+ * How many people are waiting on this account to answer.
+ *
+ * "participants read their friendships" used to scope this automatically; the
+ * membership test is stated here now, alongside the two filters that were
+ * always explicit.
+ */
+async function pendingRequestCount(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(friendships)
+    .where(
+      and(
+        friendshipsFilter(userId),
+        eq(friendships.status, "pending"),
+        ne(friendships.requester_id, userId)
+      )
+    );
+  return row?.value ?? 0;
 }
 
 /**
  * Saves the name, bio, voice and language. Port of `updateMyProfile()` plus
  * the locale write the web app does from its language switcher.
  *
- * Both rows go through the service role — family accounts have read-only
- * policies on `profiles` and `guests` — pinned to the verified user id.
+ * Both writes are pinned to the verified user id from the session, which is
+ * what keeps this to the caller's own rows.
  */
 export async function PATCH(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const displayName = readString(body, "displayName", 80) || null;
@@ -73,17 +101,14 @@ export async function PATCH(request: NextRequest) {
   const voice = isRealtimeVoice(rawVoice) ? rawVoice : null;
   const locale = normalizeLocale(readString(body, "locale", 16));
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("email")
-    .eq("id", user.id)
-    .single();
-
-  const { error } = await admin
-    .from("profiles")
-    .update({ display_name: displayName, locale })
-    .eq("id", user.id);
-  if (error) {
+  let profile: { email: string } | undefined;
+  try {
+    [profile] = await db
+      .update(profiles)
+      .set({ display_name: displayName, locale })
+      .where(eq(profiles.id, user.id))
+      .returning({ email: profiles.email });
+  } catch (error) {
     console.error("Could not save the profile:", error);
     return serverError("Could not save your settings.");
   }
@@ -95,35 +120,33 @@ export async function PATCH(request: NextRequest) {
     voice,
   };
 
-  const { data: guest } = await admin
-    .from("guests")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  try {
+    const [guest] = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(eq(guests.user_id, user.id))
+      .limit(1);
 
-  // No guest row yet means they have not recorded anything. Creating it now
-  // means the bio is already waiting for the host when they do.
-  const { error: guestError } = guest
-    ? await admin.from("guests").update(guestFields).eq("id", guest.id)
-    : await admin.from("guests").insert({
+    // No guest row yet means they have not recorded anything. Creating it now
+    // means the bio is already waiting for the host when they do.
+    if (guest) {
+      await db.update(guests).set(guestFields).where(eq(guests.id, guest.id));
+    } else {
+      await db.insert(guests).values({
         ...guestFields,
         user_id: user.id,
         origin: "self_serve",
         language: interviewLanguage(locale),
       });
-
-  if (guestError) {
+    }
+  } catch (guestError) {
     console.error("Could not save the storyteller details:", guestError);
     return serverError("Could not save your settings.");
   }
 
   // Carried on the response so the client can replace its whole profile with
   // this one answer, badge included, instead of following up with a GET.
-  const { count } = await supabase
-    .from("friendships")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending")
-    .neq("requester_id", user.id);
+  const pending = await pendingRequestCount(user.id);
 
   return NextResponse.json({
     userId: user.id,
@@ -135,6 +158,6 @@ export async function PATCH(request: NextRequest) {
     bio: about,
     voice,
     language: interviewLanguage(locale),
-    pendingRequests: count ?? 0,
+    pendingRequests: pending,
   });
 }

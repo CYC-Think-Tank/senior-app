@@ -8,7 +8,9 @@ import {
   normalizeLocale,
   translate,
 } from "@/lib/i18n";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions } from "@/lib/db/schema";
 
 export type StartConversationState = {
   error: string | null;
@@ -96,32 +98,36 @@ export async function startConversation(
   }
 
   const language = interviewLanguage(locale);
-  const admin = createSupabaseAdminClient();
-  const { data: guest, error: guestError } = await admin
-    .from("guests")
-    .insert({ name, language, origin: "public" })
-    .select("id")
-    .single();
 
-  if (guestError || !guest) {
+  let guestId: string;
+  try {
+    const [guest] = await db
+      .insert(guests)
+      .values({ name, language, origin: "public" })
+      .returning({ id: guests.id });
+    guestId = guest.id;
+  } catch (guestError) {
     console.error("Could not create a public conversation guest:", guestError);
     return { error: t("interviewStartGenericError") };
   }
 
-  const { data: session, error: sessionError } = await admin
-    .from("sessions")
-    .insert({ guest_id: guest.id })
-    .select("token")
-    .single();
-
-  if (sessionError || !session) {
+  let token: string;
+  try {
+    const [session] = await db
+      .insert(sessions)
+      .values({ guest_id: guestId })
+      .returning({ token: sessions.token });
+    token = session.token;
+  } catch (sessionError) {
     console.error(
       "Could not create a public conversation session:",
       sessionError,
     );
-    await admin.from("guests").delete().eq("id", guest.id);
+    // The guest exists only to hold this conversation, so it goes back with it
+    // rather than being left behind as an orphan the sweeper cannot reach.
+    await db.delete(guests).where(eq(guests.id, guestId));
     return { error: t("interviewStartGenericError") };
   }
 
-  redirect(`/interview/${session.token}`);
+  redirect(`/interview/${token}`);
 }

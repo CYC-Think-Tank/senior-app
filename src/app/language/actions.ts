@@ -1,9 +1,11 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { eq } from "drizzle-orm";
 import { localeCookieName, normalizeLocale } from "@/lib/i18n";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
+import { getSessionUser } from "@/lib/auth";
 
 export async function setLocaleAction(locale: string) {
   const nextLocale = normalizeLocale(locale);
@@ -14,17 +16,15 @@ export async function setLocaleAction(locale: string) {
     sameSite: "lax",
   });
 
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims.sub;
-  if (!userId) return;
+  const user = await getSessionUser();
+  if (!user) return;
 
-  const { error } = await createSupabaseAdminClient()
-    .from("profiles")
-    .update({ locale: nextLocale })
-    .eq("id", userId);
-
-  if (error) {
+  try {
+    await db
+      .update(profiles)
+      .set({ locale: nextLocale })
+      .where(eq(profiles.id, user.id));
+  } catch (error) {
     console.error("Could not save the user's language preference:", error);
   }
 }

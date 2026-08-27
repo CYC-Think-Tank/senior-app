@@ -1,7 +1,9 @@
 import "server-only";
 
 import OpenAI from "openai";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guestMemories, transcriptTurns } from "@/lib/db/schema";
 import { MEMORY_MODEL } from "@/lib/constants";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { decryptGuestMemory, encryptGuestMemory } from "./encryption";
@@ -174,23 +176,22 @@ async function requestUpdatedMemory({
  * a response body.
  */
 export async function getGuestMemorySummary(
-  admin: SupabaseClient,
   guestId: string
 ): Promise<string | null> {
-  const { data, error } = await admin
-    .from("guest_memories")
-    .select(
-      "guest_id, summary_ciphertext, last_session_id, last_session_created_at, updated_at"
-    )
-    .eq("guest_id", guestId)
-    .maybeSingle();
-
-  if (error) {
+  let row: MemoryRow | null;
+  try {
+    const [found] = await db
+      .select()
+      .from(guestMemories)
+      .where(eq(guestMemories.guest_id, guestId))
+      .limit(1);
+    row = (found as MemoryRow | undefined) ?? null;
+  } catch (error) {
     console.error(`memory lookup failed for guest ${guestId}:`, error);
     return null;
   }
 
-  const memory = decryptMemoryRow(data as MemoryRow | null);
+  const memory = decryptMemoryRow(row);
   if (!memory) return null;
 
   const sections: Array<[string, string[]]> = [
@@ -218,7 +219,6 @@ export async function getGuestMemorySummary(
  * finalizer for an older session simply leaves newer memory alone.
  */
 export async function updateGuestMemoryFromSession(
-  admin: SupabaseClient,
   session: {
     id: string;
     guestId: string;
@@ -227,20 +227,19 @@ export async function updateGuestMemoryFromSession(
   },
   attempt = 0
 ): Promise<boolean> {
-  const { data: rawRow, error: readError } = await admin
-    .from("guest_memories")
-    .select(
-      "guest_id, summary_ciphertext, last_session_id, last_session_created_at, updated_at"
-    )
-    .eq("guest_id", session.guestId)
-    .maybeSingle();
-
-  if (readError) {
+  let row: MemoryRow | null;
+  try {
+    const [found] = await db
+      .select()
+      .from(guestMemories)
+      .where(eq(guestMemories.guest_id, session.guestId))
+      .limit(1);
+    row = (found as MemoryRow | undefined) ?? null;
+  } catch (readError) {
     console.error(`memory lookup failed for guest ${session.guestId}:`, readError);
     return false;
   }
 
-  const row = rawRow as MemoryRow | null;
   if (row?.last_session_id === session.id) return true;
   if (
     row?.last_session_created_at &&
@@ -250,20 +249,30 @@ export async function updateGuestMemoryFromSession(
     return true;
   }
 
-  const { data: encryptedTurns, error: turnsError } = await admin
-    .from("transcript_turns")
-    .select("idx, speaker, text")
-    .eq("session_id", session.id)
-    .order("idx", { ascending: true });
+  let encryptedTurns: TurnRow[];
+  try {
+    encryptedTurns = await db
+      .select({
+        idx: transcriptTurns.idx,
+        speaker: transcriptTurns.speaker,
+        text: transcriptTurns.text,
+      })
+      .from(transcriptTurns)
+      .where(eq(transcriptTurns.session_id, session.id))
+      .orderBy(asc(transcriptTurns.idx));
+  } catch (turnsError) {
+    console.error(`memory update could not read session ${session.id}:`, turnsError);
+    return false;
+  }
 
-  if (turnsError || !encryptedTurns?.length) {
+  if (encryptedTurns.length === 0) {
     console.warn(`memory update skipped for session ${session.id}: no transcript`);
     return false;
   }
 
   let turns: TurnRow[];
   try {
-    turns = decryptTurns(session.id, encryptedTurns as TurnRow[]);
+    turns = decryptTurns(session.id, encryptedTurns);
   } catch (cause) {
     console.error(`memory update could not read session ${session.id}:`, cause);
     return false;
@@ -293,31 +302,41 @@ export async function updateGuestMemoryFromSession(
   };
 
   if (!row) {
-    const { error } = await admin.from("guest_memories").insert(values);
-    if (!error) return true;
-
-    // Another finalizer created the row after our read. Re-merge its result.
-    if (error.code === "23505" && attempt < 1) {
-      return updateGuestMemoryFromSession(admin, session, attempt + 1);
+    try {
+      await db.insert(guestMemories).values(values);
+      return true;
+    } catch (error) {
+      // Another finalizer created the row after our read. Re-merge its result.
+      const code = (error as { code?: string } | null)?.code;
+      if (code === "23505" && attempt < 1) {
+        return updateGuestMemoryFromSession(session, attempt + 1);
+      }
+      console.error(`memory insert failed for guest ${session.guestId}:`, error);
+      return false;
     }
-    console.error(`memory insert failed for guest ${session.guestId}:`, error);
-    return false;
   }
 
-  const { data: saved, error } = await admin
-    .from("guest_memories")
-    .update(values)
-    .eq("guest_id", session.guestId)
-    .eq("updated_at", row.updated_at)
-    .select("guest_id")
-    .maybeSingle();
-
-  if (error) {
+  // Compare-and-swap on updated_at: the loser of a race sees no updated row
+  // and re-merges against whatever the winner wrote.
+  let saved: { guest_id: string } | undefined;
+  try {
+    [saved] = await db
+      .update(guestMemories)
+      .set(values)
+      .where(
+        and(
+          eq(guestMemories.guest_id, session.guestId),
+          eq(guestMemories.updated_at, row.updated_at)
+        )
+      )
+      .returning({ guest_id: guestMemories.guest_id });
+  } catch (error) {
     console.error(`memory save failed for guest ${session.guestId}:`, error);
     return false;
   }
+
   if (!saved && attempt < 1) {
-    return updateGuestMemoryFromSession(admin, session, attempt + 1);
+    return updateGuestMemoryFromSession(session, attempt + 1);
   }
 
   return Boolean(saved);

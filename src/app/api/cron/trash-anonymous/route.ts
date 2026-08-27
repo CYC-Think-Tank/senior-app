@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { trashAbandonedAnonymousSessions } from "@/lib/sessions/trash";
 
 // Deleting a batch means a storage listing and removal per session.
@@ -21,8 +20,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const result = await trashAbandonedAnonymousSessions(admin);
+  const result = await trashAbandonedAnonymousSessions();
 
   if (result.errors.length > 0) {
     console.error("Anonymous sweep had failures:", result.errors);

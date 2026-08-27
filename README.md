@@ -10,17 +10,25 @@ An AI interviewer (OpenAI Realtime API) holds warm voice conversations with a se
 
 ## Setup
 
-1. **Supabase**: create a project at [supabase.com](https://supabase.com).
-   - Edit the `admin_emails` insert at the top of [supabase/migrations/001_init.sql](supabase/migrations/001_init.sql) (your email is pre-filled), then run the whole file in the SQL editor.
-   - This creates the schema, RLS policies, the signup trigger, and the two private storage buckets.
-   - Existing projects that ran the original schema must also run [supabase/migrations/002_family_dashboard.sql](supabase/migrations/002_family_dashboard.sql) to add the family-dashboard columns and policies.
-2. **Environment**: copy `.env.example` to `.env.local` and fill in:
-   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Settings → API)
+1. **Database** — Azure Database for PostgreSQL Flexible Server.
+   - Allow-list `PGCRYPTO` under **Server parameters → `azure.extensions`** first; the schema's token defaults need `gen_random_bytes()`.
+   - Apply the schema, then the auth tables, then the seed, from a machine on the server's firewall allow-list:
+     ```
+     psql "$DATABASE_URL" -f supabase/migrations/001_migrate_azure.sql
+     psql "$DATABASE_URL" -f supabase/migrations/002_better_auth.sql
+     psql "$DATABASE_URL" -f supabase/seed.sql
+     ```
+   - The seed is one row: the address in `admin_emails` that gets the admin role at sign-up. Edit it to your own before running.
+   - Schema changes from here are plain `.sql` files applied the same way; there is no migration runner.
+2. **Storage** — an Azure Storage account with two **private** containers, `raw-audio` and `story-videos`. Nothing is ever served from them directly: uploads and playback are proxied through the app, which encrypts and decrypts on the way.
+3. **Environment**: copy `.env.example` to `.env.local` and fill in:
+   - `DATABASE_URL` (Azure portal → your server → Connect) and `AZURE_STORAGE_CONNECTION_STRING` (storage account → Access keys). `DATABASE_URL` is optional locally: with it unset the app falls back to the same `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE`/`PGPORT` variables `psql` reads, so one exported set serves both the migrations and the dev server. TLS is verified either way.
+   - `BETTER_AUTH_SECRET` (`openssl rand -base64 32`) — signs sessions and password-reset tokens; changing it signs everyone out
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (the sender must use a domain verified in Resend; `onboarding@resend.dev` only sends to the Resend account owner)
    - `OPENAI_API_KEY` (needs Realtime API access)
    - `AUDIO_ENCRYPTION_KEY` (`openssl rand -base64 32`) — the app's at-rest key: it encrypts every recording, transcript turn, and private AI continuity summary under separate derived subkeys. Back it up; losing it makes that data unreadable. Data already saved is converted in place with `node --env-file=.env.local scripts/encrypt-existing-audio.mjs` and `node --env-file=.env.local scripts/encrypt-existing-transcripts.mjs` (both idempotent, so they are safe to re-run; the transcript one takes `--check` to report any plaintext left without writing).
-3. **Run**: `npm install && npm run dev`
-4. Sign in at `/login` with your admin email (magic link), and you'll land on `/admin`.
+4. **Run**: `npm install && npm run dev`
+5. Sign up at `/signup` with the address you seeded into `admin_emails`, and you'll land on `/admin`.
 
 ### Optional Krisp background voice cancellation
 
@@ -37,7 +45,7 @@ If those files are missing or the browser is unsupported, interviews fall back t
 ## The pipeline
 
 1. A conversation starts either from `/dashboard` (a signed-in account records their own) or from the public `/interview` flow.
-2. The storyteller presses the one big button and talks with "Rosie" (WebRTC → OpenAI Realtime, `gpt-realtime`). Both sides of the audio are recorded in the browser and uploaded to Supabase Storage in chunks, with a timestamped transcript.
+2. The storyteller presses the one big button and talks with "Rosie" (WebRTC → OpenAI Realtime, `gpt-realtime`). Both sides of the audio are recorded in the browser and uploaded to Azure Blob Storage in chunks, with a timestamped transcript.
 3. On finish, ffmpeg stitches the chunks into the session's recording and marks it `ready`.
 4. For a reusable senior, the server folds confirmed facts, interests, current activities, and safe follow-ups into an encrypted private continuity summary. Later, Rosie receives it only inside server-authored instructions and uses one safe detail as a natural icebreaker.
 5. The recording appears under `/dashboard`, where it can be renamed, deleted, or given a permanent private share link (`/share/<token>`).
@@ -45,6 +53,7 @@ If those files are missing or the browser is unsupported, interviews fall back t
 ## Notes
 
 - Interview and share pages are token-gated (capability URLs) so the senior never needs an account.
-- The audio bucket is private; playback always goes through short-lived signed URLs.
+- The storage containers are private and never fetched by the browser. Playback goes through `/api/audio/<token>`, which decrypts on the way out; the token is signed by the page that already did the authorization.
+- **Authorization lives in `src/lib/authz.ts`.** It used to live in Postgres row-level security, where a forgotten check leaked nothing because the database applied the policy anyway. There is one unrestricted database client now, so every route and action applies its own filter, and `tests/authz.test.mjs` checks the predicates actually narrow. Read that file before touching a query that crosses accounts.
 - ffmpeg comes from `ffmpeg-static` — no system install needed.
 # senior-app

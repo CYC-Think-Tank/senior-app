@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { and, eq } from "drizzle-orm";
+import { friendshipsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { friendships } from "@/lib/db/schema";
 import {
   notFound,
   readJson,
@@ -22,20 +26,31 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const friendshipId = readString(body, "friendshipId", 64);
   const accept = body.accept === true;
 
-  // RLS: "participants read their friendships" is the authorisation — a row
-  // comes back only if this account is one of the two in it.
-  const { data: friendship } = await supabase
-    .from("friendships")
-    .select("id, requester_id, status")
-    .eq("id", friendshipId)
-    .eq("status", "pending")
-    .maybeSingle();
+  // `friendshipsFilter` is the authorisation, carrying over "participants read
+  // their friendships": a row comes back only if this account is one of the
+  // two in it. Without it, any pending friendship id would be answerable by
+  // anyone who knew it.
+  const [friendship] = await db
+    .select({
+      id: friendships.id,
+      requester_id: friendships.requester_id,
+      status: friendships.status,
+    })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.id, friendshipId),
+        eq(friendships.status, "pending"),
+        friendshipsFilter(user.id)
+      )
+    )
+    .limit(1);
   if (!friendship) return notFound("That request is no longer waiting.");
 
   if (accept) {
@@ -48,26 +63,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error } = await admin
-      .from("friendships")
-      .update({ status: "accepted", responded_at: new Date().toISOString() })
-      .eq("id", friendshipId)
-      .eq("status", "pending");
-
-    if (error) {
+    try {
+      await db
+        .update(friendships)
+        .set({ status: "accepted", responded_at: new Date().toISOString() })
+        .where(
+          and(eq(friendships.id, friendshipId), eq(friendships.status, "pending"))
+        );
+    } catch (error) {
       console.error("Could not accept the friend request:", error);
       return serverError("Could not accept that request.");
     }
     return NextResponse.json({ ok: true });
   }
 
-  const { error } = await admin
-    .from("friendships")
-    .delete()
-    .eq("id", friendshipId)
-    .eq("status", "pending");
-
-  if (error) {
+  try {
+    await db
+      .delete(friendships)
+      .where(
+        and(eq(friendships.id, friendshipId), eq(friendships.status, "pending"))
+      );
+  } catch (error) {
     console.error("Could not decline the friend request:", error);
     return serverError("Could not decline that request.");
   }

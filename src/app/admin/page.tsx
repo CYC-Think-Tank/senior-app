@@ -1,4 +1,10 @@
+import { desc } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth";
+import { db } from "@/lib/db";
+import {
+  guests as guestsTable,
+  sessions as sessionsTable,
+} from "@/lib/db/schema";
 import type { Guest, InterviewSession } from "@/lib/types";
 import {
   AdminDashboardView,
@@ -74,28 +80,33 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
 };
 
 export default async function AdminDashboard() {
-  const { supabase } = await requireAdmin();
-
-  const [{ data: guestRows }, { data: sessionRows }] = await Promise.all([
-    // Every storyteller, however they got here: admins no longer add anyone by
-    // hand, so filtering by origin would leave these counts permanently at zero.
-    supabase
-      .from("guests")
-      .select("id, user_id")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("sessions")
-      .select("guest_id, status, duration_ms, created_at")
-      .order("created_at", { ascending: false }),
-  ]);
+  // "admin manages guests" and "admin manages sessions" gave admins blanket
+  // read access; `requireAdmin` is what stands in for both now.
+  await requireAdmin();
 
   type GuestRow = Pick<Guest, "id" | "user_id">;
   type SessionRow = Pick<
     InterviewSession,
     "guest_id" | "status" | "duration_ms" | "created_at"
   >;
-  const guests = (guestRows ?? []) as GuestRow[];
-  const sessions = (sessionRows ?? []) as SessionRow[];
+
+  const [guests, sessions] = (await Promise.all([
+    // Every storyteller, however they got here: admins no longer add anyone by
+    // hand, so filtering by origin would leave these counts permanently at zero.
+    db
+      .select({ id: guestsTable.id, user_id: guestsTable.user_id })
+      .from(guestsTable)
+      .orderBy(desc(guestsTable.created_at)),
+    db
+      .select({
+        guest_id: sessionsTable.guest_id,
+        status: sessionsTable.status,
+        duration_ms: sessionsTable.duration_ms,
+        created_at: sessionsTable.created_at,
+      })
+      .from(sessionsTable)
+      .orderBy(desc(sessionsTable.created_at)),
+  ])) as [GuestRow[], SessionRow[]];
   const today = dateKey(new Date());
   const finishedSessions = sessions.filter((session) => session.status === "ready");
   const durations = finishedSessions

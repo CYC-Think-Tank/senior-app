@@ -1,5 +1,9 @@
 import { cache } from "react";
+import { and, count, desc, eq, inArray, ne } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { friendshipsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { friendships, profiles } from "@/lib/db/schema";
 import { otherParticipant, requestDirection } from "@/lib/friends";
 import { personName } from "@/lib/names";
 import type { Friendship, Profile } from "@/lib/types";
@@ -28,35 +32,40 @@ export type MyCircle = {
 /**
  * The caller's whole friend graph, in the three shapes the page renders.
  *
- * Both queries run through the RLS client: "participants read their
- * friendships" scopes the first to rows this account is in, and "read
- * connected profiles" (migration 014) is what makes the second one legal.
+ * `friendshipsFilter` is the old "participants read their friendships" policy,
+ * scoping the first read to rows this account is in. The profile read that
+ * follows stands on the same ground migration 014's "read connected profiles"
+ * did: every id in it came out of one of those rows.
  */
 export const getMyCircle = cache(async (): Promise<MyCircle> => {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  const { data } = await supabase
-    .from("friendships")
-    .select("id, user_low, user_high, requester_id, status, created_at, responded_at")
-    .order("created_at", { ascending: false });
+  const rows = (await db
+    .select()
+    .from(friendships)
+    .where(friendshipsFilter(user.id))
+    .orderBy(desc(friendships.created_at))) as Friendship[];
 
-  const rows = (data ?? []) as Friendship[];
   if (rows.length === 0) return { friends: [], incoming: [], outgoing: [] };
 
-  // Two plain queries rather than a PostgREST embed: `friendships` has three
-  // foreign keys into `profiles`, so an embed would need disambiguating hints
-  // for no gain at this size.
+  // Two plain queries rather than one join: `friendships` has three foreign
+  // keys into `profiles`, so joining would need disambiguating for no gain at
+  // this size.
   const otherIds = rows.map((row) => otherParticipant(row, user.id));
-  const { data: profileRows } = await supabase
-    .from("profiles")
-    .select("id, display_name, email")
-    .in("id", otherIds);
-
-  const names = new Map<string, string>();
-  for (const profile of (profileRows ?? []) as Pick<
+  const profileRows = (await db
+    .select({
+      id: profiles.id,
+      display_name: profiles.display_name,
+      email: profiles.email,
+    })
+    .from(profiles)
+    .where(inArray(profiles.id, otherIds))) as Pick<
     Profile,
     "id" | "display_name" | "email"
-  >[]) {
+  >[];
+
+  const names = new Map<string, string>();
+  for (const profile of profileRows) {
     names.set(profile.id, personName(profile.display_name, profile.email));
   }
 
@@ -89,11 +98,16 @@ export const getMyCircle = cache(async (): Promise<MyCircle> => {
  * sidebar badge, so it is a count query rather than a second full read.
  */
 export const getPendingRequestCount = cache(async (): Promise<number> => {
-  const { supabase, user } = await requireUser();
-  const { count } = await supabase
-    .from("friendships")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending")
-    .neq("requester_id", user.id);
-  return count ?? 0;
+  const { user } = await requireUser();
+  const [row] = await db
+    .select({ value: count() })
+    .from(friendships)
+    .where(
+      and(
+        friendshipsFilter(user.id),
+        eq(friendships.status, "pending"),
+        ne(friendships.requester_id, user.id)
+      )
+    );
+  return row?.value ?? 0;
 });

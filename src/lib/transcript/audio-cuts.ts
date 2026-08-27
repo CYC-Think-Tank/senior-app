@@ -1,6 +1,8 @@
 import "server-only";
 
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { transcriptTurns } from "@/lib/db/schema";
 import type { AudioCut } from "@/lib/audio/cuts";
 
 type CutRow = AudioCut & { sessionId: string };
@@ -15,26 +17,34 @@ export async function getExcludedAudioCuts(
   const bySession = new Map<string, AudioCut[]>();
   if (sessionIds.length === 0) return bySession;
 
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("transcript_turns")
-    .select("session_id, start_ms, end_ms")
-    .in("session_id", sessionIds)
-    .eq("excluded", true)
-    .order("start_ms", { ascending: true });
+  let rows: CutRow[];
+  try {
+    const found = await db
+      .select({
+        session_id: transcriptTurns.session_id,
+        start_ms: transcriptTurns.start_ms,
+        end_ms: transcriptTurns.end_ms,
+      })
+      .from(transcriptTurns)
+      .where(
+        and(
+          inArray(transcriptTurns.session_id, sessionIds),
+          eq(transcriptTurns.excluded, true)
+        )
+      )
+      .orderBy(asc(transcriptTurns.start_ms));
 
-  if (error) {
+    rows = found.map(
+      (row): CutRow => ({
+        sessionId: row.session_id,
+        startMs: row.start_ms,
+        endMs: row.end_ms,
+      }),
+    );
+  } catch (error) {
     console.error("Could not read transcript audio cuts:", error);
     return bySession;
   }
-
-  const rows = (data ?? []).map(
-    (row): CutRow => ({
-      sessionId: row.session_id,
-      startMs: row.start_ms,
-      endMs: row.end_ms,
-    }),
-  );
   for (const row of rows) {
     const cuts = bySession.get(row.sessionId) ?? [];
     cuts.push({ startMs: row.startMs, endMs: row.endMs });

@@ -1,7 +1,11 @@
 import { PassThrough, Readable } from "node:stream";
 import { ZipArchive, type ArchiverError } from "archiver";
 import type { NextRequest } from "next/server";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { guests, sessions as sessionsTable, transcriptTurns } from "@/lib/db/schema";
+import { signedUrl } from "@/lib/storage";
 import {
   audioExtension,
   conversationArchiveFolder,
@@ -13,7 +17,6 @@ import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { conversationNames } from "@/lib/names";
 import { getPreferredLocale } from "@/lib/preferred-locale";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   Guest,
   InterviewSession,
@@ -48,39 +51,56 @@ type ExportTurn = Pick<
 >;
 
 async function getOwnSessions() {
-  const { supabase, user } = await requireUser();
-  const sessions: OwnSession[] = [];
+  const { user } = await requireUser();
+  const found: OwnSession[] = [];
 
-  for (let from = 0; ; from += SESSION_PAGE_SIZE) {
-    // This read uses the signed-in user's RLS-scoped client and also filters by
-    // the storyteller's user id, so family members cannot export one another.
-    const { data, error } = await supabase
-      .from("sessions")
-      .select(
-        "id, title, topic, status, created_at, started_at, duration_ms, raw_audio_path, guests!inner(name, user_id)",
+  for (let offset = 0; ; offset += SESSION_PAGE_SIZE) {
+    // The join on the storyteller's user id is what keeps this to the caller's
+    // own conversations; RLS used to add that filter invisibly, and now it is
+    // stated here. Family members still cannot export one another.
+    const page = await db
+      .select({
+        id: sessionsTable.id,
+        title: sessionsTable.title,
+        topic: sessionsTable.topic,
+        status: sessionsTable.status,
+        created_at: sessionsTable.created_at,
+        started_at: sessionsTable.started_at,
+        duration_ms: sessionsTable.duration_ms,
+        raw_audio_path: sessionsTable.raw_audio_path,
+        guest_name: guests.name,
+        guest_user_id: guests.user_id,
+      })
+      .from(sessionsTable)
+      .innerJoin(guests, eq(guests.id, sessionsTable.guest_id))
+      .where(
+        and(
+          inArray(sessionsTable.status, ["ready", "recording"]),
+          eq(guests.user_id, user.id)
+        )
       )
-      .in("status", ["ready", "recording"])
-      .eq("guests.user_id", user.id)
-      .order("created_at", { ascending: true })
-      .range(from, from + SESSION_PAGE_SIZE - 1);
+      .orderBy(asc(sessionsTable.created_at))
+      .limit(SESSION_PAGE_SIZE)
+      .offset(offset);
 
-    if (error) throw error;
-
-    const page = (data ?? []) as unknown as OwnSession[];
-    sessions.push(...page);
+    found.push(
+      ...page.map(({ guest_name, guest_user_id, ...session }) => ({
+        ...session,
+        guests: { name: guest_name, user_id: guest_user_id },
+      }))
+    );
     if (page.length < SESSION_PAGE_SIZE) break;
   }
 
-  return sessions;
+  return found;
 }
 
 async function getTurnsForAuthorizedSessions(sessionIds: string[]) {
-  const admin = createSupabaseAdminClient();
   const turns: ExportTurn[] = [];
 
-  // transcript_turns is not family-readable through RLS. Only after the
-  // sessions above have been authorized do we use the service role to fetch
-  // their matching transcript rows.
+  // Transcript rows were never family-readable — no policy exposed them — so
+  // this only ever runs on session ids `getOwnSessions` has already proven the
+  // caller owns. Keep that order: this function authorizes nothing itself.
   for (
     let batchStart = 0;
     batchStart < sessionIds.length;
@@ -91,18 +111,23 @@ async function getTurnsForAuthorizedSessions(sessionIds: string[]) {
       batchStart + TURN_SESSION_BATCH_SIZE,
     );
 
-    for (let from = 0; ; from += TURN_PAGE_SIZE) {
-      const { data, error } = await admin
-        .from("transcript_turns")
-        .select("session_id, idx, speaker, text, start_ms, end_ms, excluded")
-        .in("session_id", batch)
-        .order("session_id", { ascending: true })
-        .order("idx", { ascending: true })
-        .range(from, from + TURN_PAGE_SIZE - 1);
+    for (let offset = 0; ; offset += TURN_PAGE_SIZE) {
+      const page = await db
+        .select({
+          session_id: transcriptTurns.session_id,
+          idx: transcriptTurns.idx,
+          speaker: transcriptTurns.speaker,
+          text: transcriptTurns.text,
+          start_ms: transcriptTurns.start_ms,
+          end_ms: transcriptTurns.end_ms,
+          excluded: transcriptTurns.excluded,
+        })
+        .from(transcriptTurns)
+        .where(inArray(transcriptTurns.session_id, batch))
+        .orderBy(asc(transcriptTurns.session_id), asc(transcriptTurns.idx))
+        .limit(TURN_PAGE_SIZE)
+        .offset(offset);
 
-      if (error) throw error;
-
-      const page = (data ?? []) as ExportTurn[];
       turns.push(...page);
       if (page.length < TURN_PAGE_SIZE) break;
     }
@@ -152,8 +177,8 @@ async function fillArchive(
       continue;
     }
 
-    const signedUrl = signedUrls.get(conversation.raw_audio_path);
-    if (!signedUrl) {
+    const audioUrl = signedUrls.get(conversation.raw_audio_path);
+    if (!audioUrl) {
       archive.append("The audio recording could not be included.\n", {
         name: `${folder}/audio-unavailable.txt`,
       });
@@ -161,7 +186,7 @@ async function fillArchive(
     }
 
     try {
-      const response = await fetch(signedUrl);
+      const response = await fetch(audioUrl);
       if (!response.ok || !response.body) {
         throw new Error(`Storage returned ${response.status}.`);
       }
@@ -238,19 +263,15 @@ export async function GET(request: NextRequest) {
   const audioPaths = conversations.flatMap((conversation) =>
     conversation.raw_audio_path ? [conversation.raw_audio_path] : [],
   );
+  // One SAS token per recording, so the archiver can stream each straight from
+  // Blob Storage instead of routing tens of megabytes back through this
+  // function. Signing is local, so there is no batch call to make.
   const signedUrls = new Map<string, string>();
-  if (audioPaths.length) {
-    const admin = createSupabaseAdminClient();
-    const { data, error } = await admin.storage
-      .from(RAW_BUCKET)
-      .createSignedUrls(audioPaths, 15 * 60);
-    if (error) {
+  for (const path of audioPaths) {
+    try {
+      signedUrls.set(path, signedUrl(RAW_BUCKET, path, 15 * 60));
+    } catch (error) {
       console.error("Could not sign conversation audio for export:", error);
-    }
-    for (const item of data ?? []) {
-      if (item.path && item.signedUrl) {
-        signedUrls.set(item.path, item.signedUrl);
-      }
     }
   }
 

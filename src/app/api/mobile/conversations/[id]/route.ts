@@ -1,4 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { and, asc, eq } from "drizzle-orm";
+import { ownSessionsFilter, ownsReadySession } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  circleShares,
+  profiles,
+  sessions,
+  transcriptTurns,
+} from "@/lib/db/schema";
+import { deleteConversation } from "@/lib/sessions/delete";
 import {
   notFound,
   readJson,
@@ -9,7 +19,7 @@ import {
 } from "@/lib/mobile/auth";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { editedAudioDurationMs } from "@/lib/audio/cuts";
-import { RAW_BUCKET, STORY_VIDEOS_BUCKET } from "@/lib/constants";
+import { RAW_BUCKET } from "@/lib/constants";
 import { normalizeLocale, translate } from "@/lib/i18n";
 import { conversationNames, personName } from "@/lib/names";
 import { ensureMoral } from "@/lib/moral/generate";
@@ -23,61 +33,77 @@ type Params = { params: Promise<{ id: string }> };
 /**
  * One conversation with its transcript, ready to play and edit.
  *
- * The RLS read is the authorisation for all three verbs in this file: a row
- * only comes back when the caller recorded it themselves.
+ * `ownSessionsFilter` is the authorisation for all three verbs in this file:
+ * it is the old "users read their own sessions" policy, applied by hand now
+ * that nothing in the database applies it for us.
  */
 export async function GET(request: NextRequest, { params }: Params) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
   const { id } = await params;
 
-  const { data: visible } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", id)
-    .in("status", ["ready", "recording"])
-    .eq("guests.user_id", user.id)
-    .maybeSingle();
-  if (!visible) return notFound("This conversation could not be opened.");
+  const [session] = (await db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.id, id), ownSessionsFilter(user.id)))
+    .limit(1)) as InterviewSession[];
+  if (!session) return notFound("This conversation could not be opened.");
 
-  const { data } = await admin.from("sessions").select("*").eq("id", id).single();
-  if (!data) return notFound("This conversation could not be opened.");
-  const session = data as InterviewSession;
+  const [profileRows, turnRows, shareRows, allSessions] = await Promise.all([
+    db
+      .select({
+        display_name: profiles.display_name,
+        email: profiles.email,
+        locale: profiles.locale,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    db
+      .select({
+        id: transcriptTurns.id,
+        idx: transcriptTurns.idx,
+        speaker: transcriptTurns.speaker,
+        text: transcriptTurns.text,
+        start_ms: transcriptTurns.start_ms,
+        end_ms: transcriptTurns.end_ms,
+        excluded: transcriptTurns.excluded,
+      })
+      .from(transcriptTurns)
+      .where(eq(transcriptTurns.session_id, id))
+      .orderBy(asc(transcriptTurns.idx)),
+    db
+      .select({ session_id: circleShares.session_id })
+      .from(circleShares)
+      .where(
+        and(
+          eq(circleShares.session_id, id),
+          eq(circleShares.owner_id, user.id)
+        )
+      )
+      .limit(1),
+    // Names are positional — "Conversation 3" only means anything against
+    // the whole list — so the list is what numbering is computed from.
+    db
+      .select({
+        id: sessions.id,
+        title: sessions.title,
+        created_at: sessions.created_at,
+      })
+      .from(sessions)
+      .where(ownSessionsFilter(user.id)),
+  ]);
 
-  const [{ data: profile }, { data: turnRows }, { data: share }, { data: allSessions }] =
-    await Promise.all([
-      supabase.from("profiles").select("display_name, email, locale").eq("id", user.id).maybeSingle(),
-      admin
-        .from("transcript_turns")
-        .select("id, idx, speaker, text, start_ms, end_ms, excluded")
-        .eq("session_id", id)
-        .order("idx", { ascending: true }),
-      supabase
-        .from("circle_shares")
-        .select("session_id")
-        .eq("session_id", id)
-        .maybeSingle(),
-      // Names are positional — "Conversation 3" only means anything against
-      // the whole list — so the list is what numbering is computed from.
-      supabase
-        .from("sessions")
-        .select("id, title, created_at, guests!inner(user_id)")
-        .in("status", ["ready", "recording"])
-        .eq("guests.user_id", user.id),
-    ]);
-
+  const profile = profileRows[0];
+  const share = shareRows[0];
   const locale = normalizeLocale(profile?.locale);
   const names = conversationNames(
-    (allSessions ?? []) as unknown as {
-      id: string;
-      title: string | null;
-      created_at: string;
-    }[],
+    allSessions,
     (number) => translate(locale, "familyConversationNumbered", { number })
   );
 
-  const turns = decryptTurns(id, turnRows ?? []).map((turn) => ({
+  const turns = decryptTurns(id, turnRows).map((turn) => ({
     id: turn.id,
     idx: turn.idx,
     speaker: turn.speaker,
@@ -92,7 +118,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     .map((turn) => ({ startMs: turn.startMs, endMs: turn.endMs }));
 
   // Audio at rest is ciphertext, so playback goes through the signed
-  // /api/audio proxy rather than a Supabase signed URL.
+  // /api/audio proxy rather than a storage URL the player could fetch itself.
   const audioPath = session.raw_audio_path
     ? createAudioUrl(RAW_BUCKET, session.raw_audio_path, 60 * 60 * 6)
     : null;
@@ -101,7 +127,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   // exactly as the share page and the circle page do it.
   const ownerName = personName(profile?.display_name, profile?.email ?? user.email);
   const moral =
-    session.status === "ready" ? await ensureMoral(admin, session, ownerName) : null;
+    session.status === "ready" ? await ensureMoral(session, ownerName) : null;
 
   return NextResponse.json({
     id: session.id,
@@ -127,23 +153,24 @@ export async function GET(request: NextRequest, { params }: Params) {
 export async function PATCH(request: NextRequest, { params }: Params) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
   const { id } = await params;
 
   const body = await readJson(request);
   const title = readString(body, "title", 120) || null;
 
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", id)
-    .in("status", ["ready", "recording"])
-    .eq("guests.user_id", user.id)
-    .maybeSingle();
-  if (!session) return notFound("This conversation could not be renamed.");
-
-  const { error } = await admin.from("sessions").update({ title }).eq("id", id);
-  if (error) {
+  try {
+    const renamed = await db
+      .update(sessions)
+      .set({ title })
+      // The ownership filter is part of the write, so an id the caller does
+      // not own updates nothing rather than being checked and then trusted.
+      .where(and(eq(sessions.id, id), ownSessionsFilter(user.id)))
+      .returning({ id: sessions.id });
+    if (renamed.length === 0) {
+      return notFound("This conversation could not be renamed.");
+    }
+  } catch (error) {
     console.error("Could not rename the conversation:", error);
     return serverError("Could not rename the conversation.");
   }
@@ -155,43 +182,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 export async function DELETE(request: NextRequest, { params }: Params) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
   const { id } = await params;
 
-  const { data: visible } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", id)
-    .eq("status", "ready")
-    .eq("guests.user_id", user.id)
-    .maybeSingle();
-  if (!visible) return notFound("This conversation could not be deleted.");
-
-  const [{ data: session }, { data: video }] = await Promise.all([
-    admin.from("sessions").select("raw_audio_path").eq("id", id).single(),
-    admin.from("conversation_videos").select("id").eq("session_id", id).maybeSingle(),
-  ]);
-
-  if (session?.raw_audio_path) {
-    await admin.storage.from(RAW_BUCKET).remove([session.raw_audio_path]);
-  }
-  if (video?.id) {
-    const prefix = `${id}/${video.id}`;
-    const [{ data: objects }, { data: scenes }] = await Promise.all([
-      admin.storage.from(STORY_VIDEOS_BUCKET).list(prefix),
-      admin.storage.from(STORY_VIDEOS_BUCKET).list(`${prefix}/scenes`),
-    ]);
-    const paths = [
-      ...(objects ?? []).filter((o) => o.id).map((o) => `${prefix}/${o.name}`),
-      ...(scenes ?? []).filter((o) => o.id).map((o) => `${prefix}/scenes/${o.name}`),
-    ];
-    if (paths.length) {
-      await admin.storage.from(STORY_VIDEOS_BUCKET).remove(paths);
-    }
+  if (!(await ownsReadySession(user.id, id))) {
+    return notFound("This conversation could not be deleted.");
   }
 
-  const { error } = await admin.from("sessions").delete().eq("id", id);
-  if (error) {
+  try {
+    await deleteConversation(id);
+  } catch (error) {
     console.error("Could not delete the conversation:", error);
     return serverError("Could not delete the conversation.");
   }

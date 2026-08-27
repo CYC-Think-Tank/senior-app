@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sessions } from "@/lib/db/schema";
 import { stitchSessionParts } from "@/lib/audio/stitch-parts";
 
 /**
@@ -6,11 +8,10 @@ import { stitchSessionParts } from "@/lib/audio/stitch-parts";
  * recording and marks it ready for editing.
  */
 export async function finalizeSessionAudio(
-  admin: SupabaseClient,
   session: { id: string; duration_ms: number | null },
   clientDurationMs?: number
 ): Promise<{ error: string | null }> {
-  const stitched = await stitchSessionParts(admin, session.id);
+  const stitched = await stitchSessionParts(session.id);
   if (!stitched) {
     return { error: "No audio was recorded." };
   }
@@ -20,16 +21,16 @@ export async function finalizeSessionAudio(
   const durationMs =
     stitched.durationMs ?? clientDurationMs ?? session.duration_ms ?? 0;
 
-  const { error } = await admin
-    .from("sessions")
-    .update({
-      status: "ready",
-      raw_audio_path: stitched.path,
-      duration_ms: Math.max(0, Math.round(durationMs)),
-    })
-    .eq("id", session.id);
-
-  if (error) {
+  try {
+    await db
+      .update(sessions)
+      .set({
+        status: "ready",
+        raw_audio_path: stitched.path,
+        duration_ms: Math.max(0, Math.round(durationMs)),
+      })
+      .where(eq(sessions.id, session.id));
+  } catch (error) {
     console.error("session finalize failed:", error);
     return { error: "Could not finalize the session." };
   }

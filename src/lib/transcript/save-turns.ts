@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { transcriptTurns } from "@/lib/db/schema";
 import { encryptTurnText } from "@/lib/transcript/encryption";
 import type { TurnDraft } from "@/lib/types";
 
@@ -55,28 +57,41 @@ function toRows(sessionId: string, turns: TurnDraft[]): TurnRow[] {
  * not take the earlier sitting down with it.
  */
 export async function saveTurns(
-  admin: SupabaseClient,
   sessionId: string,
   turns: TurnDraft[]
 ): Promise<{ error: string | null; count: number }> {
   const rows = toRows(sessionId, turns);
   if (rows.length === 0) return { error: null, count: 0 };
 
-  const { error } = await admin
-    .from("transcript_turns")
-    .upsert(rows, { onConflict: "session_id,idx" });
-  if (error) {
+  try {
+    await db
+      .insert(transcriptTurns)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: [transcriptTurns.session_id, transcriptTurns.idx],
+        set: {
+          speaker: sql`excluded.speaker`,
+          text: sql`excluded.text`,
+          start_ms: sql`excluded.start_ms`,
+          end_ms: sql`excluded.end_ms`,
+        },
+      });
+  } catch (error) {
     console.error("transcript upsert failed:", error);
     return { error: "Could not save the transcript.", count: 0 };
   }
 
   // Drop turns left behind by a longer previous attempt on this session.
-  const { error: trimError } = await admin
-    .from("transcript_turns")
-    .delete()
-    .eq("session_id", sessionId)
-    .gte("idx", rows.length);
-  if (trimError) {
+  try {
+    await db
+      .delete(transcriptTurns)
+      .where(
+        and(
+          eq(transcriptTurns.session_id, sessionId),
+          gte(transcriptTurns.idx, rows.length)
+        )
+      );
+  } catch (trimError) {
     console.error("transcript trim failed:", trimError);
   }
 

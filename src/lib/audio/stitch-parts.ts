@@ -3,46 +3,34 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { RAW_BUCKET } from "@/lib/constants";
+import { download, list, remove, upload } from "@/lib/storage";
 import { decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import { partsPrefix } from "@/lib/audio/parts";
 import { splitRuns, type PartExtension } from "@/lib/audio/part-runs";
 
 const DOWNLOAD_CONCURRENCY = 8;
-const LIST_PAGE = 1000;
 
 type PartFile = { name: string; size: number };
 
-/** Lists every uploaded chunk for a session, oldest first. */
-export async function listParts(
-  admin: SupabaseClient,
-  sessionId: string
-): Promise<PartFile[]> {
-  const prefix = partsPrefix(sessionId);
-  const all: PartFile[] = [];
-
-  for (let offset = 0; ; offset += LIST_PAGE) {
-    const { data, error } = await admin.storage
-      .from(RAW_BUCKET)
-      .list(prefix, { limit: LIST_PAGE, offset });
-    if (error) throw new Error(`Could not list the recording parts: ${error.message}`);
-    if (!data || data.length === 0) break;
-    for (const file of data) {
-      all.push({
-        name: file.name,
-        size: (file.metadata?.size as number | undefined) ?? 0,
-      });
-    }
-    if (data.length < LIST_PAGE) break;
+/**
+ * Lists every uploaded chunk for a session, oldest first.
+ *
+ * No paging loop any more: the storage module's `list` walks Azure's
+ * continuation tokens itself, so this sees the whole prefix in one call.
+ */
+export async function listParts(sessionId: string): Promise<PartFile[]> {
+  try {
+    const all = await list(RAW_BUCKET, partsPrefix(sessionId));
+    return all.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not list the recording parts: ${detail}`);
   }
-
-  return all.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Downloads parts in order, a few at a time so a long interview is not serial. */
 async function downloadParts(
-  admin: SupabaseClient,
   sessionId: string,
   parts: PartFile[]
 ): Promise<Buffer[]> {
@@ -54,15 +42,13 @@ async function downloadParts(
     { length: Math.min(DOWNLOAD_CONCURRENCY, parts.length) },
     async () => {
       for (let i = next++; i < parts.length; i = next++) {
-        const { data, error } = await admin.storage
-          .from(RAW_BUCKET)
-          .download(`${prefix}/${parts[i].name}`);
-        if (error || !data) {
+        const data = await download(RAW_BUCKET, `${prefix}/${parts[i].name}`);
+        if (!data) {
           throw new Error(`Could not download part ${parts[i].name}.`);
         }
         // Per-part decryption; a session that straddled the encryption
         // rollout can mix plaintext and encrypted chunks.
-        buffers[i] = decryptAudio(Buffer.from(await data.arrayBuffer()));
+        buffers[i] = decryptAudio(data);
       }
     }
   );
@@ -180,13 +166,12 @@ export type StitchResult = {
  * anywhere in here leaves the session recoverable and can simply be retried.
  */
 export async function stitchSessionParts(
-  admin: SupabaseClient,
   sessionId: string
 ): Promise<StitchResult | null> {
-  const parts = await listParts(admin, sessionId);
+  const parts = await listParts(sessionId);
   if (parts.length === 0) return null;
 
-  const buffers = await downloadParts(admin, sessionId, parts);
+  const buffers = await downloadParts(sessionId, parts);
   const runs = splitRuns(parts.map((part) => part.name), buffers);
 
   // WebM only survives as the output when every sitting was already WebM;
@@ -217,19 +202,21 @@ export async function stitchSessionParts(
     }
 
     const storagePath = `${sessionId}/raw-${Date.now()}.${ext}`;
-    const { error: uploadError } = await admin.storage
-      .from(RAW_BUCKET)
-      .upload(storagePath, encryptAudio(await readFile(outputPath)), {
-        contentType: "application/octet-stream",
-        upsert: true,
-      });
-    if (uploadError) {
-      throw new Error(`Could not store the recording: ${uploadError.message}`);
+    try {
+      await upload(
+        RAW_BUCKET,
+        storagePath,
+        encryptAudio(await readFile(outputPath))
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not store the recording: ${detail}`);
     }
 
-    await admin.storage
-      .from(RAW_BUCKET)
-      .remove(parts.map((p) => `${partsPrefix(sessionId)}/${p.name}`));
+    await remove(
+      RAW_BUCKET,
+      parts.map((p) => `${partsPrefix(sessionId)}/${p.name}`)
+    );
 
     return { path: storagePath, durationMs, partCount: parts.length };
   } finally {

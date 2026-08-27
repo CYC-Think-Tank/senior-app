@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { download } from "@/lib/storage";
 import {
   HEADER_LENGTH,
   cipherRangeFor,
@@ -232,15 +232,12 @@ async function serveWholeObject(
   grant: { bucket: string; path: string },
   contentType: string
 ) {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.storage
-    .from(grant.bucket)
-    .download(grant.path);
-  if (error || !data) {
+  const data = await download(grant.bucket, grant.path);
+  if (!data) {
     return NextResponse.json({ error: "Audio not found." }, { status: 404 });
   }
 
-  const audio = decryptAudio(Buffer.from(await data.arrayBuffer()));
+  const audio = decryptAudio(data);
   const range = parseRange(request, audio.length);
   if (range === "unsatisfiable") {
     return new NextResponse(null, {

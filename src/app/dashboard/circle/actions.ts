@@ -1,8 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { eq, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  canReadComments,
+  canWriteComment,
+  conversationOwner,
+  ownsReadySession,
+} from "@/lib/authz";
+import { db } from "@/lib/db";
+import { circleShares, conversationComments, profiles } from "@/lib/db/schema";
 import { normalizeCommentBody } from "@/lib/comments";
 import { personName } from "@/lib/names";
 
@@ -13,37 +21,35 @@ export type CircleShareResult =
 /**
  * Turns whole-circle sharing on or off for one finished conversation.
  *
- * Authorised the same way as generateShareLink: the session is read through
- * the caller's RLS-scoped client first, so this only ever runs on a finished
- * conversation they recorded themselves. That read is also what keeps two
- * other cases out without special-casing them — an anonymous walk-in guest has
- * no user_id to match, and an admin's blanket access to sessions does not let
- * them share someone else's story.
+ * Authorised the same way as generateShareLink, through `ownsReadySession`, so
+ * this only ever runs on a finished conversation the caller recorded
+ * themselves. That check also keeps two other cases out without special-casing
+ * them — an anonymous walk-in guest has no user_id to match, and being an
+ * admin does not let anyone share someone else's story.
  */
 export async function setCircleSharing(
   sessionId: string,
   shared: boolean,
 ): Promise<CircleShareResult> {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", sessionId)
-    .eq("status", "ready")
-    .eq("guests.user_id", user.id)
-    .single();
+  if (!(await ownsReadySession(user.id, sessionId))) return { ok: false };
 
-  if (!session) return { ok: false };
-
-  const admin = createSupabaseAdminClient();
-  const { error } = shared
-    ? await admin
-        .from("circle_shares")
-        .upsert({ session_id: sessionId, owner_id: user.id })
-    : await admin.from("circle_shares").delete().eq("session_id", sessionId);
-
-  if (error) {
+  try {
+    if (shared) {
+      await db
+        .insert(circleShares)
+        .values({ session_id: sessionId, owner_id: user.id })
+        .onConflictDoUpdate({
+          target: circleShares.session_id,
+          set: { owner_id: sql`excluded.owner_id` },
+        });
+    } else {
+      await db
+        .delete(circleShares)
+        .where(eq(circleShares.session_id, sessionId));
+    }
+  } catch (error) {
     console.error("Could not change circle sharing:", error);
     return { ok: false };
   }
@@ -62,44 +68,40 @@ export type PostCommentResult =
 /**
  * Adds a comment to a conversation the caller can currently reach.
  *
- * The single circle_shares read below is the whole authorisation. Its policies
- * return a row only when the caller is the owner, or a friend of the owner
- * *and* the switch is still on — so "it was unshared while I had the page
- * open" and "I was removed from the circle while I had the page open" both
- * come back as `forbidden` without needing to be checked for separately.
+ * `canWriteComment` is the whole authorisation. It passes only when the caller
+ * is the storyteller, or a friend of theirs *and* the switch is still on — so
+ * "it was unshared while I had the page open" and "I was removed from the
+ * circle while I had the page open" both come back as `forbidden` without
+ * needing to be checked for separately.
  */
 export async function postComment(
   sessionId: string,
   body: string,
 ): Promise<PostCommentResult> {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
   const text = normalizeCommentBody(body);
   if (!text) return { ok: false, reason: "empty" };
 
-  const { data: share } = await supabase
-    .from("circle_shares")
-    .select("session_id")
-    .eq("session_id", sessionId)
-    .maybeSingle();
-  if (!share) return { ok: false, reason: "forbidden" };
+  if (!(await canWriteComment(user.id, sessionId))) {
+    return { ok: false, reason: "forbidden" };
+  }
 
-  const admin = createSupabaseAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("display_name, email")
-    .eq("id", user.id)
-    .single();
+  const [profile] = await db
+    .select({ display_name: profiles.display_name, email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, user.id))
+    .limit(1);
 
-  const { error } = await admin.from("conversation_comments").insert({
-    session_id: sessionId,
-    author_id: user.id,
-    // Snapshotted, not joined at read time — see migration 016.
-    author_name: personName(profile?.display_name, profile?.email ?? user.email),
-    body: text,
-  });
-
-  if (error) {
+  try {
+    await db.insert(conversationComments).values({
+      session_id: sessionId,
+      author_id: user.id,
+      // Snapshotted, not joined at read time — see migration 016.
+      author_name: personName(profile?.display_name, profile?.email ?? user.email),
+      body: text,
+    });
+  } catch (error) {
     console.error("Could not post the comment:", error);
     return { ok: false, reason: "failed" };
   }
@@ -115,36 +117,33 @@ export async function postComment(
  * is moderation of your own story, not of someone else's.
  */
 export async function deleteComment(commentId: string) {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  // RLS: the select policies mean a comment only comes back if the caller is
-  // allowed to see it in the first place.
-  const { data: comment } = await supabase
-    .from("conversation_comments")
-    .select("id, session_id, author_id")
-    .eq("id", commentId)
-    .maybeSingle();
+  const [comment] = await db
+    .select({
+      id: conversationComments.id,
+      session_id: conversationComments.session_id,
+      author_id: conversationComments.author_id,
+    })
+    .from(conversationComments)
+    .where(eq(conversationComments.id, commentId))
+    .limit(1);
   if (!comment) return { ok: false as const };
 
-  let allowed = comment.author_id === user.id;
-  if (!allowed) {
-    const { data: owned } = await supabase
-      .from("sessions")
-      .select("id, guests!inner(user_id)")
-      .eq("id", comment.session_id)
-      .eq("guests.user_id", user.id)
-      .maybeSingle();
-    allowed = Boolean(owned);
+  // Two separate questions the select policies used to answer together: may
+  // this person see the thread at all, and is this note theirs to remove.
+  const isAuthor = comment.author_id === user.id;
+  const isOwner = (await conversationOwner(comment.session_id)) === user.id;
+  if (!isAuthor && !(await canReadComments(user.id, comment.session_id))) {
+    return { ok: false as const };
   }
-  if (!allowed) return { ok: false as const };
+  if (!isAuthor && !isOwner) return { ok: false as const };
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("conversation_comments")
-    .delete()
-    .eq("id", commentId);
-
-  if (error) {
+  try {
+    await db
+      .delete(conversationComments)
+      .where(eq(conversationComments.id, commentId));
+  } catch (error) {
     console.error("Could not delete the comment:", error);
     return { ok: false as const };
   }

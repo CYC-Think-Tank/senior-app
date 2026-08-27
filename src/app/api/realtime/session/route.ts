@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions, transcriptTurns } from "@/lib/db/schema";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { getGuestMemorySummary } from "@/lib/memory/summary";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
@@ -27,12 +29,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing token." }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("sessions")
-    .select("id, status, topic, started_at, guests(*)")
-    .eq("token", token)
-    .single();
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      status: sessions.status,
+      topic: sessions.topic,
+      started_at: sessions.started_at,
+      guest: guests,
+    })
+    .from(sessions)
+    .innerJoin(guests, eq(guests.id, sessions.guest_id))
+    .where(eq(sessions.token, token))
+    .limit(1);
 
   if (!session) {
     return NextResponse.json(
@@ -50,17 +58,21 @@ export async function POST(request: NextRequest) {
   // Whatever the live checkpoints saved before the tab closed. Handing it to
   // the interviewer is what turns reopening the link into carrying on rather
   // than starting the conversation again.
-  const { data: savedTurns } = await admin
-    .from("transcript_turns")
-    .select("idx, speaker, text")
-    .eq("session_id", session.id)
-    .order("idx", { ascending: true });
+  const savedTurns = await db
+    .select({
+      idx: transcriptTurns.idx,
+      speaker: transcriptTurns.speaker,
+      text: transcriptTurns.text,
+    })
+    .from(transcriptTurns)
+    .where(eq(transcriptTurns.session_id, session.id))
+    .orderBy(asc(transcriptTurns.idx));
 
-  const guest = session.guests as unknown as Guest;
+  const guest = session.guest as unknown as Guest;
   const [guestName, language, memorySummary] = await Promise.all([
-    resolveCurrentGuestName(admin, guest),
-    resolveCurrentGuestLanguage(admin, guest),
-    getGuestMemorySummary(admin, guest.id),
+    resolveCurrentGuestName(guest),
+    resolveCurrentGuestLanguage(guest),
+    getGuestMemorySummary(guest.id),
   ]);
   const instructions = buildInterviewerInstructions({
     guestName,
@@ -147,13 +159,13 @@ export async function POST(request: NextRequest) {
 
   // `started_at` marks when the conversation began, not this sitting, so a
   // resumed one leaves it alone.
-  await admin
-    .from("sessions")
-    .update({
+  await db
+    .update(sessions)
+    .set({
       status: "recording",
       started_at: session.started_at ?? new Date().toISOString(),
     })
-    .eq("id", session.id);
+    .where(eq(sessions.id, session.id));
 
   // The model rides along for clients that have to name it themselves. The
   // browser does not — WebRTC carries it in the offer — but a WebSocket

@@ -7,6 +7,10 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/mobile/auth";
+import { and, eq } from "drizzle-orm";
+import { friendshipsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { friendships } from "@/lib/db/schema";
 import { friendshipPair } from "@/lib/friends";
 
 export const dynamic = "force-dynamic";
@@ -21,25 +25,33 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const friendUserId = readString(body, "userId", 64);
   const { low, high } = friendshipPair(user.id, friendUserId);
 
-  // RLS again: this only returns the row if the caller is one of its two
-  // participants, so nobody can dissolve a friendship they are not in.
-  const { data: friendship } = await supabase
-    .from("friendships")
-    .select("id")
-    .eq("user_low", low)
-    .eq("user_high", high)
-    .eq("status", "accepted")
-    .maybeSingle();
+  // The membership filter again, so nobody can dissolve a friendship they are
+  // not in. (The ordered pair is built from the caller's own id, so this is
+  // belt and braces — but it is the check, not a side effect of how the pair
+  // was derived, and it should read that way.)
+  const [friendship] = await db
+    .select({ id: friendships.id })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.user_low, low),
+        eq(friendships.user_high, high),
+        eq(friendships.status, "accepted"),
+        friendshipsFilter(user.id)
+      )
+    )
+    .limit(1);
   if (!friendship) return notFound("You are not in that circle.");
 
-  const { error } = await admin.from("friendships").delete().eq("id", friendship.id);
-  if (error) {
+  try {
+    await db.delete(friendships).where(eq(friendships.id, friendship.id));
+  } catch (error) {
     console.error("Could not remove the friend:", error);
     return serverError("Could not remove them.");
   }

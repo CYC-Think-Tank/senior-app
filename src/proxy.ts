@@ -1,52 +1,37 @@
-import { createServerClient } from "@supabase/ssr";
+import { getSessionCookie } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
-import { supabaseAuthCookieOptions } from "@/lib/supabase/cookie-options";
 
-// Next 16 proxy (formerly middleware): refreshes the Supabase auth session on
-// navigation so server components always see a valid token. Route guarding
-// itself lives in the layouts.
-export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+/**
+ * Next 16 proxy (formerly middleware): an optimistic redirect, nothing more.
+ *
+ * Under Supabase this refreshed the auth token on every navigation so server
+ * components saw a valid one. Better Auth sessions live in the database and
+ * are renewed by `getSession` itself, so there is nothing to refresh here.
+ * What is left is worth keeping: bouncing a signed-out visitor away from the
+ * portal without paying for a render first.
+ *
+ * This only reads the cookie — it does not verify it, and it must not be
+ * mistaken for the guard. Every protected page still calls `requireUser` or
+ * `requireAdmin`, and every route still applies the checks in `@/lib/authz`;
+ * a forged cookie gets past this and no further.
+ */
+const PROTECTED = ["/admin", "/dashboard"];
 
-  // Before .env.local is filled in, skip session refresh so pages can still
-  // render (they'll show their own errors where Supabase is actually needed).
-  if (
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ) {
-    return response;
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const signedIn = Boolean(getSessionCookie(request));
+
+  if (!signedIn && PROTECTED.some((path) => pathname.startsWith(path))) {
+    const login = new URL("/login", request.url);
+    return NextResponse.redirect(login);
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookieOptions: supabaseAuthCookieOptions,
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet, headersToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-          Object.entries(headersToSet).forEach(([name, value]) =>
-            response.headers.set(name, value)
-          );
-        },
-      },
-    }
-  );
+  // /login and /signup are matched too, but sending an already signed-in
+  // visitor onward is left to `redirectSignedInUser` on the page: where they
+  // belong depends on their role, which this cannot see without a database
+  // read the proxy has no business doing.
 
-  // Verify locally against the project's cached JWKS when asymmetric signing
-  // is enabled; this avoids an Auth server round trip on most navigations.
-  await supabase.auth.getClaims();
-
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

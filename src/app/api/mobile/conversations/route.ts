@@ -1,4 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { ownSessionsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  circleShares,
+  guests,
+  profiles,
+  sessions,
+  transcriptTurns,
+} from "@/lib/db/schema";
 import {
   readJson,
   readString,
@@ -24,35 +34,52 @@ type SessionRow = Pick<
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, user } = auth;
+  const { user } = auth;
 
-  const [{ data: profile }, { data }] = await Promise.all([
-    supabase.from("profiles").select("locale").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("sessions")
-      .select(
-        "id, token, title, status, created_at, duration_ms, share_token, guests!inner(name, user_id)"
-      )
-      .in("status", ["ready", "recording"])
-      .eq("guests.user_id", user.id)
-      .order("created_at", { ascending: false }),
+  const [profileRows, found] = await Promise.all([
+    db
+      .select({ locale: profiles.locale })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    db
+      .select({
+        id: sessions.id,
+        token: sessions.token,
+        title: sessions.title,
+        status: sessions.status,
+        created_at: sessions.created_at,
+        duration_ms: sessions.duration_ms,
+        share_token: sessions.share_token,
+        guest_name: guests.name,
+        guest_user_id: guests.user_id,
+      })
+      .from(sessions)
+      .innerJoin(guests, eq(guests.id, sessions.guest_id))
+      // The abandonment window in `ownSessionsFilter` is what keeps a live
+      // conversation out of this list — same as the old policy.
+      .where(ownSessionsFilter(user.id))
+      .orderBy(desc(sessions.created_at)),
   ]);
 
-  const locale = normalizeLocale(profile?.locale);
-  const rows = (data ?? []) as unknown as SessionRow[];
+  const locale = normalizeLocale(profileRows[0]?.locale);
+  const rows = found.map(({ guest_name, guest_user_id, ...row }) => ({
+    ...row,
+    guests: { name: guest_name, user_id: guest_user_id ?? "" },
+  })) as unknown as SessionRow[];
 
-  // "owner reads own circle shares" scopes this to the caller's own switches.
-  const { data: shares } = await supabase
-    .from("circle_shares")
-    .select("session_id")
-    .eq("owner_id", user.id);
-  const shared = new Set((shares ?? []).map((share) => share.session_id));
+  // "owner reads own circle shares", stated explicitly.
+  const shares = await db
+    .select({ session_id: circleShares.session_id })
+    .from(circleShares)
+    .where(eq(circleShares.owner_id, user.id));
+  const shared = new Set(shares.map((share) => share.session_id));
 
   const names = conversationNames(rows, (number) =>
     translate(locale, "familyConversationNumbered", { number })
   );
-  // Only ids the caller's own RLS read already authorised are handed to the
-  // service helper that reads private cut timestamps.
+  // Only ids the ownership filter above already authorised are handed to the
+  // helper that reads private cut timestamps.
   const cuts = await getExcludedAudioCuts(rows.map((row) => row.id));
 
   return NextResponse.json(
@@ -66,7 +93,7 @@ export async function GET(request: NextRequest) {
       shareToken: row.share_token,
       unfinished: row.status !== "ready",
       sharedWithCircle: shared.has(row.id),
-      // Their own conversation's own capability token. The RLS policy only
+      // Their own conversation's own capability token. The filter only
       // returns a recording session whose checkpoints have gone stale, so this
       // cannot hand back the token of a conversation already in progress.
       resumeToken: row.status === "ready" ? null : row.token,
@@ -82,20 +109,34 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const resumeSessionId = readString(body, "resumeSessionId", 64);
 
   if (resumeSessionId) {
-    return resumeConversation(auth, resumeSessionId);
+    return resumeConversation(user.id, resumeSessionId);
   }
 
-  const [{ data: profile }, { data: existing }] = await Promise.all([
-    admin.from("profiles").select("display_name, email, locale").eq("id", user.id).single(),
-    admin.from("guests").select("id, name, language").eq("user_id", user.id).maybeSingle(),
+  const [profileRows, existingRows] = await Promise.all([
+    db
+      .select({
+        display_name: profiles.display_name,
+        email: profiles.email,
+        locale: profiles.locale,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    db
+      .select({ id: guests.id, name: guests.name, language: guests.language })
+      .from(guests)
+      .where(eq(guests.user_id, user.id))
+      .limit(1),
   ]);
 
+  const profile = profileRows[0];
+  const existing = existingRows[0];
   const email = profile?.email ?? user.email;
   const currentName = personName(profile?.display_name, email);
   const currentLanguage = interviewLanguage(normalizeLocale(profile?.locale));
@@ -104,70 +145,73 @@ export async function POST(request: NextRequest) {
   if (existing) {
     guestId = existing.id;
     if (existing.name !== currentName || existing.language !== currentLanguage) {
-      const { error } = await admin
-        .from("guests")
-        .update({ name: currentName, language: currentLanguage })
-        .eq("id", guestId);
-      if (error) {
+      try {
+        await db
+          .update(guests)
+          .set({ name: currentName, language: currentLanguage })
+          .where(eq(guests.id, guestId));
+      } catch (error) {
         console.error("Could not update the self guest:", error);
         return serverError("Could not start the conversation.");
       }
     }
   } else {
     // The user_id is what makes the finished recording visible on their own
-    // dashboard; see the "users read their own sessions" policy.
-    const { data: guest, error } = await admin
-      .from("guests")
-      .insert({
-        user_id: user.id,
-        name: currentName,
-        language: currentLanguage,
-        origin: "self_serve",
-      })
-      .select("id")
-      .single();
-    if (error || !guest) {
+    // dashboard; see `ownSessionsFilter`.
+    try {
+      const [guest] = await db
+        .insert(guests)
+        .values({
+          user_id: user.id,
+          name: currentName,
+          language: currentLanguage,
+          origin: "self_serve",
+        })
+        .returning({ id: guests.id });
+      guestId = guest.id;
+    } catch (error) {
       console.error("Could not create a self guest:", error);
       return serverError("Could not start the conversation.");
     }
-    guestId = guest.id;
   }
 
-  const { data: session, error } = await admin
-    .from("sessions")
-    .insert({ guest_id: guestId })
-    .select("id, token")
-    .single();
-
-  if (error || !session) {
+  try {
+    const [session] = await db
+      .insert(sessions)
+      .values({ guest_id: guestId })
+      .returning({ id: sessions.id, token: sessions.token });
+    return NextResponse.json({ sessionId: session.id, token: session.token });
+  } catch (error) {
     console.error("Could not create a conversation:", error);
     return serverError("Could not start the conversation.");
   }
-
-  void supabase;
-  return NextResponse.json({ sessionId: session.id, token: session.token });
 }
 
 /**
  * Picks a conversation back up at the link it was recorded on, handing the app
  * everything the earlier sittings saved so the new audio appends to the old.
  *
- * The RLS read is the authorisation, exactly as in `resumeConversation()`: the
- * policy only exposes a `recording` session whose checkpoints have gone stale,
- * so this cannot walk in on a conversation already in progress.
+ * `ownSessionsFilter` is the authorisation, exactly as in
+ * `resumeConversation()`: it only exposes a `recording` session whose
+ * checkpoints have gone stale, so this cannot walk in on a conversation
+ * already in progress, and it cannot reach another account's at all.
  */
-async function resumeConversation(
-  auth: NonNullable<Awaited<ReturnType<typeof requireMobileUser>>>,
-  sessionId: string
-) {
-  const { supabase, admin } = auth;
-
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, token, duration_ms")
-    .eq("id", sessionId)
-    .eq("status", "recording")
-    .maybeSingle();
+async function resumeConversation(userId: string, sessionId: string) {
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      token: sessions.token,
+      duration_ms: sessions.duration_ms,
+    })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        eq(sessions.status, "recording"),
+        ownSessionsFilter(userId)
+      )
+    )
+    .limit(1);
 
   if (!session) {
     return NextResponse.json(
@@ -176,13 +220,19 @@ async function resumeConversation(
     );
   }
 
-  const { data: rows } = await admin
-    .from("transcript_turns")
-    .select("idx, speaker, text, start_ms, end_ms")
-    .eq("session_id", session.id)
-    .order("idx", { ascending: true });
+  const rows = await db
+    .select({
+      idx: transcriptTurns.idx,
+      speaker: transcriptTurns.speaker,
+      text: transcriptTurns.text,
+      start_ms: transcriptTurns.start_ms,
+      end_ms: transcriptTurns.end_ms,
+    })
+    .from(transcriptTurns)
+    .where(eq(transcriptTurns.session_id, session.id))
+    .orderBy(asc(transcriptTurns.idx));
 
-  const turns = decryptTurns(session.id, rows ?? []);
+  const turns = decryptTurns(session.id, rows);
   // Where the new sitting sits on the conversation's timeline. The last
   // checkpoint's duration is what recovery has to work with; the final turn is
   // the floor, so a stale heartbeat cannot rewind over recorded audio.

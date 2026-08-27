@@ -1,6 +1,10 @@
 import { cache } from "react";
 import { headers } from "next/headers";
+import { desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { ownSessionsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { circleShares, guests, sessions } from "@/lib/db/schema";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
@@ -24,37 +28,52 @@ export type FamilyConversation = {
 };
 
 export const getFamilyConversations = cache(async () => {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
   const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
-  const { data } = await supabase
-    .from("sessions")
-    .select("id, title, status, created_at, duration_ms, share_token, guests!inner(name, user_id)")
-    .in("status", ["ready", "recording"])
-    .eq("guests.user_id", user.id)
-    .order("created_at", { ascending: false });
 
   type SessionRow = Pick<
     InterviewSession,
     "id" | "title" | "status" | "created_at" | "duration_ms" | "share_token"
   > & { guests: { name: string; user_id: string } };
-  const rows = (data ?? []) as unknown as SessionRow[];
 
-  // "owner reads own circle shares" scopes this to the caller's own switches.
-  const { data: shares } = await supabase
-    .from("circle_shares")
-    .select("session_id")
-    .eq("owner_id", user.id);
-  const sharedWithCircle = new Set(
-    (shares ?? []).map((share) => share.session_id),
-  );
+  // `ownSessionsFilter` is the old "users read their own sessions" policy: the
+  // caller's finished conversations, plus any that were abandoned mid-recording
+  // long enough ago to be recoverable.
+  const found = await db
+    .select({
+      id: sessions.id,
+      title: sessions.title,
+      status: sessions.status,
+      created_at: sessions.created_at,
+      duration_ms: sessions.duration_ms,
+      share_token: sessions.share_token,
+      guest_name: guests.name,
+      guest_user_id: guests.user_id,
+    })
+    .from(sessions)
+    .innerJoin(guests, eq(guests.id, sessions.guest_id))
+    .where(ownSessionsFilter(user.id))
+    .orderBy(desc(sessions.created_at));
+
+  const rows = found.map(({ guest_name, guest_user_id, ...row }) => ({
+    ...row,
+    guests: { name: guest_name, user_id: guest_user_id ?? "" },
+  })) as unknown as SessionRow[];
+
+  // "owner reads own circle shares", stated explicitly.
+  const shares = await db
+    .select({ session_id: circleShares.session_id })
+    .from(circleShares)
+    .where(eq(circleShares.owner_id, user.id));
+  const sharedWithCircle = new Set(shares.map((share) => share.session_id));
 
   const names = conversationNames(rows, (number) =>
     t("familyConversationNumbered", { number }),
   );
-  // Only ids already authorized by the caller's RLS read are handed to the
-  // service helper that reads private transcript cut timestamps.
+  // Only ids the ownership filter above already authorized are handed to the
+  // helper that reads private transcript cut timestamps.
   const cutsBySession = await getExcludedAudioCuts(rows.map((row) => row.id));
   const conversations: FamilyConversation[] = rows.map((row) => ({
     id: row.id,

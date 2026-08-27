@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { friendshipsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { friendships, profiles } from "@/lib/db/schema";
 import { normalizeEmail } from "@/lib/email";
 import { friendshipPair } from "@/lib/friends";
 import { personName } from "@/lib/names";
@@ -39,10 +41,11 @@ function revalidateCircle() {
 /**
  * Finds a family account by its exact email address.
  *
- * Deliberately service-role. Every other read in this app authorises through
- * the caller's RLS client first, but search is the one case where no
- * relationship exists yet — there is no predicate that could authorise it
- * without making `profiles` readable by email to every signed-in user.
+ * Deliberately unfiltered. Every other read in this app narrows to what the
+ * caller may see, but search is the one case where no relationship exists yet
+ * — there is no predicate that could authorise it without making `profiles`
+ * readable by email to every signed-in user. Migration 014 named the same
+ * carve-out.
  *
  * So the safety lives in the shape of the answer instead: an exact match only,
  * family accounts only, and a return value carrying nothing but an id, a
@@ -58,16 +61,18 @@ export async function searchFriendByEmail(
   const email = normalizeEmail(emailInput);
   if (!email) return { ok: false, reason: "invalid_email" };
 
-  const admin = createSupabaseAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, display_name, email")
-    // `eq`, never `ilike`: `%` and `_` are legal in a local part and would
-    // otherwise turn a typed address into a wildcard search over every
+  const [profile] = await db
+    .select({
+      id: profiles.id,
+      display_name: profiles.display_name,
+      email: profiles.email,
+    })
+    .from(profiles)
+    // An exact match, never a LIKE: `%` and `_` are legal in a local part and
+    // would otherwise turn a typed address into a wildcard search over every
     // account. Migration 013 lowercased the column to make this match.
-    .eq("email", email)
-    .eq("role", "family")
-    .maybeSingle();
+    .where(and(eq(profiles.email, email), eq(profiles.role, "family")))
+    .limit(1);
 
   // An admin's address and an address nobody uses return the same thing, so
   // search cannot be used to enumerate who exists or who is privileged.
@@ -77,12 +82,14 @@ export async function searchFriendByEmail(
   if (profile.id === user.id) return { ok: false, reason: "self" };
 
   const { low, high } = friendshipPair(user.id, profile.id);
-  const { data: friendship } = await admin
-    .from("friendships")
-    .select("status, requester_id")
-    .eq("user_low", low)
-    .eq("user_high", high)
-    .maybeSingle();
+  const [friendship] = await db
+    .select({
+      status: friendships.status,
+      requester_id: friendships.requester_id,
+    })
+    .from(friendships)
+    .where(and(eq(friendships.user_low, low), eq(friendships.user_high, high)))
+    .limit(1);
 
   let relationship: FriendRelationship = "none";
   if (friendship?.status === "accepted") {
@@ -105,7 +112,7 @@ export async function searchFriendByEmail(
 /**
  * Asks another family account to join the caller's circle.
  *
- * There is no RLS read to authorise here — anyone signed in may ask anyone.
+ * There is nothing to authorise here — anyone signed in may ask anyone.
  * What keeps it safe is that the caller's half of the pair comes from the
  * verified session claim and never from an argument, so the worst a forged
  * `targetUserId` can do is create a request the caller is themselves part of.
@@ -123,42 +130,41 @@ export async function sendFriendRequest(
     return { ok: false, reason: "invalid" };
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data: target } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("id", targetUserId)
-    .eq("role", "family")
-    .maybeSingle();
+  const [target] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(and(eq(profiles.id, targetUserId), eq(profiles.role, "family")))
+    .limit(1);
   if (!target) return { ok: false, reason: "not_found" };
 
   const { low, high } = friendshipPair(user.id, targetUserId);
+  const readPair = async () => {
+    const [row] = await db
+      .select({
+        id: friendships.id,
+        status: friendships.status,
+        requester_id: friendships.requester_id,
+      })
+      .from(friendships)
+      .where(and(eq(friendships.user_low, low), eq(friendships.user_high, high)))
+      .limit(1);
+    return row;
+  };
 
-  const { data: existing } = await admin
-    .from("friendships")
-    .select("id, status, requester_id")
-    .eq("user_low", low)
-    .eq("user_high", high)
-    .maybeSingle();
-
+  const existing = await readPair();
   if (existing) return acceptOrEcho(existing, user.id);
 
-  const { error } = await admin.from("friendships").insert({
-    user_low: low,
-    user_high: high,
-    requester_id: user.id,
-  });
-
-  if (error) {
+  try {
+    await db.insert(friendships).values({
+      user_low: low,
+      user_high: high,
+      requester_id: user.id,
+    });
+  } catch (error) {
     // 23505: the other side inserted the same pair between our read and our
     // write. Re-read and fall into the same handshake as above.
-    if (error.code === "23505") {
-      const { data: raced } = await admin
-        .from("friendships")
-        .select("id, status, requester_id")
-        .eq("user_low", low)
-        .eq("user_high", high)
-        .maybeSingle();
+    if ((error as { code?: string } | null)?.code === "23505") {
+      const raced = await readPair();
       if (raced) return acceptOrEcho(raced, user.id);
     }
     console.error("Could not send the friend request:", error);
@@ -185,14 +191,14 @@ async function acceptOrEcho(
     return { ok: true, status: "pending" };
   }
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("friendships")
-    .update({ status: "accepted", responded_at: new Date().toISOString() })
-    .eq("id", existing.id)
-    .eq("status", "pending");
-
-  if (error) {
+  try {
+    await db
+      .update(friendships)
+      .set({ status: "accepted", responded_at: new Date().toISOString() })
+      .where(
+        and(eq(friendships.id, existing.id), eq(friendships.status, "pending"))
+      );
+  } catch (error) {
     console.error("Could not accept the reciprocal friend request:", error);
     return { ok: false, reason: "invalid" };
   }
@@ -202,42 +208,51 @@ async function acceptOrEcho(
 }
 
 /**
- * Reads a pending friendship the caller is part of, through their RLS client.
- * The "participants read their friendships" policy is the authorisation: a
- * row comes back only if this account is one of the two in it.
+ * Reads a pending friendship the caller is part of.
+ *
+ * `friendshipsFilter` carries over "participants read their friendships" and
+ * is the authorisation: a row comes back only if this account is one of the
+ * two in it. Without it, any pending friendship id would be answerable by
+ * whoever knew it.
  */
-async function readPendingFriendship(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  friendshipId: string,
-) {
-  const { data } = await supabase
-    .from("friendships")
-    .select("id, requester_id, status")
-    .eq("id", friendshipId)
-    .eq("status", "pending")
-    .maybeSingle();
-  return data;
+async function readPendingFriendship(userId: string, friendshipId: string) {
+  const [row] = await db
+    .select({
+      id: friendships.id,
+      requester_id: friendships.requester_id,
+      status: friendships.status,
+    })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.id, friendshipId),
+        eq(friendships.status, "pending"),
+        friendshipsFilter(userId)
+      )
+    )
+    .limit(1);
+  return row;
 }
 
 /** Accepts a request someone else sent. Only the recipient may accept. */
 export async function acceptFriendRequest(friendshipId: string) {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  const friendship = await readPendingFriendship(supabase, friendshipId);
+  const friendship = await readPendingFriendship(user.id, friendshipId);
   // Being in the row is not enough — the person who asked cannot accept for
   // the person who was asked.
   if (!friendship || friendship.requester_id === user.id) {
     return { ok: false as const };
   }
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("friendships")
-    .update({ status: "accepted", responded_at: new Date().toISOString() })
-    .eq("id", friendshipId)
-    .eq("status", "pending");
-
-  if (error) {
+  try {
+    await db
+      .update(friendships)
+      .set({ status: "accepted", responded_at: new Date().toISOString() })
+      .where(
+        and(eq(friendships.id, friendshipId), eq(friendships.status, "pending"))
+      );
+  } catch (error) {
     console.error("Could not accept the friend request:", error);
     return { ok: false as const };
   }
@@ -255,19 +270,18 @@ export async function acceptFriendRequest(friendshipId: string) {
  * explain the dead end to either of them. Re-asking is the lesser problem.
  */
 export async function declineFriendRequest(friendshipId: string) {
-  const { supabase } = await requireUser();
+  const { user } = await requireUser();
 
-  const friendship = await readPendingFriendship(supabase, friendshipId);
+  const friendship = await readPendingFriendship(user.id, friendshipId);
   if (!friendship) return { ok: false as const };
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("friendships")
-    .delete()
-    .eq("id", friendshipId)
-    .eq("status", "pending");
-
-  if (error) {
+  try {
+    await db
+      .delete(friendships)
+      .where(
+        and(eq(friendships.id, friendshipId), eq(friendships.status, "pending"))
+      );
+  } catch (error) {
     console.error("Could not decline the friend request:", error);
     return { ok: false as const };
   }
@@ -278,31 +292,34 @@ export async function declineFriendRequest(friendshipId: string) {
 
 /**
  * Removes someone from the circle. Their access to conversations shared with
- * the circle stops at the next query — `is_friend()` is evaluated per request,
+ * the circle stops at the next query — `isFriend` is evaluated per request,
  * not cached on the shared rows.
  */
 export async function removeFriend(friendUserId: string) {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
   const { low, high } = friendshipPair(user.id, friendUserId);
-  // RLS again: this only returns the row if the caller is one of its two
-  // participants, so nobody can dissolve a friendship they are not in.
-  const { data: friendship } = await supabase
-    .from("friendships")
-    .select("id")
-    .eq("user_low", low)
-    .eq("user_high", high)
-    .eq("status", "accepted")
-    .maybeSingle();
+  // The membership filter again, so nobody can dissolve a friendship they are
+  // not in. The ordered pair is built from the caller's own id, so this is
+  // belt and braces — but it should read as the check, not as a side effect of
+  // how the pair happened to be derived.
+  const [friendship] = await db
+    .select({ id: friendships.id })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.user_low, low),
+        eq(friendships.user_high, high),
+        eq(friendships.status, "accepted"),
+        friendshipsFilter(user.id)
+      )
+    )
+    .limit(1);
   if (!friendship) return { ok: false as const };
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("friendships")
-    .delete()
-    .eq("id", friendship.id);
-
-  if (error) {
+  try {
+    await db.delete(friendships).where(eq(friendships.id, friendship.id));
+  } catch (error) {
     console.error("Could not remove the friend:", error);
     return { ok: false as const };
   }

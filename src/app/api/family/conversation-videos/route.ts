@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { ownsReadySession } from "@/lib/authz";
 import {
   progressConversationVideo,
   publicConversationVideo,
@@ -23,15 +24,12 @@ export async function POST(request: Request) {
         { status: 503 },
       );
     }
-    const { supabase, user } = await requireUser();
-    const { data: session } = await supabase
-      .from("sessions")
-      .select("id, guests!inner(user_id)")
-      .eq("id", sessionId)
-      .eq("status", "ready")
-      .eq("guests.user_id", user.id)
-      .single();
-    if (!session) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
+    const { user } = await requireUser();
+    // Was the RLS `guests!inner(user_id)` filter: only the storyteller behind
+    // a finished conversation may commission its film.
+    if (!(await ownsReadySession(user.id, sessionId))) {
+      return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
+    }
     const video = await startConversationVideo(sessionId, { regenerate: regenerate === true });
     if (["planning", "generating", "rendering"].includes(video.status)) {
       after(async () => {

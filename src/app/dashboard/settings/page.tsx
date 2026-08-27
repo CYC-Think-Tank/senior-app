@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { guests, profiles } from "@/lib/db/schema";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { isRealtimeVoice, REALTIME_VOICE } from "@/lib/constants";
 import { SettingsForm } from "./settings-form";
@@ -26,26 +29,29 @@ const copyByLocale: Record<Locale, { eyebrow: string; title: string; intro: stri
 };
 
 export default async function FamilySettingsPage() {
-  const [{ supabase, user }, locale] = await Promise.all([
+  const [{ user }, locale] = await Promise.all([
     requireUser(),
     getPreferredLocale(),
   ]);
   const copy = copyByLocale[locale];
 
-  // Both reads go through the caller's RLS client: they may read their own
-  // profile, and their self guest is visible through their family.
-  const [{ data: profile }, { data: guest }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, email")
-      .eq("id", user.id)
-      .single(),
-    supabase
-      .from("guests")
-      .select("bio, voice")
-      .eq("user_id", user.id)
-      .maybeSingle(),
+  // Both reads are pinned to the caller's own id, which is what the "read own
+  // profile" and "users read their own guest" policies used to guarantee.
+  const [profileRows, guestRows] = await Promise.all([
+    db
+      .select({ display_name: profiles.display_name, email: profiles.email })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    db
+      .select({ bio: guests.bio, voice: guests.voice })
+      .from(guests)
+      .where(eq(guests.user_id, user.id))
+      .limit(1),
   ]);
+
+  const profile = profileRows[0];
+  const guest = guestRows[0];
 
   return (
     <div className={styles.page}>

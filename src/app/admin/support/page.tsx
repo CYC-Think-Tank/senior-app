@@ -1,6 +1,8 @@
 import { CalendarClock, Languages, MapPin, ShieldAlert, UserRoundCheck } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { desc, inArray, ne } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { profiles, supportProviders, supportRequests } from "@/lib/db/schema";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import type { Locale } from "@/lib/i18n";
 import { updateSupportRequestStatus } from "./actions";
@@ -58,25 +60,60 @@ export default async function SupportAdminPage() {
   await requireAdmin();
   const locale = await getPreferredLocale();
   const c = copy[locale];
-  const admin = createSupabaseAdminClient();
-  const { data: rows } = await admin
-    .from("support_requests")
-    .select("id, requester_id, request_text, assistance_type, urgency, preferred_language, location, service_mode, availability, required_skills, safety_level, recommended_tier, assessment_summary, safety_reason, matched_provider_id, match_score, status, created_at")
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: false });
-  const requests = (rows ?? []) as RequestRow[];
+  // "admins manage support requests" and "admins manage support providers"
+  // gave admins the whole queue and the whole roster; `requireAdmin` above is
+  // what stands in for both.
+  const requests = (await db
+    .select({
+      id: supportRequests.id,
+      requester_id: supportRequests.requester_id,
+      request_text: supportRequests.request_text,
+      assistance_type: supportRequests.assistance_type,
+      urgency: supportRequests.urgency,
+      preferred_language: supportRequests.preferred_language,
+      location: supportRequests.location,
+      service_mode: supportRequests.service_mode,
+      availability: supportRequests.availability,
+      required_skills: supportRequests.required_skills,
+      safety_level: supportRequests.safety_level,
+      recommended_tier: supportRequests.recommended_tier,
+      assessment_summary: supportRequests.assessment_summary,
+      safety_reason: supportRequests.safety_reason,
+      matched_provider_id: supportRequests.matched_provider_id,
+      match_score: supportRequests.match_score,
+      status: supportRequests.status,
+      created_at: supportRequests.created_at,
+    })
+    .from(supportRequests)
+    .where(ne(supportRequests.status, "cancelled"))
+    .orderBy(desc(supportRequests.created_at))) as RequestRow[];
+
   const requesterIds = [...new Set(requests.map((request) => request.requester_id))];
   const providerIds = [...new Set(requests.map((request) => request.matched_provider_id).filter((id): id is string => Boolean(id)))];
-  const [{ data: people }, { data: providers }] = await Promise.all([
+  const [people, providers] = await Promise.all([
     requesterIds.length
-      ? admin.from("profiles").select("id, display_name, email").in("id", requesterIds)
-      : Promise.resolve({ data: [] }),
+      ? db
+          .select({
+            id: profiles.id,
+            display_name: profiles.display_name,
+            email: profiles.email,
+          })
+          .from(profiles)
+          .where(inArray(profiles.id, requesterIds))
+      : Promise.resolve([]),
     providerIds.length
-      ? admin.from("support_providers").select("id, display_name, provider_type").in("id", providerIds)
-      : Promise.resolve({ data: [] }),
+      ? db
+          .select({
+            id: supportProviders.id,
+            display_name: supportProviders.display_name,
+            provider_type: supportProviders.provider_type,
+          })
+          .from(supportProviders)
+          .where(inArray(supportProviders.id, providerIds))
+      : Promise.resolve([]),
   ]);
-  const peopleById = new Map((people ?? []).map((person) => [person.id, person]));
-  const providersById = new Map((providers ?? []).map((provider) => [provider.id, provider]));
+  const peopleById = new Map(people.map((person) => [person.id, person]));
+  const providersById = new Map(providers.map((provider) => [provider.id, provider]));
   const activeCount = requests.filter((request) => !["resolved", "cancelled"].includes(request.status)).length;
 
   return (

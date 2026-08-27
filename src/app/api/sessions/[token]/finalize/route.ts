@@ -1,6 +1,8 @@
 import { randomBytes } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions } from "@/lib/db/schema";
 import { finalizeSessionAudio } from "@/lib/sessions/finalize";
 import { isTurnDraftArray, saveTurns } from "@/lib/transcript/save-turns";
 import { updateGuestMemoryFromSession } from "@/lib/memory/summary";
@@ -26,36 +28,43 @@ export async function POST(
     return NextResponse.json({ error: "Invalid payload." }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("sessions")
-    .select(
-      "id, guest_id, duration_ms, share_token, created_at, guests(name, user_id, origin)"
-    )
-    .eq("token", token)
-    .single();
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      guest_id: sessions.guest_id,
+      duration_ms: sessions.duration_ms,
+      share_token: sessions.share_token,
+      created_at: sessions.created_at,
+      guest_name: guests.name,
+      guest_user_id: guests.user_id,
+      guest_origin: guests.origin,
+    })
+    .from(sessions)
+    .innerJoin(guests, eq(guests.id, sessions.guest_id))
+    .where(eq(sessions.token, token))
+    .limit(1);
 
   if (!session) {
     return NextResponse.json({ error: "Invalid link." }, { status: 404 });
   }
 
-  const { error: turnsError } = await saveTurns(admin, session.id, turns);
+  const { error: turnsError } = await saveTurns(session.id, turns);
   if (turnsError) {
     return NextResponse.json({ error: turnsError }, { status: 500 });
   }
 
-  const { error } = await finalizeSessionAudio(admin, session, durationMs);
+  const { error } = await finalizeSessionAudio(session, durationMs);
   if (error) {
     return NextResponse.json({ error }, { status: 500 });
   }
 
   const shareToken = session.share_token ?? randomBytes(24).toString("hex");
-  const { error: updateError } = await admin
-    .from("sessions")
-    .update({ share_token: shareToken })
-    .eq("id", session.id);
-
-  if (updateError) {
+  try {
+    await db
+      .update(sessions)
+      .set({ share_token: shareToken })
+      .where(eq(sessions.id, session.id));
+  } catch (updateError) {
     console.error("session finalize failed:", updateError);
     return NextResponse.json(
       { error: "Could not finalize the session." },
@@ -67,19 +76,14 @@ export async function POST(
   // Await it here so the very next conversation can reliably use what was just
   // said, while the helper absorbs model/database failures without changing
   // this successful response.
-  const guest = session.guests as unknown as {
-    name: string;
-    user_id: string | null;
-    origin: string;
-  };
   // Public walk-ins get a one-use guest row, so there is no future interview
   // in which their memory could be used. Avoid retaining and paying to process
   // a summary that has no continuity value.
-  if (guest.user_id || guest.origin !== "public") {
-    await updateGuestMemoryFromSession(admin, {
+  if (session.guest_user_id || session.guest_origin !== "public") {
+    await updateGuestMemoryFromSession({
       id: session.id,
       guestId: session.guest_id,
-      guestName: guest.name,
+      guestName: session.guest_name,
       createdAt: session.created_at,
     });
   }

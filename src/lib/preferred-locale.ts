@@ -2,12 +2,15 @@ import "server-only";
 
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { eq } from "drizzle-orm";
 import {
   localeCookieName,
   normalizeLocale,
   type Locale,
 } from "@/lib/i18n";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
+import { getSessionUser } from "@/lib/auth";
 
 /**
  * Resolves the language for a request. A signed-in person's saved preference
@@ -18,22 +21,19 @@ export const getPreferredLocale = cache(async (): Promise<Locale> => {
   const cookieLocale = normalizeLocale(
     (await cookies()).get(localeCookieName)?.value,
   );
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims.sub;
 
-  if (!userId) return cookieLocale;
+  const user = await getSessionUser();
+  if (!user) return cookieLocale;
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("locale")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
+  try {
+    const [profile] = await db
+      .select({ locale: profiles.locale })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1);
+    return profile?.locale ? normalizeLocale(profile.locale) : cookieLocale;
+  } catch (error) {
     console.error("Could not load the user's language preference:", error);
     return cookieLocale;
   }
-
-  return profile?.locale ? normalizeLocale(profile.locale) : cookieLocale;
 });

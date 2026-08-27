@@ -1,9 +1,11 @@
 "use server";
 
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { cookies, headers } from "next/headers";
+import { eq } from "drizzle-orm";
+import { auth } from "@/lib/auth/config";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
 import { validateNewPassword } from "@/lib/password";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { cookies } from "next/headers";
 import { localeCookieName, normalizeLocale, translate } from "@/lib/i18n";
 import { normalizeEmail } from "@/lib/email";
 
@@ -39,77 +41,49 @@ export async function signUpWithPassword(
   const passwordError = validateNewPassword(password);
   if (passwordError) return { ok: false, error: t("authPasswordMin") };
 
-  const admin = createSupabaseAdminClient();
-  // Exact match, never `ilike`: `%` and `_` are legal in an email's local part
-  // but are wildcards in a LIKE pattern, so an address like `j%@gmail.com`
-  // would otherwise match every j-address on the domain. Both sides of this
-  // comparison are lowercased (migration 013 backfilled the column).
-  const { data: existingProfile, error: profileLookupError } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-
-  if (profileLookupError) {
-    console.error("Could not check for an existing profile:", profileLookupError);
-    return { ok: false, error: t("signupError") };
-  }
+  // Checked before asking Better Auth to create the account so the page can
+  // say "you already have an account" rather than surfacing a duplicate-key
+  // failure. Exact match, never `ilike`: `%` and `_` are legal in an email's
+  // local part but are wildcards in a LIKE pattern.
+  const [existingProfile] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(eq(profiles.email, email))
+    .limit(1);
 
   if (existingProfile) {
-    return {
-      ok: false,
-      error: t("signupAccountExists"),
-    };
+    return { ok: false, error: t("signupAccountExists") };
   }
 
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { display_name: name },
-  });
+  // The matching `profiles` row — including the admin-allowlist role check —
+  // is created by the `user.create.after` hook in src/lib/auth/config.ts,
+  // which is where the old `handle_new_user()` database trigger now lives.
+  const signUp = await auth.api
+    .signUpEmail({
+      body: { name, email, password },
+      headers: await headers(),
+    })
+    .catch((error: unknown) => {
+      console.error("Could not create a password account:", error);
+      return null;
+    });
 
-  if (error || !data.user?.id) {
-    console.error("Could not create a password account:", error);
+  if (!signUp?.user) {
     return { ok: false, error: t("signupError") };
   }
 
-  // Exact match for the same reason as the profile lookup above, and here it
-  // decides the account's role: under `ilike`, signing up as `j%@gmail.com`
-  // would match a seeded admin address and grant admin. Migration 013
-  // lowercased this table so `eq` matches what the signup trigger does.
-  const { data: adminEmail } = await admin
-    .from("admin_emails")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle();
-  const role = adminEmail ? "admin" : "family";
+  // The hook set the role from `admin_emails`; the chosen interface language
+  // is this action's to record, since only it saw the cookie.
+  const [profile] = await db
+    .update(profiles)
+    .set({ locale })
+    .where(eq(profiles.id, signUp.user.id))
+    .returning({ role: profiles.role });
 
-  const { error: profileError } = await admin.from("profiles").upsert(
-    {
-      id: data.user.id,
-      email,
-      display_name: name,
-      locale,
-      role,
-    },
-    { onConflict: "id" }
-  );
-
-  if (profileError) {
-    console.error("Could not create the signed-up profile:", profileError);
+  if (!profile) {
+    console.error("Could not create the signed-up profile:", signUp.user.id);
     return { ok: false, error: t("signupError") };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  if (signInError) {
-    console.error("Could not sign in after password sign-up:", signInError);
-    return { ok: false, error: t("signupError") };
-  }
-
-  return { ok: true, redirectTo: role === "admin" ? "/admin" : "/dashboard" };
+  return { ok: true, redirectTo: profile.role === "admin" ? "/admin" : "/dashboard" };
 }

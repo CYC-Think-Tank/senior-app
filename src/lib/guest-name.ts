@@ -1,7 +1,7 @@
-import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
 import { personName } from "@/lib/names";
-
-type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
 type GuestNameSource = {
   name: string;
@@ -13,26 +13,21 @@ type GuestNameSource = {
  * Anonymous and admin-created guests have no linked profile, so their stored
  * guest name remains authoritative.
  */
-export async function resolveCurrentGuestName(
-  admin: AdminClient,
-  guest: GuestNameSource,
-) {
+export async function resolveCurrentGuestName(guest: GuestNameSource) {
   if (!guest.user_id) {
     return guest.name;
   }
 
-  const { data: profile, error } = await admin
-    .from("profiles")
-    .select("display_name, email")
-    .eq("id", guest.user_id)
-    .maybeSingle();
+  try {
+    const [profile] = await db
+      .select({ display_name: profiles.display_name, email: profiles.email })
+      .from(profiles)
+      .where(eq(profiles.id, guest.user_id))
+      .limit(1);
 
-  if (error) {
+    return profile ? personName(profile.display_name, profile.email) : guest.name;
+  } catch (error) {
     console.error("Could not resolve the guest's current profile name:", error);
     return guest.name;
   }
-
-  return profile
-    ? personName(profile.display_name, profile.email)
-    : guest.name;
 }

@@ -8,8 +8,10 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/mobile/auth";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { friendships, profiles } from "@/lib/db/schema";
 import { friendshipPair } from "@/lib/friends";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
  * Asks another family account to join the caller's circle. Port of
  * `sendFriendRequest()`.
  *
- * There is no RLS read to authorise here — anyone signed in may ask anyone.
+ * There is nothing to authorise here — anyone signed in may ask anyone.
  * What keeps it safe is that the caller's half of the pair comes from the
  * verified token and never from the body, so the worst a forged `userId` can
  * do is create a request the caller is themselves part of.
@@ -29,7 +31,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const targetUserId = readString(body, "userId", 64);
@@ -37,42 +39,42 @@ export async function POST(request: NextRequest) {
     return badRequest("That request cannot be sent.");
   }
 
-  const { data: target } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("id", targetUserId)
-    .eq("role", "family")
-    .maybeSingle();
+  const [target] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(and(eq(profiles.id, targetUserId), eq(profiles.role, "family")))
+    .limit(1);
   if (!target) return notFound("Nobody uses WiseShare with that account.");
 
   const { low, high } = friendshipPair(user.id, targetUserId);
+  const readPair = async () => {
+    const [row] = await db
+      .select({
+        id: friendships.id,
+        status: friendships.status,
+        requester_id: friendships.requester_id,
+      })
+      .from(friendships)
+      .where(and(eq(friendships.user_low, low), eq(friendships.user_high, high)))
+      .limit(1);
+    return row;
+  };
 
-  const { data: existing } = await admin
-    .from("friendships")
-    .select("id, status, requester_id")
-    .eq("user_low", low)
-    .eq("user_high", high)
-    .maybeSingle();
+  const existing = await readPair();
+  if (existing) return acceptOrEcho(existing, user.id);
 
-  if (existing) return acceptOrEcho(admin, existing, user.id);
-
-  const { error } = await admin.from("friendships").insert({
-    user_low: low,
-    user_high: high,
-    requester_id: user.id,
-  });
-
-  if (error) {
+  try {
+    await db.insert(friendships).values({
+      user_low: low,
+      user_high: high,
+      requester_id: user.id,
+    });
+  } catch (error) {
     // 23505: the other side inserted the same pair between our read and our
     // write. Re-read and fall into the same handshake as above.
-    if (error.code === "23505") {
-      const { data: raced } = await admin
-        .from("friendships")
-        .select("id, status, requester_id")
-        .eq("user_low", low)
-        .eq("user_high", high)
-        .maybeSingle();
-      if (raced) return acceptOrEcho(admin, raced, user.id);
+    if ((error as { code?: string } | null)?.code === "23505") {
+      const raced = await readPair();
+      if (raced) return acceptOrEcho(raced, user.id);
     }
     console.error("Could not send the friend request:", error);
     return serverError("Could not send that request.");
@@ -87,7 +89,6 @@ export async function POST(request: NextRequest) {
  * double-tapped button is harmless.
  */
 async function acceptOrEcho(
-  admin: SupabaseClient,
   existing: { id: string; status: string; requester_id: string },
   me: string
 ) {
@@ -98,13 +99,14 @@ async function acceptOrEcho(
     return NextResponse.json({ ok: true, status: "pending" });
   }
 
-  const { error } = await admin
-    .from("friendships")
-    .update({ status: "accepted", responded_at: new Date().toISOString() })
-    .eq("id", existing.id)
-    .eq("status", "pending");
-
-  if (error) {
+  try {
+    await db
+      .update(friendships)
+      .set({ status: "accepted", responded_at: new Date().toISOString() })
+      .where(
+        and(eq(friendships.id, existing.id), eq(friendships.status, "pending"))
+      );
+  } catch (error) {
     console.error("Could not accept the reciprocal friend request:", error);
     return serverError("Could not send that request.");
   }

@@ -3,7 +3,7 @@ import "server-only";
 import { Resend } from "resend";
 import { APP_NAME } from "@/lib/constants";
 
-type AuthEmailKind = "magic-link" | "invitation";
+type AuthEmailKind = "password-reset";
 
 function escapeHtml(value: string) {
   return value
@@ -14,32 +14,30 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;");
 }
 
-export async function sendAuthEmail({
+/**
+ * The password-reset email. Better Auth calls this from `sendResetPassword`
+ * with a one-time link; the address and the link are the whole payload.
+ */
+export async function sendPasswordResetEmail({
   to,
   actionLink,
-  kind,
 }: {
   to: string;
   actionLink: string;
-  kind: AuthEmailKind;
 }) {
+  const kind: AuthEmailKind = "password-reset";
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.RESEND_FROM_EMAIL?.trim();
 
   if (!apiKey) throw new Error("RESEND_API_KEY is not configured.");
   if (!from) throw new Error("RESEND_FROM_EMAIL is not configured.");
 
-  const isInvitation = kind === "invitation";
-  const subject = isInvitation
-    ? `You’re invited to ${APP_NAME}`
-    : `Sign in to ${APP_NAME}`;
-  const heading = isInvitation
-    ? "Your family stories are waiting"
-    : `Sign in to ${APP_NAME}`;
-  const introduction = isInvitation
-    ? `You’ve been invited to listen to private family stories on ${APP_NAME}.`
-    : `Use this secure link to sign in to ${APP_NAME}.`;
-  const buttonLabel = isInvitation ? "Accept invitation" : "Sign in";
+  const subject = `Reset your ${APP_NAME} password`;
+  const heading = "Choose a new password";
+  const introduction =
+    `Use this secure link to set a new password for your ${APP_NAME} account. ` +
+    `It expires in an hour.`;
+  const buttonLabel = "Set a new password";
   const safeActionLink = escapeHtml(actionLink);
 
   const resend = new Resend(apiKey);
@@ -55,11 +53,11 @@ export async function sendAuthEmail({
       <h1 style="margin:0 0 12px;font-family:Georgia,serif;font-size:28px;line-height:1.2">${heading}</h1>
       <p style="margin:0 0 24px;color:#745f66;font-size:16px;line-height:1.6">${introduction}</p>
       <a href="${safeActionLink}" style="display:inline-block;border-radius:10px;background:#a64f6d;color:#ffffff;padding:13px 20px;text-decoration:none;font-weight:700">${buttonLabel}</a>
-      <p style="margin:24px 0 0;color:#a38e95;font-size:13px;line-height:1.5">If you didn’t request this email, you can safely ignore it.</p>
+      <p style="margin:24px 0 0;color:#a38e95;font-size:13px;line-height:1.5">If you didn’t ask to reset your password, you can safely ignore this email.</p>
     </div>
   </body>
 </html>`,
-    text: `${introduction}\n\n${buttonLabel}: ${actionLink}\n\nIf you didn’t request this email, you can safely ignore it.`,
+    text: `${introduction}\n\n${buttonLabel}: ${actionLink}\n\nIf you didn’t ask to reset your password, you can safely ignore this email.`,
     tags: [{ name: "category", value: kind }],
   });
 

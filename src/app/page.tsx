@@ -7,7 +7,10 @@ import { PageTransitionLink } from "@/components/page-transition-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { getSessionUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
 import styles from "./page.module.css";
 
 export default async function LandingPage() {
@@ -15,22 +18,21 @@ export default async function LandingPage() {
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   let dashboardHref: string | null = null;
 
-  if (
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ) {
-    const supabase = await createSupabaseServerClient();
-    const { data: claims } = await supabase.auth.getClaims();
-    const userId = claims?.claims.sub;
-
-    if (userId) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", userId)
-        .maybeSingle();
+  // The landing page renders for signed-out visitors too, so a database that
+  // is not reachable yet must not take it down — it just means no shortcut
+  // into the portal.
+  try {
+    const user = await getSessionUser();
+    if (user) {
+      const [profile] = await db
+        .select({ role: profiles.role })
+        .from(profiles)
+        .where(eq(profiles.id, user.id))
+        .limit(1);
       dashboardHref = profile?.role === "admin" ? "/admin" : "/dashboard";
     }
+  } catch (error) {
+    console.error("Could not resolve the visitor's portal link:", error);
   }
 
   const startConversationHref = dashboardHref ?? "/interview";

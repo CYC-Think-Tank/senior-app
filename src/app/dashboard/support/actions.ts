@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { supportProviders, supportRequests } from "@/lib/db/schema";
 import { assessSupportRequest } from "@/lib/support/ai";
 import {
   rankProviders,
@@ -83,18 +85,31 @@ export async function createSupportRequest(
     location,
     availability,
   });
-  const admin = createSupabaseAdminClient();
-  const { data: providerRows, error: providerError } = await admin
-    .from("support_providers")
-    .select("id, display_name, provider_type, languages, skills, interests, service_modes, locations, availability, successful_matches")
-    .eq("active", true)
-    .eq("verified", true);
-
-  if (providerError) {
+  let providerRows: Record<string, unknown>[] = [];
+  try {
+    providerRows = await db
+      .select({
+        id: supportProviders.id,
+        display_name: supportProviders.display_name,
+        provider_type: supportProviders.provider_type,
+        languages: supportProviders.languages,
+        skills: supportProviders.skills,
+        interests: supportProviders.interests,
+        service_modes: supportProviders.service_modes,
+        locations: supportProviders.locations,
+        availability: supportProviders.availability,
+        successful_matches: supportProviders.successful_matches,
+      })
+      .from(supportProviders)
+      .where(
+        and(eq(supportProviders.active, true), eq(supportProviders.verified, true))
+      );
+  } catch (providerError) {
     console.error("Could not load support providers:", providerError);
   }
-  const providers = (providerRows ?? [])
-    .map((row) => providerFromRow(row as Record<string, unknown>))
+
+  const providers = providerRows
+    .map((row) => providerFromRow(row))
     .filter((provider): provider is SupportProvider => Boolean(provider));
   const match = rankProviders({ assessment, providers, preference, mode, location })[0] ?? null;
   const status = match
@@ -103,9 +118,9 @@ export async function createSupportRequest(
       ? "escalated"
       : "open";
 
-  const { data, error } = await admin
-    .from("support_requests")
-    .insert({
+  let created: { id: string } | undefined;
+  try {
+    [created] = await db.insert(supportRequests).values({
       requester_id: user.id,
       request_text: request,
       assistance_type: assessment.assistanceType,
@@ -125,44 +140,45 @@ export async function createSupportRequest(
       matched_provider_id: match?.provider.id ?? null,
       status,
     })
-    .select("id")
-    .single();
-
-  if (error || !data) {
+    .returning({ id: supportRequests.id });
+  } catch (error) {
     console.error("Could not save support request:", error);
+    return { status: "error", message: "We could not save your request. Please try again." };
+  }
+
+  if (!created) {
     return { status: "error", message: "We could not save your request. Please try again." };
   }
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");
-  return { status: "success", requestId: data.id, assessment, match };
+  return { status: "success", requestId: created.id, assessment, match };
 }
 
 export async function submitSupportFollowUp(requestId: string, resolved: boolean) {
   const { user } = await requireUser();
   if (!requestId) return;
-  const admin = createSupabaseAdminClient();
 
-  // Server Actions are public POST endpoints. Pin the update to the signed-in
-  // requester's id so one senior can never answer another person's follow-up.
-  const { data: request } = await admin
-    .from("support_requests")
-    .select("id, status")
-    .eq("id", requestId)
-    .eq("requester_id", user.id)
-    .maybeSingle();
-  if (!request) return;
-
-  const { error } = await admin
-    .from("support_requests")
-    .update({
-      status: resolved ? "resolved" : "escalated",
-      feedback: resolved ? "resolved_by_senior" : "senior_still_needs_help",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", request.id)
-    .eq("requester_id", user.id);
-  if (error) console.error("Could not save support follow-up:", error);
+  // Server Actions are public POST endpoints. Pinning the update to the
+  // signed-in requester's id is what stops one senior answering another
+  // person's follow-up — it is part of the write, not a check before it.
+  try {
+    await db
+      .update(supportRequests)
+      .set({
+        status: resolved ? "resolved" : "escalated",
+        feedback: resolved ? "resolved_by_senior" : "senior_still_needs_help",
+        updated_at: new Date().toISOString(),
+      })
+      .where(
+        and(
+          eq(supportRequests.id, requestId),
+          eq(supportRequests.requester_id, user.id)
+        )
+      );
+  } catch (error) {
+    console.error("Could not save support follow-up:", error);
+  }
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");
 }

@@ -1,7 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mic } from "lucide-react";
+import { and, asc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { ownSessionsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  circleShares,
+  conversationVideos,
+  guests,
+  sessions as sessionsTable,
+  transcriptTurns,
+} from "@/lib/db/schema";
 import { resumeConversation } from "@/app/dashboard/actions";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { AudioPlayer } from "@/components/audio-player";
@@ -11,7 +21,6 @@ import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { CommentThread } from "../circle/comment-thread";
 import { getConversationComments } from "../circle/circle-data";
@@ -29,21 +38,25 @@ export default async function FamilyConversationPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
   const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
 
-  // Read through the user's client so RLS keeps this inside the family; the
-  // service role is only used afterwards to sign the audio URL. The siblings
-  // come along so an unnamed conversation gets the same number as the list.
-  const { data: sessions } = await supabase
-    .from("sessions")
-    .select("*, guests(name)")
-    .in("status", ["ready", "recording"]);
+  // `ownSessionsFilter` is what keeps this to the caller's own conversations.
+  // The siblings come along so an unnamed conversation gets the same number
+  // here as it has in the list.
+  const found = await db
+    .select({ session: sessionsTable, guest_name: guests.name })
+    .from(sessionsTable)
+    .innerJoin(guests, eq(guests.id, sessionsTable.guest_id))
+    .where(ownSessionsFilter(user.id));
 
   type SessionRow = InterviewSession & { guests: Pick<Guest, "name"> };
-  const all = (sessions ?? []) as unknown as SessionRow[];
+  const all = found.map(({ session, guest_name }) => ({
+    ...session,
+    guests: { name: guest_name },
+  })) as unknown as SessionRow[];
   const s = all.find((row) => row.id === sessionId);
   if (!s) notFound();
 
@@ -57,46 +70,48 @@ export default async function FamilyConversationPage({
     : null;
 
   const finished = s.status === "ready";
-  // Transcript rows are intentionally absent from family RLS. The session read
-  // above proved this is the caller's own conversation before the service role
-  // fetches and decrypts its editable lines.
-  const admin = createSupabaseAdminClient();
-  const { data: turnRows } = finished
-    ? await admin
-        .from("transcript_turns")
-        .select("*")
-        .eq("session_id", s.id)
-        .order("idx")
-    : { data: [] };
-  const turns = finished
-    ? decryptTurns(s.id, (turnRows ?? []) as TranscriptTurn[])
+  // No policy ever exposed transcript rows to a family account. The filtered
+  // read above is what proves this is the caller's own conversation before its
+  // editable lines are fetched and decrypted.
+  const turnRows = finished
+    ? await db
+        .select()
+        .from(transcriptTurns)
+        .where(eq(transcriptTurns.session_id, s.id))
+        .orderBy(asc(transcriptTurns.idx))
     : [];
+  const turns = finished ? decryptTurns(s.id, turnRows as TranscriptTurn[]) : [];
   const cuts = turns
     .filter((turn) => turn.excluded)
     .map((turn) => ({ startMs: turn.start_ms, endMs: turn.end_ms }));
   const editedDuration = editedAudioDurationMs(s.duration_ms, cuts);
 
-  const { data: videoRow } = finished
-    ? await supabase
-        .from("conversation_videos")
-        .select("*")
-        .eq("session_id", s.id)
-        .maybeSingle()
-    : { data: null };
-  const initialVideo = videoRow
-    ? await publicConversationVideo(videoRow as ConversationVideo)
+  const videoRows = finished
+    ? await db
+        .select()
+        .from(conversationVideos)
+        .where(eq(conversationVideos.session_id, s.id))
+        .limit(1)
+    : [];
+  const initialVideo = videoRows[0]
+    ? await publicConversationVideo(videoRows[0] as ConversationVideo)
     : null;
 
   // Only finished conversations can be shared, and the comment thread is only
   // worth showing once there is a circle that could have written in it.
-  const { data: share } = finished
-    ? await supabase
-        .from("circle_shares")
-        .select("session_id")
-        .eq("session_id", sessionId)
-        .maybeSingle()
-    : { data: null };
-  const sharedWithCircle = Boolean(share);
+  const shareRows = finished
+    ? await db
+        .select({ session_id: circleShares.session_id })
+        .from(circleShares)
+        .where(
+          and(
+            eq(circleShares.session_id, sessionId),
+            eq(circleShares.owner_id, user.id)
+          )
+        )
+        .limit(1)
+    : [];
+  const sharedWithCircle = shareRows.length > 0;
   const comments = finished ? await getConversationComments(sessionId) : [];
 
   return (

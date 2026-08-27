@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { desc, inArray } from "drizzle-orm";
+import { friendshipsFilter } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { friendships, profiles } from "@/lib/db/schema";
 import { requireMobileUser, unauthorized } from "@/lib/mobile/auth";
 import { otherParticipant, requestDirection } from "@/lib/friends";
 import { personName } from "@/lib/names";
@@ -10,38 +14,42 @@ export const dynamic = "force-dynamic";
  * The caller's whole friend graph, in the three shapes the screen renders.
  * Port of `getMyCircle()`.
  *
- * Both queries run through the RLS client: "participants read their
- * friendships" scopes the first to rows this account is in, and "read
- * connected profiles" (migration 014) is what makes the second one legal.
+ * `friendshipsFilter` is the old "participants read their friendships" policy,
+ * now applied by hand. The profile read that follows is safe for the same
+ * reason migration 014's "read connected profiles" policy was: every id in it
+ * came out of a friendship row the caller is part of.
  */
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, user } = auth;
+  const { user } = auth;
 
-  const { data } = await supabase
-    .from("friendships")
-    .select("id, user_low, user_high, requester_id, status, created_at, responded_at")
-    .order("created_at", { ascending: false });
+  const rows = (await db
+    .select()
+    .from(friendships)
+    .where(friendshipsFilter(user.id))
+    .orderBy(desc(friendships.created_at))) as Friendship[];
 
-  const rows = (data ?? []) as Friendship[];
   if (rows.length === 0) {
     return NextResponse.json({ friends: [], incoming: [], outgoing: [] });
   }
 
-  const { data: profileRows } = await supabase
-    .from("profiles")
-    .select("id, display_name, email")
-    .in(
-      "id",
-      rows.map((row) => otherParticipant(row, user.id))
-    );
+  const profileRows = (await db
+    .select({
+      id: profiles.id,
+      display_name: profiles.display_name,
+      email: profiles.email,
+    })
+    .from(profiles)
+    .where(
+      inArray(
+        profiles.id,
+        rows.map((row) => otherParticipant(row, user.id))
+      )
+    )) as Pick<Profile, "id" | "display_name" | "email">[];
 
   const names = new Map<string, string>();
-  for (const profile of (profileRows ?? []) as Pick<
-    Profile,
-    "id" | "display_name" | "email"
-  >[]) {
+  for (const profile of profileRows) {
     names.set(profile.id, personName(profile.display_name, profile.email));
   }
 

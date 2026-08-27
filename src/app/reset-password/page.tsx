@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -10,8 +11,12 @@ import { Wordmark } from "@/components/ui";
 import { resetPassword } from "./actions";
 import styles from "../login/login.module.css";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const { locale, t } = useI18n();
+  // Better Auth checks the emailed link, then redirects here with a one-time
+  // token on the query string. It is the only thing authorising the change —
+  // there is no session yet at this point in the flow.
+  const token = useSearchParams().get("token") ?? "";
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +33,7 @@ export default function ResetPasswordPage() {
 
     setBusy(true);
     try {
-      const result = await resetPassword(password);
+      const result = await resetPassword(password, token);
       if (result.ok) setSaved(true);
       else setError(result.error);
     } catch {
@@ -121,5 +126,15 @@ export default function ResetPasswordPage() {
         </div>
       </main>
     </PortalShell>
+  );
+}
+
+export default function ResetPasswordPage() {
+  // `useSearchParams` bails out of prerendering without a Suspense boundary
+  // above it, so the form gets one.
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
