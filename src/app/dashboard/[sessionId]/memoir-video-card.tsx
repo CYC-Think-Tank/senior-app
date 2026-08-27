@@ -23,6 +23,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
+import { MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO } from "@/lib/constants";
 import type {
   PublicConversationVideo,
   VideoGenerationQuota,
@@ -58,6 +59,8 @@ const copyByLocale: Record<Locale, {
   fullscreen: string;
   regeneratePart: string;
   regenerateHelp: string;
+  sceneRegenerationsLeft: (count: number) => string;
+  sceneRegenerationLimitReached: string;
   generationTitle: string;
   generationBody: string;
   regenerateProgressBody: string;
@@ -113,6 +116,9 @@ const copyByLocale: Record<Locale, {
     fullscreen: "View full screen",
     regeneratePart: "Regenerate this part",
     regenerateHelp: "Only this part will be replaced. The rest of your film stays exactly as it is.",
+    sceneRegenerationsLeft: (count) =>
+      `${count} scene regeneration${count === 1 ? "" : "s"} left for this film.`,
+    sceneRegenerationLimitReached: "Both scene regenerations have been used for this film.",
     generationTitle: "We’re creating your film",
     generationBody: "This takes a little while because every scene is made especially for your story.",
     regenerateProgressBody: "The selected part is being replaced. All other parts are safely saved.",
@@ -170,6 +176,8 @@ const copyByLocale: Record<Locale, {
     fullscreen: "全屏观看",
     regeneratePart: "重新生成这一部分",
     regenerateHelp: "只会替换这一部分，短片的其余内容会保持原样。",
+    sceneRegenerationsLeft: (count) => `这部短片还可重新生成 ${count} 个场景。`,
+    sceneRegenerationLimitReached: "这部短片的两次场景重新生成机会均已使用。",
     generationTitle: "正在创作您的短片",
     generationBody: "每个场景都是为您的故事特别创作的，因此需要一些时间。",
     regenerateProgressBody: "正在替换所选部分，其他部分均已安全保存。",
@@ -226,6 +234,8 @@ const copyByLocale: Record<Locale, {
     fullscreen: "全螢幕觀看",
     regeneratePart: "重新生成這一部分",
     regenerateHelp: "只會取代這一部分，短片的其餘內容會保持原樣。",
+    sceneRegenerationsLeft: (count) => `這部短片還可重新生成 ${count} 個場景。`,
+    sceneRegenerationLimitReached: "這部短片的兩次場景重新生成機會均已使用。",
     generationTitle: "正在創作您的短片",
     generationBody: "每個場景都是為您的故事特別創作的，因此需要一些時間。",
     regenerateProgressBody: "正在取代所選部分，其他部分均已安全儲存。",
@@ -314,6 +324,12 @@ export function MemoirVideoCard({
   const playbackProgress = timelineDuration
     ? Math.max(0, Math.min(100, (currentTime / timelineDuration) * 100))
     : 0;
+  const sceneRegenerationQuota = video?.sceneRegenerationQuota ?? {
+    used: 0,
+    limit: MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
+    remaining: MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
+  };
+  const sceneRegenerationLimitReached = sceneRegenerationQuota.remaining <= 0;
 
   const refresh = useCallback(async () => {
     if (!video || video.status === "ready" || video.status === "failed") return;
@@ -379,6 +395,11 @@ export function MemoirVideoCard({
       error: null,
       videoUrl: null,
       clips: [],
+      sceneRegenerationQuota: {
+        used: 0,
+        limit: MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
+        remaining: MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
+      },
       createdAt: new Date().toISOString(),
     });
     try {
@@ -402,7 +423,7 @@ export function MemoirVideoCard({
   }
 
   async function regenerateScene(sceneNumber: number) {
-    if (!video) return;
+    if (!video || sceneRegenerationLimitReached) return;
     masterVideoRef.current?.pause();
     setIsPlaying(false);
     setPendingScene(sceneNumber);
@@ -416,6 +437,17 @@ export function MemoirVideoCard({
       );
       const body = await response.json();
       if (!response.ok) {
+        if (response.status === 403) {
+          setVideo((current) => current ? {
+            ...current,
+            sceneRegenerationQuota: {
+              ...current.sceneRegenerationQuota,
+              used: current.sceneRegenerationQuota.limit,
+              remaining: 0,
+            },
+          } : current);
+          throw new Error(copy.sceneRegenerationLimitReached);
+        }
         throw new Error(locale === "en" ? body.error ?? copy.sceneError : copy.sceneError);
       }
       setVideo(body.video);
@@ -707,9 +739,13 @@ export function MemoirVideoCard({
                     {formatTime(selectedStart)} – {formatTime(selectedEnd)}
                   </p>
                 </div>
-                <p className={styles.selectionHelp}>
+                <p className={`${styles.selectionHelp} ${sceneRegenerationLimitReached ? styles.selectionHelpLimit : ""}`}>
                   <ShieldCheck aria-hidden="true" />
-                  <span>{copy.regenerateHelp}</span>
+                  <span>
+                    {sceneRegenerationLimitReached
+                      ? copy.sceneRegenerationLimitReached
+                      : `${copy.regenerateHelp} ${copy.sceneRegenerationsLeft(sceneRegenerationQuota.remaining)}`}
+                  </span>
                 </p>
               </div>
               <div className={styles.selectionActions}>
@@ -717,7 +753,7 @@ export function MemoirVideoCard({
                   className={styles.regenerateButton}
                   type="button"
                   onClick={() => confirmAction({ kind: "part", sceneNumber: effectiveSelectedScene })}
-                  disabled={starting}
+                  disabled={starting || sceneRegenerationLimitReached}
                 >
                   <RefreshCw aria-hidden="true" />
                   <span>{copy.regeneratePart}</span>

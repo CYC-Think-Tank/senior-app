@@ -70,9 +70,27 @@ export const MEMOIR_OUTPUT_FPS = 24;
 
 // Every complete film buys a fresh set of clips from SeeGen, so an account
 // only gets a few. Starting a film and remaking a whole film each spend one;
-// repairing playback and redoing a single part reuse what was already bought
-// and are free.
+// repairing playback reuses the existing clips.
 export const MEMOIR_MAX_GENERATIONS_PER_ACCOUNT = 3;
+
+// A finished film can replace at most two individual scenes. This is enforced
+// atomically in Postgres as well as surfaced in the clients.
+export const MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO = 2;
+
+export function memoirSceneRegenerationQuota(usedValue: unknown) {
+  const used = Math.max(
+    0,
+    Math.min(
+      MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
+      Number.isFinite(Number(usedValue)) ? Math.floor(Number(usedValue)) : 0,
+    ),
+  );
+  return {
+    used,
+    limit: MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
+    remaining: MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO - used,
+  };
+}
 
 export function memoirOutputSeconds(sceneCount: number) {
   return sceneCount * MEMOIR_SCENE_DURATION_SECONDS;

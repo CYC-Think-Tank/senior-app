@@ -13,6 +13,7 @@ const {
 );
 const {
   MEMOIR_MAX_OUTPUT_SECONDS,
+  MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
   MEMOIR_MAX_SCENES,
   MEMOIR_AUDIO_TRANSITION_SECONDS,
   MEMOIR_MIN_OUTPUT_SECONDS,
@@ -21,6 +22,7 @@ const {
   MEMOIR_SCENE_DURATION_SECONDS,
   MEMOIR_TRANSITION_SECONDS,
   memoirOutputSeconds,
+  memoirSceneRegenerationQuota,
   memoirSceneCountForConversation,
 } = await import("../src/lib/constants.ts");
 const { buildMemoirRenderPlan } = await import(
@@ -29,6 +31,14 @@ const { buildMemoirRenderPlan } = await import(
 const { buildNarrationTimeline, wavDurationSeconds } = await import(
   "../src/lib/memoir/narration-plan.ts"
 );
+
+test("each film exposes exactly two individual scene regenerations", () => {
+  assert.equal(MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO, 2);
+  assert.deepEqual(memoirSceneRegenerationQuota(0), { used: 0, limit: 2, remaining: 2 });
+  assert.deepEqual(memoirSceneRegenerationQuota(1), { used: 1, limit: 2, remaining: 1 });
+  assert.deepEqual(memoirSceneRegenerationQuota(2), { used: 2, limit: 2, remaining: 0 });
+  assert.deepEqual(memoirSceneRegenerationQuota(99), { used: 2, limit: 2, remaining: 0 });
+});
 
 test("storyteller source excludes interviewer and cut lines", () => {
   const turns = [

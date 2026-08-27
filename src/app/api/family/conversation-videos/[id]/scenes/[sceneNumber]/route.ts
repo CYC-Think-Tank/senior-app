@@ -4,6 +4,7 @@ import {
   progressConversationVideo,
   publicConversationVideo,
   regenerateConversationVideoScene,
+  VideoSceneRegenerationLimitError,
 } from "@/lib/memoir/workflow";
 import { isSeegenConfigured } from "@/lib/memoir/seedance";
 import type { ConversationVideo } from "@/lib/types";
@@ -51,6 +52,9 @@ export async function POST(_request: Request, { params }: Params) {
       video: await publicConversationVideo(video as ConversationVideo),
     });
   } catch (error) {
+    if (error instanceof VideoSceneRegenerationLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     console.error("Could not regenerate memoir scene:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not regenerate the scene." },

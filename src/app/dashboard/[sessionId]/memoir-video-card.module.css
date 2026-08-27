@@ -417,6 +417,8 @@
 
 .selectionHelp svg { margin-top: 0.12rem; }
 
+.selectionHelpLimit { color: #ffc7ec; }
+
 .selectionActions {
   display: grid;
   gap: 0.65rem;

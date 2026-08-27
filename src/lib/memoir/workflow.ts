@@ -4,10 +4,12 @@ import { decryptTurns } from "@/lib/transcript/encryption";
 import { createAudioUrl, decryptAudio, encryptAudio } from "@/lib/audio/encryption";
 import {
   MEMOIR_MAX_GENERATIONS_PER_ACCOUNT,
+  MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
   MEMOIR_MAX_SCENES,
   MEMOIR_MIN_SCENES,
   MEMOIR_SCENE_DURATION_SECONDS,
   STORY_VIDEOS_BUCKET,
+  memoirSceneRegenerationQuota,
   memoirOutputSeconds,
   memoirSceneCountForConversation,
 } from "@/lib/constants";
@@ -52,6 +54,7 @@ export type PublicConversationVideo = {
   error: string | null;
   videoUrl: string | null;
   clips: Array<{ sceneNumber: number; videoUrl: string }>;
+  sceneRegenerationQuota: ReturnType<typeof memoirSceneRegenerationQuota>;
   createdAt: string;
 };
 
@@ -82,6 +85,18 @@ export class VideoGenerationLimitError extends Error {
       `This account has used all ${MEMOIR_MAX_GENERATIONS_PER_ACCOUNT} of its film generations.`,
     );
     this.name = "VideoGenerationLimitError";
+  }
+}
+
+/** A finished film has already used both of its individual scene changes. */
+export class VideoSceneRegenerationLimitError extends Error {
+  readonly limit = MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO;
+
+  constructor() {
+    super(
+      `This film has used both of its ${MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO} scene regenerations.`,
+    );
+    this.name = "VideoSceneRegenerationLimitError";
   }
 }
 
@@ -158,6 +173,7 @@ export async function publicConversationVideo(video: ConversationVideo): Promise
       ? createAudioUrl(STORY_VIDEOS_BUCKET, video.video_path, 6 * 60 * 60)
       : null,
     clips,
+    sceneRegenerationQuota: memoirSceneRegenerationQuota(video.scene_regenerations_used),
     createdAt: video.created_at,
   };
 }
@@ -389,6 +405,7 @@ export async function startConversationVideo(
         status: "planning", title: null, story_ciphertext: null,
         narration_ciphertext: null, visual_bible_ciphertext: null,
         narration_path: null, video_path: null, duration_ms: null, error_message: null,
+        ...(canRegenerate ? { scene_regenerations_used: 0 } : {}),
       });
       const { data: reloaded, error: resetError } = await admin
         .from("conversation_videos")
@@ -437,43 +454,30 @@ export async function regenerateConversationVideoScene(
 
   const admin = createSupabaseAdminClient();
   const sceneIndex = sceneNumber - 1;
-  const { data: scene } = await admin
-    .from("conversation_video_scenes")
-    .select("id, status")
-    .eq("video_id", videoId)
-    .eq("idx", sceneIndex)
-    .maybeSingle();
-  if (!scene) throw new Error("Scene not found.");
-
-  // Claim the ready film so double-clicks and overlapping regeneration jobs
-  // cannot purchase two replacements for the same scene.
-  const { data: video, error: claimError } = await admin
-    .from("conversation_videos")
-    .update({ status: "generating", error_message: null, updated_at: now() })
-    .eq("id", videoId)
-    .eq("status", "ready")
-    .select("*")
-    .maybeSingle();
+  // The database moves the counter, claims the ready film, and queues the
+  // scene in one transaction. Two tabs therefore cannot spend the same slot.
+  const { data: claim, error: claimError } = await admin.rpc(
+    "claim_video_scene_regeneration",
+    {
+      p_video_id: videoId,
+      p_scene_index: sceneIndex,
+      p_limit: MEMOIR_MAX_SCENE_REGENERATIONS_PER_VIDEO,
+    },
+  );
   if (claimError) throw claimError;
-  if (!video) throw new Error("Wait for the current video job to finish before regenerating a scene.");
-
-  const { error: sceneError } = await admin
-    .from("conversation_video_scenes")
-    .update({
-      status: "queued",
-      provider_task_id: null,
-      result_url: null,
-      error_message: null,
-      updated_at: now(),
-    })
-    .eq("id", scene.id)
-    .eq("video_id", videoId);
-
-  if (sceneError) {
-    await updateVideo(admin, videoId, { status: "ready" });
-    throw sceneError;
+  const remaining = claim === null || claim === undefined ? Number.NaN : Number(claim);
+  if (remaining === -1) throw new VideoSceneRegenerationLimitError();
+  if (remaining === -3) throw new Error("Scene not found.");
+  if (!Number.isInteger(remaining) || remaining < 0) {
+    throw new Error("Wait for the current video job to finish before regenerating a scene.");
   }
 
+  const { data: video, error: videoError } = await admin
+    .from("conversation_videos")
+    .select("*")
+    .eq("id", videoId)
+    .single();
+  if (videoError || !video) throw videoError ?? new Error("Video not found.");
   return video as ConversationVideo;
 }
 
