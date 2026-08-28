@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/sync-cyc-registrations",
       "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/cron/process-videos",
-      "schedule": "*/10 * * * *"
     }
   ]
 }
