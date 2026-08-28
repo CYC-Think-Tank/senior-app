@@ -13,74 +13,76 @@ import {
 import { translate } from "@/lib/i18n";
 import { conversationNames } from "@/lib/names";
 import { getPreferredLocale } from "@/lib/preferred-locale";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type {
-  Guest,
-  InterviewSession,
-  TranscriptTurn,
-} from "@/lib/types";
+import { asc, eq, inArray } from "drizzle-orm";
+import { ownSessionCondition } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { guests, sessions as sessionsTable, transcriptTurns } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const SESSION_PAGE_SIZE = 500;
-const TURN_PAGE_SIZE = 1000;
 const TURN_SESSION_BATCH_SIZE = 50;
 
-type OwnSession = Pick<
-  InterviewSession,
-  | "id"
-  | "title"
-  | "topic"
-  | "status"
-  | "created_at"
-  | "started_at"
-  | "duration_ms"
-  | "raw_audio_path"
-> & {
-  guests: Pick<Guest, "name" | "user_id">;
+type OwnSession = {
+  id: string;
+  title: string | null;
+  topic: string | null;
+  status: string;
+  createdAt: string;
+  startedAt: string | null;
+  durationMs: number | null;
+  rawAudioPath: string | null;
+  guestName: string;
 };
 
-type ExportTurn = Pick<
-  TranscriptTurn,
-  "session_id" | "idx" | "speaker" | "text" | "start_ms" | "end_ms" | "excluded"
->;
+type ExportTurn = {
+  sessionId: string;
+  idx: number;
+  speaker: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+  excluded: boolean;
+};
 
-async function getOwnSessions() {
-  const { supabase, user } = await requireUser();
-  const sessions: OwnSession[] = [];
+/**
+ * Every conversation this account may export — its own, and only its own.
+ * `ownSessionCondition` is the same predicate the dashboard list uses, so an
+ * export contains exactly what the person can already see.
+ */
+async function getOwnSessions(): Promise<OwnSession[]> {
+  const { user } = await requireUser();
 
-  for (let from = 0; ; from += SESSION_PAGE_SIZE) {
-    // This read uses the signed-in user's RLS-scoped client and also filters by
-    // the storyteller's user id, so family members cannot export one another.
-    const { data, error } = await supabase
-      .from("sessions")
-      .select(
-        "id, title, topic, status, created_at, started_at, duration_ms, raw_audio_path, guests!inner(name, user_id)",
-      )
-      .in("status", ["ready", "recording"])
-      .eq("guests.user_id", user.id)
-      .order("created_at", { ascending: true })
-      .range(from, from + SESSION_PAGE_SIZE - 1);
-
-    if (error) throw error;
-
-    const page = (data ?? []) as unknown as OwnSession[];
-    sessions.push(...page);
-    if (page.length < SESSION_PAGE_SIZE) break;
-  }
-
-  return sessions;
+  return db
+    .select({
+      id: sessionsTable.id,
+      title: sessionsTable.title,
+      topic: sessionsTable.topic,
+      status: sessionsTable.status,
+      createdAt: sessionsTable.createdAt,
+      startedAt: sessionsTable.startedAt,
+      durationMs: sessionsTable.durationMs,
+      rawAudioPath: sessionsTable.rawAudioPath,
+      guestName: guests.name,
+    })
+    .from(sessionsTable)
+    .innerJoin(guests, eq(guests.id, sessionsTable.guestId))
+    .where(ownSessionCondition(user.id))
+    .orderBy(asc(sessionsTable.createdAt));
 }
 
+/**
+ * The transcript rows for sessions the caller has already been authorised
+ * for. Nothing here re-checks that, so every caller must pass ids that came
+ * out of `getOwnSessions`.
+ *
+ * Batched because an account with hundreds of conversations would otherwise
+ * build one enormous IN list.
+ */
 async function getTurnsForAuthorizedSessions(sessionIds: string[]) {
-  const admin = createSupabaseAdminClient();
   const turns: ExportTurn[] = [];
 
-  // transcript_turns is not family-readable through RLS. Only after the
-  // sessions above have been authorized do we use the service role to fetch
-  // their matching transcript rows.
   for (
     let batchStart = 0;
     batchStart < sessionIds.length;
@@ -91,21 +93,21 @@ async function getTurnsForAuthorizedSessions(sessionIds: string[]) {
       batchStart + TURN_SESSION_BATCH_SIZE,
     );
 
-    for (let from = 0; ; from += TURN_PAGE_SIZE) {
-      const { data, error } = await admin
-        .from("transcript_turns")
-        .select("session_id, idx, speaker, text, start_ms, end_ms, excluded")
-        .in("session_id", batch)
-        .order("session_id", { ascending: true })
-        .order("idx", { ascending: true })
-        .range(from, from + TURN_PAGE_SIZE - 1);
+    const page = await db
+      .select({
+        sessionId: transcriptTurns.sessionId,
+        idx: transcriptTurns.idx,
+        speaker: transcriptTurns.speaker,
+        text: transcriptTurns.text,
+        startMs: transcriptTurns.startMs,
+        endMs: transcriptTurns.endMs,
+        excluded: transcriptTurns.excluded,
+      })
+      .from(transcriptTurns)
+      .where(inArray(transcriptTurns.sessionId, batch))
+      .orderBy(asc(transcriptTurns.sessionId), asc(transcriptTurns.idx));
 
-      if (error) throw error;
-
-      const page = (data ?? []) as ExportTurn[];
-      turns.push(...page);
-      if (page.length < TURN_PAGE_SIZE) break;
-    }
+    turns.push(...page);
   }
 
   return turns;
@@ -144,8 +146,6 @@ async function fillArchive(
   conversations: ExportableConversation[],
   locale: string,
 ) {
-  const admin = createSupabaseAdminClient();
-
   archive.append(readme(locale, conversations.length), { name: "README.txt" });
 
   for (const conversation of conversations) {
@@ -157,7 +157,7 @@ async function fillArchive(
       name: `${folder}/details.json`,
     });
 
-    if (!conversation.raw_audio_path) {
+    if (!conversation.rawAudioPath) {
       archive.append("No completed audio recording is available.\n", {
         name: `${folder}/audio-unavailable.txt`,
       });
@@ -168,10 +168,10 @@ async function fillArchive(
       // Storage holds ciphertext, so the recording has to be decrypted here
       // rather than copied straight out of the bucket.
       archive.append(
-        await conversationAudio(admin, conversation.raw_audio_path),
+        await conversationAudio(conversation.rawAudioPath),
         {
           name: `${folder}/recording${audioExtension(
-            conversation.raw_audio_path,
+            conversation.rawAudioPath,
           )}`,
         },
       );
@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
   // archive below is what the "export everything" download still builds.
   if (conversationId) {
     const session = sessions[0];
-    if (!session.raw_audio_path) {
+    if (!session.rawAudioPath) {
       return new Response(
         "That conversation has no recording to export.",
         { status: 404 },
@@ -233,10 +233,7 @@ export async function GET(request: NextRequest) {
     const name = names.get(session.id) ?? t("familyConversationLabel");
     let mp3: Buffer;
     try {
-      mp3 = await conversationMp3(
-        createSupabaseAdminClient(),
-        session.raw_audio_path,
-      );
+      mp3 = await conversationMp3(session.rawAudioPath);
     } catch (error) {
       console.error(
         `Could not prepare the MP3 for conversation ${session.id}:`,
@@ -265,15 +262,15 @@ export async function GET(request: NextRequest) {
   );
   const turnsBySession = new Map<string, ExportTurn[]>();
   for (const turn of turns) {
-    const existing = turnsBySession.get(turn.session_id) ?? [];
+    const existing = turnsBySession.get(turn.sessionId) ?? [];
     existing.push(turn);
-    turnsBySession.set(turn.session_id, existing);
+    turnsBySession.set(turn.sessionId, existing);
   }
 
   const conversations: ExportableConversation[] = sessions.map((session) => ({
     ...session,
     name: names.get(session.id) ?? t("familyConversationLabel"),
-    guestName: session.guests.name,
+    guestName: session.guestName,
     turns: turnsBySession.get(session.id) ?? [],
   }));
 

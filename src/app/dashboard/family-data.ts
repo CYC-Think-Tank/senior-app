@@ -1,13 +1,15 @@
 import { cache } from "react";
 import { headers } from "next/headers";
+import { desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { ownSessionCondition } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { circleShares, guests, profiles, sessions } from "@/lib/db/schema";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
 import { editedAudioDurationMs } from "@/lib/audio/cuts";
 import { getExcludedAudioCuts } from "@/lib/transcript/audio-cuts";
-import type { InterviewSession } from "@/lib/types";
 
 export type FamilyConversation = {
   id: string;
@@ -25,63 +27,68 @@ export type FamilyConversation = {
 };
 
 export const getFamilyConversations = cache(async () => {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
   const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
-  const admin = createSupabaseAdminClient();
-  const [{ data }, { data: firstSession }, { data: profile }] = await Promise.all([
-    supabase
-      .from("sessions")
-      .select("id, title, status, created_at, duration_ms, share_token, guests!inner(name, user_id)")
-      .in("status", ["ready", "recording"])
-      .eq("guests.user_id", user.id)
-      .order("created_at", { ascending: false }),
-    admin
-      .from("sessions")
-      .select("id, guests!inner(user_id)")
-      .eq("guests.user_id", user.id)
-      .limit(1)
-      .maybeSingle(),
-    admin
-      .from("profiles")
-      .select("conversation_language_chosen_at")
-      .eq("id", user.id)
-      .maybeSingle(),
+
+  const [rows, firstSession, profileRows] = await Promise.all([
+    // ownSessionCondition is the "users read their own sessions" policy: their
+    // own conversations, finished or abandoned long enough to be resumable.
+    db
+      .select({
+        id: sessions.id,
+        title: sessions.title,
+        status: sessions.status,
+        createdAt: sessions.createdAt,
+        durationMs: sessions.durationMs,
+        shareToken: sessions.shareToken,
+        guestName: guests.name,
+      })
+      .from(sessions)
+      .innerJoin(guests, eq(guests.id, sessions.guestId))
+      .where(ownSessionCondition(user.id))
+      .orderBy(desc(sessions.createdAt)),
+    // Whether they have ever recorded at all, which is a wider question than
+    // the list above: a pending conversation counts.
+    db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .innerJoin(guests, eq(guests.id, sessions.guestId))
+      .where(eq(guests.userId, user.id))
+      .limit(1),
+    db
+      .select({ chosenAt: profiles.conversationLanguageChosenAt })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
   ]);
+  const profile = profileRows[0];
 
-  type SessionRow = Pick<
-    InterviewSession,
-    "id" | "title" | "status" | "created_at" | "duration_ms" | "share_token"
-  > & { guests: { name: string; user_id: string } };
-  const rows = (data ?? []) as unknown as SessionRow[];
-
-  // "owner reads own circle shares" scopes this to the caller's own switches.
-  const { data: shares } = await supabase
-    .from("circle_shares")
-    .select("session_id")
-    .eq("owner_id", user.id);
-  const sharedWithCircle = new Set(
-    (shares ?? []).map((share) => share.session_id),
-  );
+  // Scoped to the caller's own switches; a friend's shares live in the feed.
+  const shares = await db
+    .select({ sessionId: circleShares.sessionId })
+    .from(circleShares)
+    .where(eq(circleShares.ownerId, user.id));
+  const sharedWithCircle = new Set(shares.map((share) => share.sessionId));
 
   const names = conversationNames(rows, (number) =>
     t("familyConversationNumbered", { number }),
   );
-  // Only ids already authorized by the caller's RLS read are handed to the
-  // service helper that reads private transcript cut timestamps.
+  // Only ids the read above already authorised are handed to the helper that
+  // reads private transcript cut timestamps.
   const cutsBySession = await getExcludedAudioCuts(rows.map((row) => row.id));
   const conversations: FamilyConversation[] = rows.map((row) => ({
     id: row.id,
-    guestName: row.guests.name,
+    guestName: row.guestName,
     name: names.get(row.id) ?? t("familyConversationLabel"),
     title: row.title,
-    createdAt: row.created_at,
+    createdAt: row.createdAt,
     durationMs: editedAudioDurationMs(
-      row.duration_ms,
+      row.durationMs,
       cutsBySession.get(row.id) ?? [],
     ),
-    shareToken: row.share_token,
+    shareToken: row.shareToken,
     unfinished: row.status !== "ready",
     sharedWithCircle: sharedWithCircle.has(row.id),
   }));
@@ -97,7 +104,7 @@ export const getFamilyConversations = cache(async () => {
   return {
     conversations,
     hasStartedConversation:
-      Boolean(profile?.conversation_language_chosen_at) || Boolean(firstSession),
+      Boolean(profile?.chosenAt) || firstSession.length > 0,
     locale,
     origin: host ? `${protocol}://${host}` : "",
   };

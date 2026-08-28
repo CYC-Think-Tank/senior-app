@@ -11,64 +11,80 @@ import { interviewLanguage, normalizeLocale, translate } from "@/lib/i18n";
 import { conversationNames, personName } from "@/lib/names";
 import { getExcludedAudioCuts } from "@/lib/transcript/audio-cuts";
 import { decryptTurns } from "@/lib/transcript/encryption";
-import type { InterviewSession } from "@/lib/types";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { canReadOwnSession, ownSessionCondition } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  circleShares,
+  guests,
+  profiles,
+  sessions,
+  transcriptTurns,
+} from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
-
-type SessionRow = Pick<
-  InterviewSession,
-  "id" | "title" | "status" | "created_at" | "duration_ms" | "share_token" | "token"
-> & { guests: { name: string; user_id: string } };
 
 /** Everything this account has recorded, newest first. */
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, user } = auth;
+  const { user } = auth;
 
-  const [{ data: profile }, { data }] = await Promise.all([
-    supabase.from("profiles").select("locale").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("sessions")
-      .select(
-        "id, token, title, status, created_at, duration_ms, share_token, guests!inner(name, user_id)"
-      )
-      .in("status", ["ready", "recording"])
-      .eq("guests.user_id", user.id)
-      .order("created_at", { ascending: false }),
+  const [profileRows, rows] = await Promise.all([
+    db
+      .select({ locale: profiles.locale })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    // ownSessionCondition is the "users read their own sessions" policy: their
+    // own conversations, finished or abandoned long enough to be resumable.
+    db
+      .select({
+        id: sessions.id,
+        token: sessions.token,
+        title: sessions.title,
+        status: sessions.status,
+        createdAt: sessions.createdAt,
+        durationMs: sessions.durationMs,
+        shareToken: sessions.shareToken,
+        guestName: guests.name,
+      })
+      .from(sessions)
+      .innerJoin(guests, eq(guests.id, sessions.guestId))
+      .where(ownSessionCondition(user.id))
+      .orderBy(desc(sessions.createdAt)),
   ]);
 
-  const locale = normalizeLocale(profile?.locale);
-  const rows = (data ?? []) as unknown as SessionRow[];
+  const locale = normalizeLocale(profileRows[0]?.locale);
 
-  // "owner reads own circle shares" scopes this to the caller's own switches.
-  const { data: shares } = await supabase
-    .from("circle_shares")
-    .select("session_id")
-    .eq("owner_id", user.id);
-  const shared = new Set((shares ?? []).map((share) => share.session_id));
+  // Scoped to the caller's own switches; a friend's shares live in the feed.
+  const shares = await db
+    .select({ sessionId: circleShares.sessionId })
+    .from(circleShares)
+    .where(eq(circleShares.ownerId, user.id));
+  const shared = new Set(shares.map((share) => share.sessionId));
 
   const names = conversationNames(rows, (number) =>
     translate(locale, "familyConversationNumbered", { number })
   );
-  // Only ids the caller's own RLS read already authorised are handed to the
-  // service helper that reads private cut timestamps.
+  // Only ids the read above already authorised are handed to the helper that
+  // reads private cut timestamps.
   const cuts = await getExcludedAudioCuts(rows.map((row) => row.id));
 
   return NextResponse.json(
     rows.map((row) => ({
       id: row.id,
-      guestName: row.guests.name,
+      guestName: row.guestName,
       name: names.get(row.id) ?? translate(locale, "familyConversationLabel"),
       title: row.title,
-      createdAt: row.created_at,
-      durationMs: editedAudioDurationMs(row.duration_ms, cuts.get(row.id) ?? []),
-      shareToken: row.share_token,
+      createdAt: row.createdAt,
+      durationMs: editedAudioDurationMs(row.durationMs, cuts.get(row.id) ?? []),
+      shareToken: row.shareToken,
       unfinished: row.status !== "ready",
       sharedWithCircle: shared.has(row.id),
-      // Their own conversation's own capability token. The RLS policy only
-      // returns a recording session whose checkpoints have gone stale, so this
-      // cannot hand back the token of a conversation already in progress.
+      // Their own conversation's own capability token. ownSessionCondition
+      // only admits a recording session whose checkpoints have gone stale, so
+      // this cannot hand back the token of a conversation already in progress.
       resumeToken: row.status === "ready" ? null : row.token,
     }))
   );
@@ -82,69 +98,83 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const resumeSessionId = readString(body, "resumeSessionId", 64);
 
   if (resumeSessionId) {
-    return resumeConversation(auth, resumeSessionId);
+    return resumeConversation(user.id, resumeSessionId);
   }
 
-  const [{ data: profile }, { data: existing }] = await Promise.all([
-    admin.from("profiles").select("display_name, email, locale").eq("id", user.id).single(),
-    admin.from("guests").select("id, name, language").eq("user_id", user.id).maybeSingle(),
+  const [[profile], [existing]] = await Promise.all([
+    db
+      .select({
+        displayName: profiles.displayName,
+        email: profiles.email,
+        locale: profiles.locale,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    db
+      .select({ id: guests.id, name: guests.name, language: guests.language })
+      .from(guests)
+      .where(eq(guests.userId, user.id))
+      .limit(1),
   ]);
 
   const email = profile?.email ?? user.email;
-  const currentName = personName(profile?.display_name, email);
+  const currentName = personName(profile?.displayName, email);
   const currentLanguage = interviewLanguage(normalizeLocale(profile?.locale));
 
   let guestId: string;
   if (existing) {
     guestId = existing.id;
     if (existing.name !== currentName || existing.language !== currentLanguage) {
-      const { error } = await admin
-        .from("guests")
-        .update({ name: currentName, language: currentLanguage })
-        .eq("id", guestId);
-      if (error) {
+      try {
+        await db
+          .update(guests)
+          .set({ name: currentName, language: currentLanguage })
+          .where(eq(guests.id, guestId));
+      } catch (error) {
         console.error("Could not update the self guest:", error);
         return serverError("Could not start the conversation.");
       }
     }
   } else {
-    // The user_id is what makes the finished recording visible on their own
-    // dashboard; see the "users read their own sessions" policy.
-    const { data: guest, error } = await admin
-      .from("guests")
-      .insert({
-        user_id: user.id,
-        name: currentName,
-        language: currentLanguage,
-        origin: "self_serve",
-      })
-      .select("id")
-      .single();
-    if (error || !guest) {
+    try {
+      // The userId is what makes the finished recording reachable from their
+      // own dashboard; every own-conversation check joins through it.
+      const [guest] = await db
+        .insert(guests)
+        .values({
+          userId: user.id,
+          name: currentName,
+          language: currentLanguage,
+          origin: "self_serve",
+        })
+        .returning({ id: guests.id });
+      if (!guest) throw new Error("No guest row was created.");
+      guestId = guest.id;
+    } catch (error) {
       console.error("Could not create a self guest:", error);
       return serverError("Could not start the conversation.");
     }
-    guestId = guest.id;
   }
 
-  const { data: session, error } = await admin
-    .from("sessions")
-    .insert({ guest_id: guestId })
-    .select("id, token")
-    .single();
-
-  if (error || !session) {
+  let session;
+  try {
+    [session] = await db
+      .insert(sessions)
+      .values({ guestId })
+      .returning({ id: sessions.id, token: sessions.token });
+  } catch (error) {
     console.error("Could not create a conversation:", error);
     return serverError("Could not start the conversation.");
   }
+  if (!session) return serverError("Could not start the conversation.");
 
-  void supabase;
   return NextResponse.json({ sessionId: session.id, token: session.token });
 }
 
@@ -152,22 +182,27 @@ export async function POST(request: NextRequest) {
  * Picks a conversation back up at the link it was recorded on, handing the app
  * everything the earlier sittings saved so the new audio appends to the old.
  *
- * The RLS read is the authorisation, exactly as in `resumeConversation()`: the
- * policy only exposes a `recording` session whose checkpoints have gone stale,
- * so this cannot walk in on a conversation already in progress.
+ * `canReadOwnSession` is the authorisation, exactly as in the web
+ * `resumeConversation()`: it only admits a `recording` session whose
+ * checkpoints have gone stale, so this cannot walk in on a conversation
+ * already in progress.
  */
-async function resumeConversation(
-  auth: NonNullable<Awaited<ReturnType<typeof requireMobileUser>>>,
-  sessionId: string
-) {
-  const { supabase, admin } = auth;
+async function resumeConversation(userId: string, sessionId: string) {
+  const stillContinuable = await canReadOwnSession(userId, sessionId);
 
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, token, duration_ms")
-    .eq("id", sessionId)
-    .eq("status", "recording")
-    .maybeSingle();
+  const [session] = stillContinuable
+    ? await db
+        .select({
+          id: sessions.id,
+          token: sessions.token,
+          durationMs: sessions.durationMs,
+        })
+        .from(sessions)
+        .where(
+          and(eq(sessions.id, sessionId), eq(sessions.status, "recording")),
+        )
+        .limit(1)
+    : [];
 
   if (!session) {
     return NextResponse.json(
@@ -176,18 +211,24 @@ async function resumeConversation(
     );
   }
 
-  const { data: rows } = await admin
-    .from("transcript_turns")
-    .select("idx, speaker, text, start_ms, end_ms")
-    .eq("session_id", session.id)
-    .order("idx", { ascending: true });
+  const rows = await db
+    .select({
+      idx: transcriptTurns.idx,
+      speaker: transcriptTurns.speaker,
+      text: transcriptTurns.text,
+      startMs: transcriptTurns.startMs,
+      endMs: transcriptTurns.endMs,
+    })
+    .from(transcriptTurns)
+    .where(eq(transcriptTurns.sessionId, session.id))
+    .orderBy(asc(transcriptTurns.idx));
 
-  const turns = decryptTurns(session.id, rows ?? []);
+  const turns = decryptTurns(session.id, rows);
   // Where the new sitting sits on the conversation's timeline. The last
   // checkpoint's duration is what recovery has to work with; the final turn is
   // the floor, so a stale heartbeat cannot rewind over recorded audio.
-  const lastTurnEnd = turns.reduce((max, turn) => Math.max(max, turn.end_ms), 0);
-  const offsetMs = Math.max(session.duration_ms ?? 0, lastTurnEnd);
+  const lastTurnEnd = turns.reduce((max, turn) => Math.max(max, turn.endMs), 0);
+  const offsetMs = Math.max(session.durationMs ?? 0, lastTurnEnd);
 
   return NextResponse.json({
     sessionId: session.id,
@@ -197,8 +238,8 @@ async function resumeConversation(
       turns: turns.map((turn) => ({
         speaker: turn.speaker,
         text: turn.text,
-        startMs: turn.start_ms,
-        endMs: turn.end_ms,
+        startMs: turn.startMs,
+        endMs: turn.endMs,
       })),
     },
   });

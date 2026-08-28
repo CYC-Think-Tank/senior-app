@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { asc, eq } from "drizzle-orm";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { guests, profiles, sessions, transcriptTurns } from "@/lib/db/schema";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import type { InterviewResume } from "@/lib/realtime/interview-client";
 import { I18nProvider } from "@/components/i18n-provider";
@@ -17,36 +19,44 @@ export default async function InterviewPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const admin = createSupabaseAdminClient();
 
-  const { data: session } = await admin
-    .from("sessions")
-    .select(
-      "id, status, topic, duration_ms, share_token, recording_consent_at, guests(name, user_id, language)"
-    )
-    .eq("token", token)
-    .single();
+  // The unguessable token in the URL is the credential, so this looks the
+  // conversation up by it and nothing else.
+  const [row] = await db
+    .select({
+      id: sessions.id,
+      status: sessions.status,
+      topic: sessions.topic,
+      durationMs: sessions.durationMs,
+      shareToken: sessions.shareToken,
+      recordingConsentAt: sessions.recordingConsentAt,
+      guestName: guests.name,
+      guestUserId: guests.userId,
+      guestLanguage: guests.language,
+    })
+    .from(sessions)
+    .innerJoin(guests, eq(guests.id, sessions.guestId))
+    .where(eq(sessions.token, token))
+    .limit(1);
 
-  if (!session) notFound();
+  if (!row) notFound();
 
-  const guest = session.guests as unknown as {
-    name: string;
-    user_id: string | null;
-    language: string;
-  };
-  const guestName = await resolveCurrentGuestName(admin, guest);
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const guestName = await resolveCurrentGuestName({
+    name: row.guestName,
+    userId: row.guestUserId,
+  });
+
+  // Only decides where the "home" link points; the token above is what grants
+  // access to the conversation itself, signed in or not.
+  const user = await getSessionUser();
   let homeHref: "/" | "/admin" | "/dashboard" = "/";
 
   if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
+    const [profile] = await db
+      .select({ role: profiles.role })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1);
     homeHref = profile?.role === "admin" ? "/admin" : "/dashboard";
   }
 
@@ -54,48 +64,54 @@ export default async function InterviewPage({
   // back up, not started over: the live checkpoints kept its transcript, and
   // the new recording will be appended to the audio they saved.
   let resume: InterviewResume | undefined;
-  if (session.status !== "ready") {
-    const { data: saved } = await admin
-      .from("transcript_turns")
-      .select("idx, speaker, text, start_ms, end_ms")
-      .eq("session_id", session.id)
-      .order("idx", { ascending: true });
+  if (row.status !== "ready") {
+    const saved = await db
+      .select({
+        idx: transcriptTurns.idx,
+        speaker: transcriptTurns.speaker,
+        text: transcriptTurns.text,
+        startMs: transcriptTurns.startMs,
+        endMs: transcriptTurns.endMs,
+      })
+      .from(transcriptTurns)
+      .where(eq(transcriptTurns.sessionId, row.id))
+      .orderBy(asc(transcriptTurns.idx));
 
-    if (saved?.length) {
-      const turns = decryptTurns(session.id, saved).map((turn) => ({
-        speaker: turn.speaker,
+    if (saved.length) {
+      const turns = decryptTurns(row.id, saved).map((turn) => ({
+        speaker: turn.speaker as "ai" | "guest",
         text: turn.text,
-        startMs: turn.start_ms,
-        endMs: turn.end_ms,
+        startMs: turn.startMs,
+        endMs: turn.endMs,
       }));
       resume = {
         turns,
         // The last checkpoint's duration, unless the turns themselves reach
         // further — a transcript can outlive the heartbeat that follows it.
         offsetMs: Math.max(
-          session.duration_ms ?? 0,
+          row.durationMs ?? 0,
           ...turns.map((turn) => turn.endMs)
         ),
       };
     }
   }
 
-  const interviewLocale = guest.user_id
+  const interviewLocale = row.guestUserId
     ? await getPreferredLocale()
-    : localeForInterviewLanguage(guest.language);
+    : localeForInterviewLanguage(row.guestLanguage);
 
   return (
     <I18nProvider key={interviewLocale} locale={interviewLocale}>
       <InterviewRoom
         token={token}
         guestName={guestName}
-        topic={session.topic}
-        initialShareToken={session.share_token}
-        alreadyRecorded={session.status === "ready"}
+        topic={row.topic}
+        initialShareToken={row.shareToken}
+        alreadyRecorded={row.status === "ready"}
         isLoggedIn={Boolean(user)}
         homeHref={homeHref}
         resume={resume}
-        recordingConsentRequired={!session.recording_consent_at}
+        recordingConsentRequired={!row.recordingConsentAt}
       />
     </I18nProvider>
   );

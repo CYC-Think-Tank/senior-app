@@ -1,27 +1,32 @@
-import type {
-  InterviewSession,
-  TranscriptTurn,
-} from "@/lib/types";
-
-type ExportableSession = Pick<
-  InterviewSession,
-  | "id"
-  | "title"
-  | "topic"
-  | "status"
-  | "created_at"
-  | "started_at"
-  | "duration_ms"
-  | "raw_audio_path"
->;
+/**
+ * What the export writer needs from a conversation.
+ *
+ * Written out rather than picked from the row types: the archive is a file
+ * format other people keep, so it should not silently change shape when a
+ * column does.
+ */
+type ExportableSession = {
+  id: string;
+  title: string | null;
+  topic: string | null;
+  status: string;
+  createdAt: string;
+  startedAt: string | null;
+  durationMs: number | null;
+  rawAudioPath: string | null;
+};
 
 export type ExportableConversation = ExportableSession & {
   name: string;
   guestName: string;
-  turns: Pick<
-    TranscriptTurn,
-    "idx" | "speaker" | "text" | "start_ms" | "end_ms" | "excluded"
-  >[];
+  turns: {
+    idx: number;
+    speaker: string;
+    text: string;
+    startMs: number;
+    endMs: number;
+    excluded: boolean;
+  }[];
 };
 
 /** Keeps user-chosen titles safe inside a ZIP path on every major OS. */
@@ -38,9 +43,9 @@ export function safeArchiveSegment(value: string, fallback: string) {
 }
 
 export function conversationArchiveFolder(
-  conversation: Pick<ExportableConversation, "id" | "name" | "created_at">,
+  conversation: Pick<ExportableConversation, "id" | "name" | "createdAt">,
 ) {
-  const date = conversation.created_at.slice(0, 10);
+  const date = conversation.createdAt.slice(0, 10);
   const name = safeArchiveSegment(conversation.name, "Conversation");
   return `${date} - ${name} - ${conversation.id.slice(0, 8)}`;
 }
@@ -71,13 +76,13 @@ export function conversationTranscript(
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(conversation.started_at ?? conversation.created_at));
+  }).format(new Date(conversation.startedAt ?? conversation.createdAt));
   const lines = [
     conversation.name,
     recorded,
     "",
     ...turns.flatMap((turn) => [
-      `[${timestamp(turn.start_ms)}] ${
+      `[${timestamp(turn.startMs)}] ${
         turn.speaker === "ai" ? "Rosie" : conversation.guestName
       }${turn.excluded ? " [excluded from episode]" : ""}`,
       turn.text,
@@ -95,10 +100,10 @@ export function conversationDetails(conversation: ExportableConversation) {
       name: conversation.name,
       topic: conversation.topic,
       status: conversation.status,
-      createdAt: conversation.created_at,
-      startedAt: conversation.started_at,
-      durationMs: conversation.duration_ms,
-      hasAudio: Boolean(conversation.raw_audio_path),
+      createdAt: conversation.createdAt,
+      startedAt: conversation.startedAt,
+      durationMs: conversation.durationMs,
+      hasAudio: Boolean(conversation.rawAudioPath),
       transcriptTurnCount: conversation.turns.length,
     },
     null,

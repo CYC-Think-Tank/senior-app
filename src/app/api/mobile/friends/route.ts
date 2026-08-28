@@ -1,8 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { desc, eq, inArray, or } from "drizzle-orm";
 import { requireMobileUser, unauthorized } from "@/lib/mobile/auth";
+import { db } from "@/lib/db";
+import { friendships, profiles } from "@/lib/db/schema";
 import { otherParticipant, requestDirection } from "@/lib/friends";
 import { personName } from "@/lib/names";
-import type { Friendship, Profile } from "@/lib/types";
+import type { Friendship } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -10,39 +13,44 @@ export const dynamic = "force-dynamic";
  * The caller's whole friend graph, in the three shapes the screen renders.
  * Port of `getMyCircle()`.
  *
- * Both queries run through the RLS client: "participants read their
- * friendships" scopes the first to rows this account is in, and "read
- * connected profiles" (migration 014) is what makes the second one legal.
+ * The participant filter is the authorisation: a friendship row is the
+ * caller's business only if they are one of the two accounts in it, which also
+ * makes everyone named below someone they are already connected to.
  */
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, user } = auth;
+  const { user } = auth;
 
-  const { data } = await supabase
-    .from("friendships")
-    .select("id, user_low, user_high, requester_id, status, created_at, responded_at")
-    .order("created_at", { ascending: false });
+  const rows = (await db
+    .select()
+    .from(friendships)
+    .where(
+      or(eq(friendships.userLow, user.id), eq(friendships.userHigh, user.id)),
+    )
+    .orderBy(desc(friendships.createdAt))) as Friendship[];
 
-  const rows = (data ?? []) as Friendship[];
   if (rows.length === 0) {
     return NextResponse.json({ friends: [], incoming: [], outgoing: [] });
   }
 
-  const { data: profileRows } = await supabase
-    .from("profiles")
-    .select("id, display_name, email")
-    .in(
-      "id",
-      rows.map((row) => otherParticipant(row, user.id))
+  const profileRows = await db
+    .select({
+      id: profiles.id,
+      displayName: profiles.displayName,
+      email: profiles.email,
+    })
+    .from(profiles)
+    .where(
+      inArray(
+        profiles.id,
+        rows.map((row) => otherParticipant(row, user.id)),
+      ),
     );
 
   const names = new Map<string, string>();
-  for (const profile of (profileRows ?? []) as Pick<
-    Profile,
-    "id" | "display_name" | "email"
-  >[]) {
-    names.set(profile.id, personName(profile.display_name, profile.email));
+  for (const profile of profileRows) {
+    names.set(profile.id, personName(profile.displayName, profile.email));
   }
 
   const friends = [];
@@ -57,11 +65,11 @@ export async function GET(request: NextRequest) {
     if (!name) continue;
 
     if (row.status === "accepted") {
-      friends.push({ userId, name, since: row.responded_at ?? row.created_at });
+      friends.push({ userId, name, since: row.respondedAt ?? row.createdAt });
     } else if (requestDirection(row, user.id) === "incoming") {
-      incoming.push({ id: row.id, userId, name, sentAt: row.created_at });
+      incoming.push({ id: row.id, userId, name, sentAt: row.createdAt });
     } else {
-      outgoing.push({ id: row.id, userId, name, sentAt: row.created_at });
+      outgoing.push({ id: row.id, userId, name, sentAt: row.createdAt });
     }
   }
 

@@ -67,7 +67,7 @@ export default async function CircleConversationPage({
           <CalendarDays aria-hidden="true" />
           <span>
             <strong>
-              {new Date(session.created_at).toLocaleDateString(locale, {
+              {new Date(session.createdAt).toLocaleDateString(locale, {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
@@ -80,7 +80,7 @@ export default async function CircleConversationPage({
           <span>
             <strong>
               {formatDuration(
-                editedAudioDurationMs(session.duration_ms, audioCuts),
+                editedAudioDurationMs(session.durationMs, audioCuts),
               )}
             </strong>
           </span>
@@ -105,7 +105,7 @@ export default async function CircleConversationPage({
       {audioUrl ? (
         <AudioPlayer
           src={audioUrl}
-          durationMs={session.duration_ms}
+          durationMs={session.durationMs}
           cuts={audioCuts}
         />
       ) : (

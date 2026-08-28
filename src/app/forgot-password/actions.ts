@@ -1,7 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
+import { APIError } from "better-auth/api";
+import { auth } from "@/lib/auth/config";
 import { normalizeEmail } from "@/lib/email";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 
@@ -19,19 +21,17 @@ export async function requestPasswordReset(
     return { ok: false, error: t("authEmailInvalid") };
   }
 
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=/reset-password`,
-  });
-
-  if (error) {
+  try {
+    // The emailed link lands on /reset-password carrying the one-time token,
+    // which the form there sends back with the new password.
+    await auth.api.requestPasswordReset({
+      body: { email, redirectTo: "/reset-password" },
+      headers: await headers(),
+    });
+  } catch (error) {
+    if (!(error instanceof APIError)) throw error;
     console.error("Could not send a password-reset email:", error);
-    return {
-      ok: false,
-      error: t("passwordResetRequestError"),
-    };
+    return { ok: false, error: t("passwordResetRequestError") };
   }
 
   return { ok: true };

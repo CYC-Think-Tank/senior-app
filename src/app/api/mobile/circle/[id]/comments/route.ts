@@ -6,6 +6,10 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/mobile/auth";
+import { eq } from "drizzle-orm";
+import { readableCircleShare } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { conversationComments, profiles } from "@/lib/db/schema";
 import { normalizeCommentBody } from "@/lib/comments";
 import { personName } from "@/lib/names";
 
@@ -15,11 +19,11 @@ export const dynamic = "force-dynamic";
  * Adds a note to a conversation the caller can currently reach. Port of
  * `postComment()`.
  *
- * The single circle_shares read below is the whole authorisation. Its policies
- * return a row only when the caller is the owner, or a friend of the owner
- * *and* the switch is still on — so "it was unshared while I had the screen
- * open" and "I was removed from the circle while I had it open" both come back
- * as 403 without being checked for separately.
+ * `readableCircleShare` is the whole authorisation. It answers only when the
+ * caller is the owner, or a friend of the owner *and* the switch is still on —
+ * so "it was unshared while I had the screen open" and "I was removed from the
+ * circle while I had it open" both come back as 403 without being checked for
+ * separately.
  */
 export async function POST(
   request: NextRequest,
@@ -27,7 +31,7 @@ export async function POST(
 ) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
   const { id } = await params;
 
   const body = await readJson(request);
@@ -36,48 +40,50 @@ export async function POST(
   );
   if (!text) return badRequest("Write something first.");
 
-  const { data: share } = await supabase
-    .from("circle_shares")
-    .select("session_id, owner_id")
-    .eq("session_id", id)
-    .maybeSingle();
-  if (!share) {
+  if (!(await readableCircleShare(user.id, id))) {
     return NextResponse.json(
       { error: "This conversation is no longer shared with you." },
       { status: 403 }
     );
   }
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("display_name, email")
-    .eq("id", user.id)
-    .single();
+  const [profile] = await db
+    .select({ displayName: profiles.displayName, email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, user.id))
+    .limit(1);
 
-  const authorName = personName(profile?.display_name, profile?.email ?? user.email);
-  const { data: comment, error } = await admin
-    .from("conversation_comments")
-    .insert({
-      session_id: id,
-      author_id: user.id,
-      // Snapshotted, not joined at read time — see migration 016.
-      author_name: authorName,
-      body: text,
-    })
-    .select("id, author_id, author_name, body, created_at")
-    .single();
-
-  if (error || !comment) {
+  const authorName = personName(profile?.displayName, profile?.email ?? user.email);
+  let comment;
+  try {
+    [comment] = await db
+      .insert(conversationComments)
+      .values({
+        sessionId: id,
+        authorId: user.id,
+        // Snapshotted, not joined at read time — see migration 016.
+        authorName,
+        body: text,
+      })
+      .returning({
+        id: conversationComments.id,
+        authorId: conversationComments.authorId,
+        authorName: conversationComments.authorName,
+        body: conversationComments.body,
+        createdAt: conversationComments.createdAt,
+      });
+  } catch (error) {
     console.error("Could not post the comment:", error);
     return serverError("Could not post your note.");
   }
+  if (!comment) return serverError("Could not post your note.");
 
   return NextResponse.json({
     id: comment.id,
-    authorId: comment.author_id,
-    authorName: comment.author_name,
+    authorId: comment.authorId,
+    authorName: comment.authorName,
     body: comment.body,
-    createdAt: comment.created_at,
+    createdAt: comment.createdAt,
     canDelete: true,
   });
 }

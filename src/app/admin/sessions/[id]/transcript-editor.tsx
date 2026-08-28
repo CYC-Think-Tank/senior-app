@@ -41,7 +41,7 @@ export default function TranscriptEditor({
     () =>
       turns
         .filter((t) => !t.excluded)
-        .reduce((sum, t) => sum + (t.end_ms - t.start_ms), 0),
+        .reduce((sum, t) => sum + (t.endMs - t.startMs), 0),
     [turns]
   );
 
@@ -98,10 +98,10 @@ export default function TranscriptEditor({
         </h1>
         <p className="mt-1 text-ink-soft">
           {copy.recorded}{" "}
-          {session.started_at
-            ? new Date(session.started_at).toLocaleString(locale)
+          {session.startedAt
+            ? new Date(session.startedAt).toLocaleString(locale)
             : "—"}{" "}
-          · {copy.raw} {formatDuration(session.duration_ms)} · {copy.kept} ≈{" "}
+          · {copy.raw} {formatDuration(session.durationMs)} · {copy.kept} ≈{" "}
           {formatDuration(keptMs)}
         </p>
       </div>
@@ -144,12 +144,12 @@ export default function TranscriptEditor({
             }`}
           >
             <button
-              onClick={() => seekTo(turn.start_ms)}
+              onClick={() => seekTo(turn.startMs)}
               className="mt-0.5 h-fit shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-ink-faint hover:bg-ember-soft hover:text-ember-deep"
               title={copy.play}
             >
               <Play className="mr-1 inline h-3 w-3" />
-              {formatTimestamp(turn.start_ms)}
+              {formatTimestamp(turn.startMs)}
             </button>
             <button
               onClick={() => toggle(turn)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -10,8 +10,15 @@ import { Wordmark } from "@/components/ui";
 import { resetPassword } from "./actions";
 import styles from "../login/login.module.css";
 
-export default function ResetPasswordPage() {
+export default function ResetPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
   const { locale, t } = useI18n();
+  // The one-time token from the emailed link. Nobody is signed in here, so
+  // this is the only thing that authorises the change.
+  const token = use(searchParams).token ?? "";
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +35,7 @@ export default function ResetPasswordPage() {
 
     setBusy(true);
     try {
-      const result = await resetPassword(password);
+      const result = await resetPassword(password, token);
       if (result.ok) setSaved(true);
       else setError(result.error);
     } catch {

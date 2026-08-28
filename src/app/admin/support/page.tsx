@@ -1,6 +1,8 @@
 import { CalendarClock, Languages, MapPin, ShieldAlert, UserRoundCheck } from "lucide-react";
+import { asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { db } from "@/lib/db";
+import { profiles, supportProviders, supportRequests } from "@/lib/db/schema";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import type { Locale } from "@/lib/i18n";
 import { setProviderApproval, updateSupportRequestStatus } from "./actions";
@@ -8,41 +10,6 @@ import { SyncRegistrations } from "./sync-registrations";
 import styles from "./support-admin.module.css";
 
 export const dynamic = "force-dynamic";
-
-type RequestRow = {
-  id: string;
-  requester_id: string;
-  request_text: string;
-  assistance_type: string;
-  urgency: string;
-  preferred_language: string;
-  location: string;
-  service_mode: string;
-  availability: string;
-  required_skills: string[];
-  safety_level: string;
-  recommended_tier: string;
-  assessment_summary: string;
-  safety_reason: string;
-  matched_provider_id: string | null;
-  match_score: number | null;
-  status: string;
-  created_at: string;
-};
-
-type ProviderRow = {
-  id: string;
-  display_name: string;
-  provider_type: string;
-  email: string;
-  phone: string;
-  school: string;
-  grade: string;
-  locations: string[];
-  verified: boolean;
-  active: boolean;
-  synced_at: string | null;
-};
 
 const copy: Record<Locale, {
   eyebrow: string; title: string; intro: string; empty: string; open: string;
@@ -76,32 +43,39 @@ export default async function SupportAdminPage() {
   await requireAdmin();
   const locale = await getPreferredLocale();
   const c = copy[locale];
-  const admin = createSupabaseAdminClient();
-  const { data: rows } = await admin
-    .from("support_requests")
-    .select("id, requester_id, request_text, assistance_type, urgency, preferred_language, location, service_mode, availability, required_skills, safety_level, recommended_tier, assessment_summary, safety_reason, matched_provider_id, match_score, status, created_at")
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: false });
-  const requests = (rows ?? []) as RequestRow[];
-  const { data: rosterRows } = await admin
-    .from("support_providers")
-    .select("id, display_name, provider_type, email, phone, school, grade, locations, verified, active, synced_at")
-    .eq("source", "cyc_registration")
-    .order("verified", { ascending: true })
-    .order("display_name");
-  const roster = (rosterRows ?? []) as ProviderRow[];
-  const requesterIds = [...new Set(requests.map((request) => request.requester_id))];
-  const providerIds = [...new Set(requests.map((request) => request.matched_provider_id).filter((id): id is string => Boolean(id)))];
-  const [{ data: people }, { data: providers }] = await Promise.all([
+  // The whole queue, staff-only: the "admins manage support requests" and
+  // "admins manage support providers" policies were admin-or-nothing, and
+  // requireAdmin above is the whole of that check now.
+  const requests = await db
+    .select()
+    .from(supportRequests)
+    .where(ne(supportRequests.status, "cancelled"))
+    .orderBy(desc(supportRequests.createdAt));
+
+  const roster = await db
+    .select()
+    .from(supportProviders)
+    .where(eq(supportProviders.source, "cyc_registration"))
+    .orderBy(asc(supportProviders.verified), asc(supportProviders.displayName));
+
+  const requesterIds = [...new Set(requests.map((request) => request.requesterId))];
+  const providerIds = [...new Set(requests.map((request) => request.matchedProviderId).filter((id): id is string => Boolean(id)))];
+  const [people, providers] = await Promise.all([
     requesterIds.length
-      ? admin.from("profiles").select("id, display_name, email").in("id", requesterIds)
-      : Promise.resolve({ data: [] }),
+      ? db
+          .select({ id: profiles.id, displayName: profiles.displayName, email: profiles.email })
+          .from(profiles)
+          .where(inArray(profiles.id, requesterIds))
+      : [],
     providerIds.length
-      ? admin.from("support_providers").select("id, display_name, provider_type").in("id", providerIds)
-      : Promise.resolve({ data: [] }),
+      ? db
+          .select({ id: supportProviders.id, displayName: supportProviders.displayName, providerType: supportProviders.providerType })
+          .from(supportProviders)
+          .where(inArray(supportProviders.id, providerIds))
+      : [],
   ]);
-  const peopleById = new Map((people ?? []).map((person) => [person.id, person]));
-  const providersById = new Map((providers ?? []).map((provider) => [provider.id, provider]));
+  const peopleById = new Map(people.map((person) => [person.id, person]));
+  const providersById = new Map(providers.map((provider) => [provider.id, provider]));
   const activeCount = requests.filter((request) => !["resolved", "cancelled"].includes(request.status)).length;
 
   return (
@@ -114,30 +88,30 @@ export default async function SupportAdminPage() {
       {requests.length ? (
         <div className={styles.queue}>
           {requests.map((request) => {
-            const person = peopleById.get(request.requester_id);
-            const provider = request.matched_provider_id ? providersById.get(request.matched_provider_id) : null;
+            const person = peopleById.get(request.requesterId);
+            const provider = request.matchedProviderId ? providersById.get(request.matchedProviderId) : null;
             return (
               <article className={styles.requestCard} key={request.id}>
                 <div className={styles.cardTop}>
                   <div>
                     <span className={`${styles.status} ${styles[`status_${request.status}`] ?? ""}`}>{request.status.replace("_", " ")}</span>
-                    <span className={styles.date}>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(request.created_at))}</span>
+                    <span className={styles.date}>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(request.createdAt))}</span>
                   </div>
                   <strong>{request.urgency}</strong>
                 </div>
 
-                <blockquote>“{request.request_text}”</blockquote>
+                <blockquote>“{request.requestText}”</blockquote>
                 <div className={styles.facts}>
-                  <div><span>{c.person}</span><strong>{person?.display_name || person?.email || "WiseShare member"}</strong></div>
-                  <div><span><Languages aria-hidden="true" />Language</span><strong>{request.preferred_language}</strong></div>
-                  <div><span><MapPin aria-hidden="true" />Location</span><strong>{request.location || request.service_mode}</strong></div>
+                  <div><span>{c.person}</span><strong>{person?.displayName || person?.email || "WiseShare member"}</strong></div>
+                  <div><span><Languages aria-hidden="true" />Language</span><strong>{request.preferredLanguage}</strong></div>
+                  <div><span><MapPin aria-hidden="true" />Location</span><strong>{request.location || request.serviceMode}</strong></div>
                   <div><span><CalendarClock aria-hidden="true" />{c.availability}</span><strong>{request.availability}</strong></div>
                 </div>
 
                 <div className={styles.assessmentGrid}>
-                  <div><span>{c.assessment}</span><p>{request.assessment_summary}</p><small>{request.required_skills.join(" · ") || request.assistance_type}</small></div>
-                  <div className={request.safety_level !== "volunteer_eligible" ? styles.safetyHigh : ""}><span><ShieldAlert aria-hidden="true" />{c.safety}</span><p>{labels[request.safety_level] ?? request.safety_level} → {labels[request.recommended_tier] ?? request.recommended_tier}</p><small>{request.safety_reason}</small></div>
-                  <div><span><UserRoundCheck aria-hidden="true" />{c.matched}</span><p>{provider ? `${provider.display_name} · ${request.match_score}%` : "Waiting for staff review"}</p><small>{provider ? labels[provider.provider_type] : labels[request.recommended_tier]}</small></div>
+                  <div><span>{c.assessment}</span><p>{request.assessmentSummary}</p><small>{request.requiredSkills.join(" · ") || request.assistanceType}</small></div>
+                  <div className={request.safetyLevel !== "volunteer_eligible" ? styles.safetyHigh : ""}><span><ShieldAlert aria-hidden="true" />{c.safety}</span><p>{labels[request.safetyLevel] ?? request.safetyLevel} → {labels[request.recommendedTier] ?? request.recommendedTier}</p><small>{request.safetyReason}</small></div>
+                  <div><span><UserRoundCheck aria-hidden="true" />{c.matched}</span><p>{provider ? `${provider.displayName} · ${request.matchScore}%` : "Waiting for staff review"}</p><small>{provider ? labels[provider.providerType] : labels[request.recommendedTier]}</small></div>
                 </div>
 
                 <div className={styles.actions}>
@@ -179,9 +153,9 @@ export default async function SupportAdminPage() {
               return (
                 <li key={provider.id}>
                   <div className={styles.rosterPerson}>
-                    <strong>{provider.display_name}</strong>
+                    <strong>{provider.displayName}</strong>
                     <small>
-                      {[labels[provider.provider_type] ?? provider.provider_type,
+                      {[labels[provider.providerType] ?? provider.providerType,
                         provider.school,
                         provider.grade && `Grade ${provider.grade}`,
                         provider.locations[0]]

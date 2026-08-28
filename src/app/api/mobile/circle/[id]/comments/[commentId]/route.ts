@@ -5,6 +5,10 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/mobile/auth";
+import { eq } from "drizzle-orm";
+import { conversationOwner } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { conversationComments } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -20,38 +24,32 @@ export async function DELETE(
 ) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
   const { commentId } = await params;
 
-  // RLS: the select policies mean a comment only comes back if the caller is
-  // allowed to see it in the first place.
-  const { data: comment } = await supabase
-    .from("conversation_comments")
-    .select("id, session_id, author_id")
-    .eq("id", commentId)
-    .maybeSingle();
+  const [comment] = await db
+    .select({
+      id: conversationComments.id,
+      sessionId: conversationComments.sessionId,
+      authorId: conversationComments.authorId,
+    })
+    .from(conversationComments)
+    .where(eq(conversationComments.id, commentId))
+    .limit(1);
   if (!comment) return notFound("That note is already gone.");
 
-  let allowed = comment.author_id === user.id;
-  if (!allowed) {
-    const { data: owned } = await supabase
-      .from("sessions")
-      .select("id, guests!inner(user_id)")
-      .eq("id", comment.session_id)
-      .eq("guests.user_id", user.id)
-      .maybeSingle();
-    allowed = Boolean(owned);
-  }
+  const allowed =
+    comment.authorId === user.id ||
+    (await conversationOwner(comment.sessionId)) === user.id;
   if (!allowed) {
     return NextResponse.json({ error: "Not yours to remove." }, { status: 403 });
   }
 
-  const { error } = await admin
-    .from("conversation_comments")
-    .delete()
-    .eq("id", commentId);
-
-  if (error) {
+  try {
+    await db
+      .delete(conversationComments)
+      .where(eq(conversationComments.id, commentId));
+  } catch (error) {
     console.error("Could not delete the comment:", error);
     return serverError("Could not remove that note.");
   }

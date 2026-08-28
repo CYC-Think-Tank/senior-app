@@ -6,6 +6,10 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/mobile/auth";
+import { and, eq } from "drizzle-orm";
+import { ownsReadySession } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { transcriptTurns } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -21,33 +25,35 @@ export async function PATCH(
 ) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
   const { id, turnId } = await params;
 
   const body = await readJson(request);
   const excluded = body.excluded === true;
 
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", id)
-    .eq("status", "ready")
-    .eq("guests.user_id", user.id)
-    .maybeSingle();
-  if (!session) return notFound("This line could not be edited.");
+  if (!(await ownsReadySession(user.id, id))) {
+    return notFound("This line could not be edited.");
+  }
 
-  const { data: turn, error } = await admin
-    .from("transcript_turns")
-    .update({ excluded })
-    .eq("id", turnId)
-    .eq("session_id", id)
-    .select("id")
-    .maybeSingle();
-
-  if (error || !turn) {
+  let turn;
+  try {
+    // Filtered by session as well as turn id, so a turn id from someone
+    // else's conversation matches nothing even though the caller owns this one.
+    [turn] = await db
+      .update(transcriptTurns)
+      .set({ excluded })
+      .where(
+        and(
+          eq(transcriptTurns.id, turnId),
+          eq(transcriptTurns.sessionId, id),
+        ),
+      )
+      .returning({ id: transcriptTurns.id });
+  } catch (error) {
     console.error("Could not edit the transcript line:", error);
     return serverError("Could not edit that line.");
   }
+  if (!turn) return notFound("This line could not be edited.");
 
   return NextResponse.json({ ok: true });
 }

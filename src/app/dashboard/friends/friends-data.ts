@@ -1,8 +1,11 @@
 import { cache } from "react";
+import { and, count, desc, eq, inArray, ne, or } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { friendships, profiles } from "@/lib/db/schema";
 import { otherParticipant, requestDirection } from "@/lib/friends";
 import { personName } from "@/lib/names";
-import type { Friendship, Profile } from "@/lib/types";
+import type { Friendship } from "@/lib/types";
 
 export type CircleFriend = {
   userId: string;
@@ -28,36 +31,40 @@ export type MyCircle = {
 /**
  * The caller's whole friend graph, in the three shapes the page renders.
  *
- * Both queries run through the RLS client: "participants read their
- * friendships" scopes the first to rows this account is in, and "read
- * connected profiles" (migration 014) is what makes the second one legal.
+ * The `userLow`/`userHigh` filter is the "participants read their friendships"
+ * policy, written out: a row is the caller's business only if they are one of
+ * the two accounts in it. Everyone named below is therefore someone this
+ * account is already connected to, which is exactly what made reading their
+ * profiles legal under "read connected profiles" too.
  */
 export const getMyCircle = cache(async (): Promise<MyCircle> => {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  const { data } = await supabase
-    .from("friendships")
-    .select("id, user_low, user_high, requester_id, status, created_at, responded_at")
-    .order("created_at", { ascending: false });
+  const rows = (await db
+    .select()
+    .from(friendships)
+    .where(
+      or(eq(friendships.userLow, user.id), eq(friendships.userHigh, user.id)),
+    )
+    .orderBy(desc(friendships.createdAt))) as Friendship[];
 
-  const rows = (data ?? []) as Friendship[];
   if (rows.length === 0) return { friends: [], incoming: [], outgoing: [] };
 
-  // Two plain queries rather than a PostgREST embed: `friendships` has three
-  // foreign keys into `profiles`, so an embed would need disambiguating hints
-  // for no gain at this size.
+  // Two plain queries rather than a join: `friendships` has three foreign keys
+  // into `profiles`, so joining would need disambiguating for no gain here.
   const otherIds = rows.map((row) => otherParticipant(row, user.id));
-  const { data: profileRows } = await supabase
-    .from("profiles")
-    .select("id, display_name, email")
-    .in("id", otherIds);
+  const profileRows = await db
+    .select({
+      id: profiles.id,
+      displayName: profiles.displayName,
+      email: profiles.email,
+    })
+    .from(profiles)
+    .where(inArray(profiles.id, otherIds));
 
   const names = new Map<string, string>();
-  for (const profile of (profileRows ?? []) as Pick<
-    Profile,
-    "id" | "display_name" | "email"
-  >[]) {
-    names.set(profile.id, personName(profile.display_name, profile.email));
+  for (const profile of profileRows) {
+    names.set(profile.id, personName(profile.displayName, profile.email));
   }
 
   const friends: CircleFriend[] = [];
@@ -72,11 +79,11 @@ export const getMyCircle = cache(async (): Promise<MyCircle> => {
     if (!name) continue;
 
     if (row.status === "accepted") {
-      friends.push({ userId, name, since: row.responded_at ?? row.created_at });
+      friends.push({ userId, name, since: row.respondedAt ?? row.createdAt });
     } else if (requestDirection(row, user.id) === "incoming") {
-      incoming.push({ id: row.id, userId, name, sentAt: row.created_at });
+      incoming.push({ id: row.id, userId, name, sentAt: row.createdAt });
     } else {
-      outgoing.push({ id: row.id, userId, name, sentAt: row.created_at });
+      outgoing.push({ id: row.id, userId, name, sentAt: row.createdAt });
     }
   }
 
@@ -89,11 +96,18 @@ export const getMyCircle = cache(async (): Promise<MyCircle> => {
  * sidebar badge, so it is a count query rather than a second full read.
  */
 export const getPendingRequestCount = cache(async (): Promise<number> => {
-  const { supabase, user } = await requireUser();
-  const { count } = await supabase
-    .from("friendships")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending")
-    .neq("requester_id", user.id);
-  return count ?? 0;
+  const { user } = await requireUser();
+  const [row] = await db
+    .select({ value: count() })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.status, "pending"),
+        ne(friendships.requesterId, user.id),
+        // Scoped to rows the caller is actually in — without this the badge
+        // would count every pending request in the database.
+        or(eq(friendships.userLow, user.id), eq(friendships.userHigh, user.id)),
+      ),
+    );
+  return row?.value ?? 0;
 });

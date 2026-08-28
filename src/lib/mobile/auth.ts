@@ -1,55 +1,33 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { auth } from "@/lib/auth/config";
 
 /**
  * Authorisation for the native client.
  *
  * The web front end reaches its data through server components and server
  * actions, which are cookie-bound and not callable from outside a browser. The
- * iOS app holds a Supabase session of its own, so these routes take the access
- * token as a bearer instead — and then behave exactly like the server actions
- * do: read through the caller's RLS-scoped client to authorise, and only then
- * let the service role write.
+ * iOS app holds a session of its own and sends its token as a bearer instead;
+ * Better Auth's bearer plugin accepts it on the same `getSession` call the web
+ * side uses, so both platforms verify a session the same way.
  *
- * That shape is not incidental. Every social table in this schema is read-only
- * under RLS (see the note at the top of migration 013), so "authorise with the
- * user's client, act with the admin client" is the only correct way to write,
- * on either platform.
+ * What used to follow this was "read through the caller's RLS-scoped client to
+ * authorise, then let the service role write". There is no RLS-scoped client
+ * any more, so the authorising half is now an explicit call into
+ * src/lib/authz.ts — the same rules, written down instead of implied.
  */
 export type MobileUser = {
-  /** RLS-scoped: sees exactly what this account may see. */
-  supabase: SupabaseClient;
-  /** Service role. Only ever used after `supabase` has authorised the action. */
-  admin: SupabaseClient;
   user: { id: string; email: string };
 };
 
 export async function requireMobileUser(
   request: NextRequest
 ): Promise<MobileUser | null> {
-  const header = request.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (!token) return null;
-
-  // Verified against the auth server rather than trusted from the wire.
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) return null;
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    }
-  );
+  // Verified against the session table rather than trusted from the wire.
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session?.user) return null;
 
   return {
-    supabase,
-    admin,
-    user: { id: data.user.id, email: data.user.email ?? "" },
+    user: { id: session.user.id, email: session.user.email ?? "" },
   };
 }
 
@@ -63,6 +41,10 @@ export function badRequest(message: string) {
 
 export function notFound(message = "Not found.") {
   return NextResponse.json({ error: message }, { status: 404 });
+}
+
+export function forbidden(message = "You cannot do that.") {
+  return NextResponse.json({ error: message }, { status: 403 });
 }
 
 export function serverError(message = "Something went wrong.") {

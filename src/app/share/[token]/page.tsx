@@ -7,7 +7,9 @@ import {
   LockKeyhole,
   Sprout,
 } from "lucide-react";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions } from "@/lib/db/schema";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { editedAudioDurationMs } from "@/lib/audio/cuts";
 import { ensureMoral } from "@/lib/moral/generate";
@@ -22,7 +24,7 @@ import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { getExcludedAudioCuts } from "@/lib/transcript/audio-cuts";
-import type { Guest, InterviewSession } from "@/lib/types";
+import type { InterviewSession } from "@/lib/types";
 import styles from "./share-page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -91,32 +93,32 @@ export default async function SharedConversationPage({
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const pageCopy = copy[locale];
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("sessions")
-    .select("*, guests(name)")
-    .eq("share_token", token)
-    .eq("status", "ready")
-    .single();
-  if (!session) notFound();
+  // The share token in the URL is the credential, and only a finished
+  // conversation has one — an unfinished recording is not shareable at all.
+  const [row] = await db
+    .select({ session: sessions, guestName: guests.name })
+    .from(sessions)
+    .innerJoin(guests, eq(guests.id, sessions.guestId))
+    .where(and(eq(sessions.shareToken, token), eq(sessions.status, "ready")))
+    .limit(1);
+  if (!row) notFound();
 
-  const s = session as unknown as InterviewSession & {
-    guests: Pick<Guest, "name">;
-  };
+  const s = row.session as InterviewSession;
+  const guestName = row.guestName;
 
-  const audioUrl = s.raw_audio_path
-    ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
+  const audioUrl = s.rawAudioPath
+    ? createAudioUrl(RAW_BUCKET, s.rawAudioPath, 60 * 60 * 6)
     : null;
   const audioCuts = (await getExcludedAudioCuts([s.id])).get(s.id) ?? [];
-  const editedDuration = editedAudioDurationMs(s.duration_ms, audioCuts);
+  const editedDuration = editedAudioDurationMs(s.durationMs, audioCuts);
 
   // Written on the first view that needs it, then read from the row forever
   // after. Null for a conversation too short — or too unreadable — to have a
   // point, and the section simply does not appear.
-  const moral = await ensureMoral(admin, s, s.guests.name);
+  const moral = await ensureMoral(s, guestName);
 
-  const title = s.topic?.trim() || pageCopy.defaultTitle(s.guests.name);
-  const recordedDate = new Date(s.created_at).toLocaleDateString(locale, {
+  const title = s.topic?.trim() || pageCopy.defaultTitle(guestName);
+  const recordedDate = new Date(s.createdAt).toLocaleDateString(locale, {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -146,16 +148,16 @@ export default async function SharedConversationPage({
             <h1 className={styles.title} id="conversation-title">
               {title}
             </h1>
-            <p className={styles.intro}>{pageCopy.intro(s.guests.name)}</p>
+            <p className={styles.intro}>{pageCopy.intro(guestName)}</p>
 
             <div className={styles.details}>
               <div className={styles.storyteller}>
                 <span className={styles.avatar} aria-hidden="true">
-                  {s.guests.name.trim().charAt(0).toUpperCase()}
+                  {guestName.trim().charAt(0).toUpperCase()}
                 </span>
                 <span>
                   <small>{pageCopy.storyteller}</small>
-                  <strong>{s.guests.name}</strong>
+                  <strong>{guestName}</strong>
                 </span>
               </div>
               <div className={styles.detail}>
@@ -210,7 +212,7 @@ export default async function SharedConversationPage({
             {audioUrl ? (
               <AudioPlayer
                 src={audioUrl}
-                durationMs={s.duration_ms}
+                durationMs={s.durationMs}
                 cuts={audioCuts}
               />
             ) : (

@@ -7,8 +7,10 @@ import {
   conversationLanguageDraftCookieName,
   localeFromValue,
 } from "@/lib/i18n";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { getSessionUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { guests, profiles, sessions } from "@/lib/db/schema";
 import { AnonymousLanguageStep } from "./anonymous-language-step";
 import { SignedInStartForm } from "./signed-in-start-form";
 
@@ -17,29 +19,26 @@ export default async function StartInterviewPage() {
   const initialLanguageChoice = localeFromValue(
     cookieStore.get(conversationLanguageDraftCookieName)?.value,
   );
-  const supabase = await createSupabaseServerClient();
-  const { data: claims } = await supabase.auth.getClaims();
-  const userId = claims?.claims.sub;
+  const user = await getSessionUser();
 
-  if (userId) {
-    const admin = createSupabaseAdminClient();
-    const [{ data: existingSession }, { data: profile }] = await Promise.all([
-      admin
-        .from("sessions")
-        .select("id, guests!inner(user_id)")
-        .eq("guests.user_id", userId)
-        .limit(1)
-        .maybeSingle(),
-      admin
-        .from("profiles")
-        .select("conversation_language_chosen_at")
-        .eq("id", userId)
-        .maybeSingle(),
+  if (user) {
+    const [existingSession, profileRows] = await Promise.all([
+      db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .innerJoin(guests, eq(guests.id, sessions.guestId))
+        .where(eq(guests.userId, user.id))
+        .limit(1),
+      db
+        .select({ chosenAt: profiles.conversationLanguageChosenAt })
+        .from(profiles)
+        .where(eq(profiles.id, user.id))
+        .limit(1),
     ]);
 
     // Returning signed-in storytellers start from their dashboard, where the
     // regular one-click flow is available. This page is their first-run setup.
-    if (existingSession || profile?.conversation_language_chosen_at) {
+    if (existingSession.length > 0 || profileRows[0]?.chosenAt) {
       redirect("/dashboard");
     }
 

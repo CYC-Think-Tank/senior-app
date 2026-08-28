@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   HEADER_LENGTH,
   cipherRangeFor,
@@ -9,7 +8,7 @@ import {
   verifyAudioToken,
   type AudioHeader,
 } from "@/lib/audio/encryption";
-import { fetchObjectRange } from "@/lib/audio/object-range";
+import { download, readRange } from "@/lib/storage";
 
 // Streaming keeps memory flat, but the clock covers time spent sending, so a
 // slow connection on a long range still needs room. 300s is Hobby's ceiling.
@@ -69,7 +68,7 @@ export async function GET(
     MIME_BY_EXT[grant.path.split(".").pop() ?? ""] ?? "application/octet-stream";
 
   try {
-    const head = await fetchObjectRange(
+    const head = await readRange(
       grant.bucket,
       grant.path,
       0,
@@ -182,7 +181,7 @@ async function serveSegmented(
             index * header.blockSize,
             windowLast * header.blockSize
           );
-          const cipher = await fetchObjectRange(
+          const cipher = await readRange(
             grant.bucket,
             grant.path,
             span.from,
@@ -232,15 +231,12 @@ async function serveWholeObject(
   grant: { bucket: string; path: string },
   contentType: string
 ) {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.storage
-    .from(grant.bucket)
-    .download(grant.path);
-  if (error || !data) {
+  const stored = await download(grant.bucket, grant.path);
+  if (!stored) {
     return NextResponse.json({ error: "Audio not found." }, { status: 404 });
   }
 
-  const audio = decryptAudio(Buffer.from(await data.arrayBuffer()));
+  const audio = decryptAudio(stored);
   const range = parseRange(request, audio.length);
   if (range === "unsatisfiable") {
     return new NextResponse(null, {

@@ -6,6 +6,9 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/mobile/auth";
+import { and, count, eq, ne, or } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { friendships, guests, profiles } from "@/lib/db/schema";
 import { isRealtimeVoice } from "@/lib/constants";
 import { interviewLanguage, normalizeLocale } from "@/lib/i18n";
 import { personName } from "@/lib/names";
@@ -16,24 +19,31 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, user } = auth;
+  const { user } = auth;
 
-  const [{ data: profile }, { data: guest }, { count }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, email, locale, role")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("guests")
-      .select("bio, voice, language")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("friendships")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending")
-      .neq("requester_id", user.id),
+  // Every read is pinned to the verified session id, so this only ever
+  // describes the caller's own account.
+  const [[profile], [guest], pendingRequests] = await Promise.all([
+    db
+      .select({
+        displayName: profiles.displayName,
+        email: profiles.email,
+        locale: profiles.locale,
+        role: profiles.role,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
+    db
+      .select({
+        bio: guests.bio,
+        voice: guests.voice,
+        language: guests.language,
+      })
+      .from(guests)
+      .where(eq(guests.userId, user.id))
+      .limit(1),
+    countPendingRequests(user.id),
   ]);
 
   const email = profile?.email ?? user.email;
@@ -41,14 +51,14 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     userId: user.id,
     email,
-    displayName: profile?.display_name ?? null,
-    name: personName(profile?.display_name, email),
+    displayName: profile?.displayName ?? null,
+    name: personName(profile?.displayName, email),
     locale: normalizeLocale(profile?.locale),
     role: profile?.role ?? "family",
     bio: guest?.bio ?? null,
     voice: guest?.voice ?? null,
     language: guest?.language ?? null,
-    pendingRequests: count ?? 0,
+    pendingRequests,
   });
 }
 
@@ -56,13 +66,13 @@ export async function GET(request: NextRequest) {
  * Saves the name, bio, voice and language. Port of `updateMyProfile()` plus
  * the locale write the web app does from its language switcher.
  *
- * Both rows go through the service role — family accounts have read-only
- * policies on `profiles` and `guests` — pinned to the verified user id.
+ * Every write is pinned to the verified session id, so this can only ever
+ * change the caller's own profile and storyteller row.
  */
 export async function PATCH(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const displayName = readString(body, "displayName", 80) || null;
@@ -73,17 +83,18 @@ export async function PATCH(request: NextRequest) {
   const voice = isRealtimeVoice(rawVoice) ? rawVoice : null;
   const locale = normalizeLocale(readString(body, "locale", 16));
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("email")
-    .eq("id", user.id)
-    .single();
+  const [profile] = await db
+    .select({ email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, user.id))
+    .limit(1);
 
-  const { error } = await admin
-    .from("profiles")
-    .update({ display_name: displayName, locale })
-    .eq("id", user.id);
-  if (error) {
+  try {
+    await db
+      .update(profiles)
+      .set({ displayName, locale })
+      .where(eq(profiles.id, user.id));
+  } catch (error) {
     console.error("Could not save the profile:", error);
     return serverError("Could not save your settings.");
   }
@@ -95,35 +106,33 @@ export async function PATCH(request: NextRequest) {
     voice,
   };
 
-  const { data: guest } = await admin
-    .from("guests")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  try {
+    const [guest] = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(eq(guests.userId, user.id))
+      .limit(1);
 
-  // No guest row yet means they have not recorded anything. Creating it now
-  // means the bio is already waiting for the host when they do.
-  const { error: guestError } = guest
-    ? await admin.from("guests").update(guestFields).eq("id", guest.id)
-    : await admin.from("guests").insert({
+    // No guest row yet means they have not recorded anything. Creating it now
+    // means the bio is already waiting for the host when they do.
+    if (guest) {
+      await db.update(guests).set(guestFields).where(eq(guests.id, guest.id));
+    } else {
+      await db.insert(guests).values({
         ...guestFields,
-        user_id: user.id,
+        userId: user.id,
         origin: "self_serve",
         language: interviewLanguage(locale),
       });
-
-  if (guestError) {
+    }
+  } catch (guestError) {
     console.error("Could not save the storyteller details:", guestError);
     return serverError("Could not save your settings.");
   }
 
   // Carried on the response so the client can replace its whole profile with
   // this one answer, badge included, instead of following up with a GET.
-  const { count } = await supabase
-    .from("friendships")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending")
-    .neq("requester_id", user.id);
+  const pendingRequests = await countPendingRequests(user.id);
 
   return NextResponse.json({
     userId: user.id,
@@ -135,6 +144,30 @@ export async function PATCH(request: NextRequest) {
     bio: about,
     voice,
     language: interviewLanguage(locale),
-    pendingRequests: count ?? 0,
+    pendingRequests,
   });
+}
+
+/**
+ * How many people are waiting on an answer from this account.
+ *
+ * Scoped to rows the caller is actually in — without that this would count
+ * every pending request in the database, which is what the RLS policy used to
+ * prevent implicitly.
+ */
+async function countPendingRequests(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.status, "pending"),
+        ne(friendships.requesterId, userId),
+        or(
+          eq(friendships.userLow, userId),
+          eq(friendships.userHigh, userId),
+        ),
+      ),
+    );
+  return row?.value ?? 0;
 }

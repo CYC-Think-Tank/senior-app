@@ -3,10 +3,10 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptAudio } from "@/lib/audio/encryption";
 import { RAW_BUCKET } from "@/lib/constants";
 import { audioExtension } from "@/lib/conversation-export";
+import { download } from "@/lib/storage";
 
 /** Matches the bitrate the app records at, so the copy adds no more loss. */
 const MP3_BITRATE = "128k";
@@ -32,22 +32,15 @@ async function runFfmpeg(args: string[]): Promise<string> {
 /**
  * Fetches a stored recording as plain, playable bytes.
  *
- * Objects in the raw bucket are encrypted at rest, so the stored bytes are
+ * Objects in the raw container are encrypted at rest, so the stored bytes are
  * ciphertext and have to be decrypted here rather than handed out as-is.
  */
-export async function conversationAudio(
-  admin: SupabaseClient,
-  storagePath: string,
-): Promise<Buffer> {
-  const { data, error } = await admin.storage
-    .from(RAW_BUCKET)
-    .download(storagePath);
-  if (error || !data) {
-    throw new Error(
-      `Could not download the recording: ${error?.message ?? "missing object"}`,
-    );
+export async function conversationAudio(storagePath: string): Promise<Buffer> {
+  const stored = await download(RAW_BUCKET, storagePath);
+  if (!stored) {
+    throw new Error(`Could not download the recording: ${storagePath} is missing`);
   }
-  return decryptAudio(Buffer.from(await data.arrayBuffer()));
+  return decryptAudio(stored);
 }
 
 /**
@@ -59,11 +52,8 @@ export async function conversationAudio(
  * because an M4A's moov atom can sit at the end of the file, which a
  * non-seekable stdin cannot reach.
  */
-export async function conversationMp3(
-  admin: SupabaseClient,
-  storagePath: string,
-): Promise<Buffer> {
-  const plain = await conversationAudio(admin, storagePath);
+export async function conversationMp3(storagePath: string): Promise<Buffer> {
+  const plain = await conversationAudio(storagePath);
   const workDir = await mkdtemp(path.join(tmpdir(), "mp3-"));
 
   try {

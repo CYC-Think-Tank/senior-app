@@ -4,8 +4,19 @@ import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { canReadOwnSession, ownsReadySession } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  conversationVideos,
+  guests,
+  profiles,
+  sessions,
+  transcriptTurns,
+} from "@/lib/db/schema";
+import { removeVideoObjects } from "@/lib/memoir/workflow";
+import { remove } from "@/lib/storage";
 import {
   conversationLanguageChosenCookieName,
   conversationLanguageDraftCookieName,
@@ -15,11 +26,7 @@ import {
 } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { personName } from "@/lib/names";
-import {
-  isRealtimeVoice,
-  RAW_BUCKET,
-  STORY_VIDEOS_BUCKET,
-} from "@/lib/constants";
+import { isRealtimeVoice, RAW_BUCKET } from "@/lib/constants";
 
 export type ShareLinkResult =
   | { ok: true; token: string }
@@ -34,29 +41,37 @@ export type ShareLinkResult =
 export async function generateShareLink(
   sessionId: string
 ): Promise<ShareLinkResult> {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  // RLS: this returns a row only if the user may see this ready conversation.
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, share_token, status, guests!inner(user_id)")
-    .eq("id", sessionId)
-    .eq("status", "ready")
-    .eq("guests.user_id", user.id)
-    .single();
+  if (!(await ownsReadySession(user.id, sessionId))) return { ok: false };
 
+  const [session] = await db
+    .select({ shareToken: sessions.shareToken })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
   if (!session) return { ok: false };
-  if (session.share_token) return { ok: true, token: session.share_token };
+  if (session.shareToken) return { ok: true, token: session.shareToken };
 
   const token = randomBytes(24).toString("hex");
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("sessions")
-    .update({ share_token: token })
-    .eq("id", sessionId)
-    .is("share_token", null);
-
-  if (error) {
+  try {
+    // Only fills an empty column, so two tabs racing cannot replace a link
+    // that has already been sent to somebody.
+    const [written] = await db
+      .update(sessions)
+      .set({ shareToken: token })
+      .where(and(eq(sessions.id, sessionId), isNull(sessions.shareToken)))
+      .returning({ shareToken: sessions.shareToken });
+    if (!written) {
+      const [current] = await db
+        .select({ shareToken: sessions.shareToken })
+        .from(sessions)
+        .where(eq(sessions.id, sessionId))
+        .limit(1);
+      if (!current?.shareToken) return { ok: false };
+      return { ok: true, token: current.shareToken };
+    }
+  } catch (error) {
     console.error("Could not create a conversation share link:", error);
     return { ok: false };
   }
@@ -78,15 +93,21 @@ export async function generateShareLink(
  * cannot walk in on a conversation already in progress.
  */
 export async function resumeConversation(sessionId: string) {
-  const { supabase } = await requireUser();
+  const { user } = await requireUser();
 
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("token")
-    .eq("id", sessionId)
-    .eq("status", "recording")
-    .single();
-  if (!session) {
+  // canReadOwnSession carries the abandonment window from the policy this
+  // replaces: a conversation still checkpointing is live, and this must not
+  // walk in on it. Only a stale one comes back.
+  if (!(await canReadOwnSession(user.id, sessionId))) {
+    throw new Error("This conversation can no longer be continued.");
+  }
+
+  const [session] = await db
+    .select({ token: sessions.token, status: sessions.status })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  if (!session || session.status !== "recording") {
     throw new Error("This conversation can no longer be continued.");
   }
 
@@ -99,27 +120,18 @@ export async function resumeConversation(sessionId: string) {
  * clears it, returning the conversation to numbering.
  */
 export async function renameConversation(sessionId: string, name: string) {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  // RLS: only returns a row the caller's family is allowed to see. Unfinished
-  // conversations are nameable too — they show up in the same list.
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", sessionId)
-    .in("status", ["ready", "recording"])
-    .eq("guests.user_id", user.id)
-    .single();
-  if (!session) return { ok: false as const };
+  // Unfinished conversations are nameable too — they show up in the same
+  // list — so this is the wider check, not the ready-only one.
+  if (!(await canReadOwnSession(user.id, sessionId))) {
+    return { ok: false as const };
+  }
 
   const title = name.trim().slice(0, 120) || null;
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("sessions")
-    .update({ title })
-    .eq("id", sessionId);
-
-  if (error) {
+  try {
+    await db.update(sessions).set({ title }).where(eq(sessions.id, sessionId));
+  } catch (error) {
     console.error("Could not rename the conversation:", error);
     return { ok: false as const };
   }
@@ -140,32 +152,33 @@ export async function setConversationTurnExcluded(
   turnId: string,
   excluded: boolean,
 ) {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  // Server Actions are public POST endpoints. Authorize the conversation
-  // through the caller's RLS client before the service role touches its turns.
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", sessionId)
-    .eq("status", "ready")
-    .eq("guests.user_id", user.id)
-    .single();
-  if (!session) return { ok: false as const };
+  // Server Actions are public POST endpoints, so this authorises the
+  // conversation explicitly before touching its turns.
+  if (!(await ownsReadySession(user.id, sessionId))) {
+    return { ok: false as const };
+  }
 
-  const admin = createSupabaseAdminClient();
-  const { data: turn, error } = await admin
-    .from("transcript_turns")
-    .update({ excluded })
-    .eq("id", turnId)
-    .eq("session_id", sessionId)
-    .select("id")
-    .maybeSingle();
-
-  if (error || !turn) {
+  let turn;
+  try {
+    // Filtered by session as well as turn id, so a turn id from someone
+    // else's conversation matches nothing even though the caller owns this one.
+    [turn] = await db
+      .update(transcriptTurns)
+      .set({ excluded })
+      .where(
+        and(
+          eq(transcriptTurns.id, turnId),
+          eq(transcriptTurns.sessionId, sessionId),
+        ),
+      )
+      .returning({ id: transcriptTurns.id });
+  } catch (error) {
     console.error("Could not edit the transcript line:", error);
     return { ok: false as const };
   }
+  if (!turn) return { ok: false as const };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/conversations");
@@ -176,50 +189,37 @@ export async function setConversationTurnExcluded(
 
 /** Permanently removes a conversation after confirming the caller can read it. */
 export async function deleteConversation(sessionId: string) {
-  const { supabase, user } = await requireUser();
-  const { data: visibleSession } = await supabase
-    .from("sessions")
-    .select("id, guests!inner(user_id)")
-    .eq("id", sessionId)
-    .eq("status", "ready")
-    .eq("guests.user_id", user.id)
-    .single();
-  if (!visibleSession) return { ok: false as const };
+  const { user } = await requireUser();
+  if (!(await ownsReadySession(user.id, sessionId))) {
+    return { ok: false as const };
+  }
 
-  const admin = createSupabaseAdminClient();
-  const [{ data: session }, { data: video }] = await Promise.all([
-    admin
-      .from("sessions")
-      .select("raw_audio_path")
-      .eq("id", sessionId)
-      .single(),
-    admin
-      .from("conversation_videos")
-      .select("id")
-      .eq("session_id", sessionId)
-      .maybeSingle(),
+  const [[session], [video]] = await Promise.all([
+    db
+      .select({ rawAudioPath: sessions.rawAudioPath })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1),
+    db
+      .select({ id: conversationVideos.id })
+      .from(conversationVideos)
+      .where(eq(conversationVideos.sessionId, sessionId))
+      .limit(1),
   ]);
 
-  if (session?.raw_audio_path) {
-    await admin.storage.from(RAW_BUCKET).remove([session.raw_audio_path]);
+  // Stored objects first: the row is what points at them, so deleting it
+  // first would strand the audio with nothing left to find it by.
+  if (session?.rawAudioPath) {
+    await remove(RAW_BUCKET, [session.rawAudioPath]);
   }
   if (video?.id) {
-    const prefix = `${sessionId}/${video.id}`;
-    const [{ data: objects }, { data: sceneObjects }] = await Promise.all([
-      admin.storage.from(STORY_VIDEOS_BUCKET).list(prefix),
-      admin.storage.from(STORY_VIDEOS_BUCKET).list(`${prefix}/scenes`),
-    ]);
-    const paths = [
-      ...(objects ?? []).filter((object) => object.id).map((object) => `${prefix}/${object.name}`),
-      ...(sceneObjects ?? []).filter((object) => object.id).map((object) => `${prefix}/scenes/${object.name}`),
-    ];
-    if (paths.length) {
-      await admin.storage.from(STORY_VIDEOS_BUCKET).remove(paths);
-    }
+    await removeVideoObjects(sessionId, video.id);
   }
 
-  const { error } = await admin.from("sessions").delete().eq("id", sessionId);
-  if (error) {
+  try {
+    // Cascades the transcript, circle share, comments, and video rows.
+    await db.delete(sessions).where(eq(sessions.id, sessionId));
+  } catch (error) {
     console.error("Could not delete the conversation:", error);
     return { ok: false as const };
   }
@@ -250,7 +250,6 @@ export async function updateMyProfile(
   voice: string,
 ) {
   const { user } = await requireUser();
-  const admin = createSupabaseAdminClient();
 
   const displayName = name.trim().slice(0, 80) || null;
   const about = bio.trim().slice(0, 1000) || null;
@@ -258,17 +257,20 @@ export async function updateMyProfile(
   // current default rather than freezing a bad value onto the row.
   const chosenVoice = isRealtimeVoice(voice) ? voice : null;
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("email")
-    .eq("id", user.id)
-    .single();
+  const [profile] = await db
+    .select({ email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, user.id))
+    .limit(1);
 
-  const { error } = await admin
-    .from("profiles")
-    .update({ display_name: displayName })
-    .eq("id", user.id);
-  if (error) {
+  try {
+    // Every write here is pinned to the verified session id, so this action
+    // can only ever save the caller's own name and storyteller details.
+    await db
+      .update(profiles)
+      .set({ displayName })
+      .where(eq(profiles.id, user.id));
+  } catch (error) {
     console.error("Could not save the profile:", error);
     return { ok: false as const };
   }
@@ -278,24 +280,27 @@ export async function updateMyProfile(
     bio: about,
     voice: chosenVoice,
   };
-  const { data: guest } = await admin
-    .from("guests")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
 
-  // No guest row yet means they have not recorded anything. Creating it now
-  // means the bio is already waiting for the host when they do.
-  const { error: guestError } = guest
-    ? await admin.from("guests").update(guestFields).eq("id", guest.id)
-    : await admin.from("guests").insert({
+  try {
+    const [guest] = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(eq(guests.userId, user.id))
+      .limit(1);
+
+    // No guest row yet means they have not recorded anything. Creating it now
+    // means the bio is already waiting for the host when they do.
+    if (guest) {
+      await db.update(guests).set(guestFields).where(eq(guests.id, guest.id));
+    } else {
+      await db.insert(guests).values({
         ...guestFields,
-        user_id: user.id,
+        userId: user.id,
         origin: "self_serve",
         language: interviewLanguage(await getPreferredLocale()),
       });
-
-  if (guestError) {
+    }
+  } catch (guestError) {
     console.error("Could not save the storyteller details:", guestError);
     return { ok: false as const };
   }
@@ -313,40 +318,39 @@ export async function updateMyProfile(
  */
 export async function startMyConversation(formData: FormData) {
   const { user } = await requireUser();
-  const admin = createSupabaseAdminClient();
   const submittedLocale = localeFromValue(
     String(formData.get("locale") ?? ""),
   );
   const locale = submittedLocale ?? await getPreferredLocale();
 
   if (submittedLocale) {
-    const { error: localeError } = await admin
-      .from("profiles")
-      .update({ locale: submittedLocale })
-      .eq("id", user.id);
-
-    if (localeError) {
+    try {
+      await db
+        .update(profiles)
+        .set({ locale: submittedLocale })
+        .where(eq(profiles.id, user.id));
+    } catch (localeError) {
       console.error("Could not save the conversation language:", localeError);
       throw new Error("Could not start the conversation.");
     }
   }
 
-  const [{ data: existing }, { data: profile }] = await Promise.all([
-    admin
-      .from("guests")
-      .select("id, name, language")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    admin
-      .from("profiles")
-      .select("display_name, email")
-      .eq("id", user.id)
-      .single(),
+  const [[existing], [profile]] = await Promise.all([
+    db
+      .select({ id: guests.id, name: guests.name, language: guests.language })
+      .from(guests)
+      .where(eq(guests.userId, user.id))
+      .limit(1),
+    db
+      .select({ displayName: profiles.displayName, email: profiles.email })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1),
   ]);
 
   let guestId: string;
   const email = profile?.email ?? user.email ?? "";
-  const currentName = personName(profile?.display_name, email);
+  const currentName = personName(profile?.displayName, email);
   const currentLanguage = interviewLanguage(locale);
 
   if (existing) {
@@ -355,55 +359,62 @@ export async function startMyConversation(formData: FormData) {
       existing.name !== currentName ||
       existing.language !== currentLanguage
     ) {
-      const { error: guestError } = await admin
-        .from("guests")
-        .update({ name: currentName, language: currentLanguage })
-        .eq("id", guestId);
-
-      if (guestError) {
+      try {
+        await db
+          .update(guests)
+          .set({ name: currentName, language: currentLanguage })
+          .where(eq(guests.id, guestId));
+      } catch (guestError) {
         console.error("Could not update the self guest's name:", guestError);
         throw new Error("Could not start the conversation.");
       }
     }
   } else {
-    // The user_id is what makes the finished recording visible on their
-    // dashboard; see the "users read their own sessions" policy.
-    const { data: guest, error: guestError } = await admin
-      .from("guests")
-      .insert({
-        user_id: user.id,
-        name: currentName,
-        language: currentLanguage,
-        origin: "self_serve",
-      })
-      .select("id")
-      .single();
-
-    if (guestError || !guest) {
+    try {
+      // The userId is what makes the finished recording reachable from their
+      // dashboard; every own-conversation check joins through it.
+      const [guest] = await db
+        .insert(guests)
+        .values({
+          userId: user.id,
+          name: currentName,
+          language: currentLanguage,
+          origin: "self_serve",
+        })
+        .returning({ id: guests.id });
+      if (!guest) throw new Error("No guest row was created.");
+      guestId = guest.id;
+    } catch (guestError) {
       console.error("Could not create a self guest:", guestError);
       throw new Error("Could not start the conversation.");
     }
-    guestId = guest.id;
   }
 
-  const { data: session, error: sessionError } = await admin
-    .from("sessions")
-    .insert({ guest_id: guestId })
-    .select("token")
-    .single();
-
-  if (sessionError || !session) {
+  let session;
+  try {
+    [session] = await db
+      .insert(sessions)
+      .values({ guestId })
+      .returning({ token: sessions.token });
+  } catch (sessionError) {
     console.error("Could not create a self conversation:", sessionError);
     throw new Error("Could not start the conversation.");
   }
+  if (!session) throw new Error("Could not start the conversation.");
 
-  const { error: firstLanguageError } = await admin
-    .from("profiles")
-    .update({ conversation_language_chosen_at: new Date().toISOString() })
-    .eq("id", user.id)
-    .is("conversation_language_chosen_at", null);
-
-  if (firstLanguageError) {
+  try {
+    // Only ever fills the column the first time, so the recorded date of
+    // their first conversation is not overwritten by later ones.
+    await db
+      .update(profiles)
+      .set({ conversationLanguageChosenAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(profiles.id, user.id),
+          isNull(profiles.conversationLanguageChosenAt),
+        ),
+      );
+  } catch (firstLanguageError) {
     console.error(
       "Could not mark the first conversation language as chosen:",
       firstLanguageError,

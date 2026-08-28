@@ -15,7 +15,7 @@ export function personName(
 type NameableSession = {
   id: string;
   title: string | null;
-  created_at: string;
+  createdAt: string;
 };
 
 /**
@@ -31,7 +31,7 @@ export function conversationNames(
   let unnamed = 0;
 
   for (const session of [...sessions].sort((a, b) =>
-    a.created_at.localeCompare(b.created_at)
+    a.createdAt.localeCompare(b.createdAt)
   )) {
     const title = session.title?.trim();
     names.set(session.id, title || unnamedLabel(++unnamed));

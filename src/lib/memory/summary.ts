@@ -1,7 +1,9 @@
 import "server-only";
 
 import OpenAI from "openai";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guestMemories, transcriptTurns } from "@/lib/db/schema";
 import { MEMORY_MODEL } from "@/lib/constants";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { decryptGuestMemory, encryptGuestMemory } from "./encryption";
@@ -15,13 +17,7 @@ export type GuestMemory = {
   safeIcebreakers: string[];
 };
 
-type MemoryRow = {
-  guest_id: string;
-  summary_ciphertext: string;
-  last_session_id: string | null;
-  last_session_created_at: string;
-  updated_at: string;
-};
+type MemoryRow = typeof guestMemories.$inferSelect;
 
 type TurnRow = {
   idx: number;
@@ -93,10 +89,10 @@ function decryptMemoryRow(row: MemoryRow | null): GuestMemory | null {
 
   try {
     return normalizeMemory(
-      JSON.parse(decryptGuestMemory(row.guest_id, row.summary_ciphertext))
+      JSON.parse(decryptGuestMemory(row.guestId, row.summaryCiphertext))
     );
   } catch (cause) {
-    console.error(`memory for guest ${row.guest_id} could not be read:`, cause);
+    console.error(`memory for guest ${row.guestId} could not be read:`, cause);
     return null;
   }
 }
@@ -174,23 +170,21 @@ async function requestUpdatedMemory({
  * a response body.
  */
 export async function getGuestMemorySummary(
-  admin: SupabaseClient,
   guestId: string
 ): Promise<string | null> {
-  const { data, error } = await admin
-    .from("guest_memories")
-    .select(
-      "guest_id, summary_ciphertext, last_session_id, last_session_created_at, updated_at"
-    )
-    .eq("guest_id", guestId)
-    .maybeSingle();
-
-  if (error) {
+  let row: MemoryRow | undefined;
+  try {
+    [row] = await db
+      .select()
+      .from(guestMemories)
+      .where(eq(guestMemories.guestId, guestId))
+      .limit(1);
+  } catch (error) {
     console.error(`memory lookup failed for guest ${guestId}:`, error);
     return null;
   }
 
-  const memory = decryptMemoryRow(data as MemoryRow | null);
+  const memory = decryptMemoryRow(row ?? null);
   if (!memory) return null;
 
   const sections: Array<[string, string[]]> = [
@@ -218,7 +212,6 @@ export async function getGuestMemorySummary(
  * finalizer for an older session simply leaves newer memory alone.
  */
 export async function updateGuestMemoryFromSession(
-  admin: SupabaseClient,
   session: {
     id: string;
     guestId: string;
@@ -227,43 +220,51 @@ export async function updateGuestMemoryFromSession(
   },
   attempt = 0
 ): Promise<boolean> {
-  const { data: rawRow, error: readError } = await admin
-    .from("guest_memories")
-    .select(
-      "guest_id, summary_ciphertext, last_session_id, last_session_created_at, updated_at"
-    )
-    .eq("guest_id", session.guestId)
-    .maybeSingle();
-
-  if (readError) {
-    console.error(`memory lookup failed for guest ${session.guestId}:`, readError);
+  let row: MemoryRow | undefined;
+  try {
+    [row] = await db
+      .select()
+      .from(guestMemories)
+      .where(eq(guestMemories.guestId, session.guestId))
+      .limit(1);
+  } catch (error) {
+    console.error(`memory lookup failed for guest ${session.guestId}:`, error);
     return false;
   }
 
-  const row = rawRow as MemoryRow | null;
-  if (row?.last_session_id === session.id) return true;
+  if (row?.lastSessionId === session.id) return true;
   if (
-    row?.last_session_created_at &&
-    new Date(row.last_session_created_at).getTime() >
+    row?.lastSessionCreatedAt &&
+    new Date(row.lastSessionCreatedAt).getTime() >
       new Date(session.createdAt).getTime()
   ) {
     return true;
   }
 
-  const { data: encryptedTurns, error: turnsError } = await admin
-    .from("transcript_turns")
-    .select("idx, speaker, text")
-    .eq("session_id", session.id)
-    .order("idx", { ascending: true });
+  let encryptedTurns: TurnRow[];
+  try {
+    encryptedTurns = await db
+      .select({
+        idx: transcriptTurns.idx,
+        speaker: transcriptTurns.speaker,
+        text: transcriptTurns.text,
+      })
+      .from(transcriptTurns)
+      .where(eq(transcriptTurns.sessionId, session.id))
+      .orderBy(asc(transcriptTurns.idx)) as TurnRow[];
+  } catch (error) {
+    console.error(`memory update could not read session ${session.id}:`, error);
+    return false;
+  }
 
-  if (turnsError || !encryptedTurns?.length) {
+  if (!encryptedTurns.length) {
     console.warn(`memory update skipped for session ${session.id}: no transcript`);
     return false;
   }
 
   let turns: TurnRow[];
   try {
-    turns = decryptTurns(session.id, encryptedTurns as TurnRow[]);
+    turns = decryptTurns(session.id, encryptedTurns);
   } catch (cause) {
     console.error(`memory update could not read session ${session.id}:`, cause);
     return false;
@@ -282,44 +283,66 @@ export async function updateGuestMemoryFromSession(
 
   const now = new Date().toISOString();
   const values = {
-    guest_id: session.guestId,
-    summary_ciphertext: encryptGuestMemory(
+    guestId: session.guestId,
+    summaryCiphertext: encryptGuestMemory(
       session.guestId,
       JSON.stringify(memory)
     ),
-    last_session_id: session.id,
-    last_session_created_at: session.createdAt,
-    updated_at: now,
+    lastSessionId: session.id,
+    lastSessionCreatedAt: session.createdAt,
+    updatedAt: now,
   };
 
   if (!row) {
-    const { error } = await admin.from("guest_memories").insert(values);
-    if (!error) return true;
-
-    // Another finalizer created the row after our read. Re-merge its result.
-    if (error.code === "23505" && attempt < 1) {
-      return updateGuestMemoryFromSession(admin, session, attempt + 1);
+    try {
+      await db.insert(guestMemories).values(values);
+      return true;
+    } catch (error) {
+      // Another finalizer created the row after our read. Re-merge its result.
+      if (isUniqueViolation(error) && attempt < 1) {
+        return updateGuestMemoryFromSession(session, attempt + 1);
+      }
+      console.error(`memory insert failed for guest ${session.guestId}:`, error);
+      return false;
     }
-    console.error(`memory insert failed for guest ${session.guestId}:`, error);
-    return false;
   }
 
-  const { data: saved, error } = await admin
-    .from("guest_memories")
-    .update(values)
-    .eq("guest_id", session.guestId)
-    .eq("updated_at", row.updated_at)
-    .select("guest_id")
-    .maybeSingle();
-
-  if (error) {
+  let saved: { guestId: string } | undefined;
+  try {
+    // Compare-and-swap on updated_at. The token is the full-precision string
+    // the type parser in src/lib/db preserves — parsed into a Date it would be
+    // truncated to milliseconds and would match nothing, which is a lost race
+    // and a lost update that look identical from here.
+    [saved] = await db
+      .update(guestMemories)
+      .set(values)
+      .where(
+        and(
+          eq(guestMemories.guestId, session.guestId),
+          eq(guestMemories.updatedAt, row.updatedAt),
+        ),
+      )
+      .returning({ guestId: guestMemories.guestId });
+  } catch (error) {
     console.error(`memory save failed for guest ${session.guestId}:`, error);
     return false;
   }
+
+  // No row means another finalizer moved the token first; re-read and merge on
+  // top of what they wrote rather than overwriting it.
   if (!saved && attempt < 1) {
-    return updateGuestMemoryFromSession(admin, session, attempt + 1);
+    return updateGuestMemoryFromSession(session, attempt + 1);
   }
 
   return Boolean(saved);
+}
+
+/** Postgres 23505, the unique-violation the concurrent-insert retry looks for. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "23505"
+  );
 }
 
