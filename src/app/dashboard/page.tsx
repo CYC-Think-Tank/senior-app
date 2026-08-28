@@ -3,7 +3,10 @@ import { ArrowRight, Mic } from "lucide-react";
 import { startMyConversation } from "./actions";
 import { ConversationList } from "./conversation-list";
 import { getFamilyConversations } from "./family-data";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
 import { personName } from "@/lib/names";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import type { Locale } from "@/lib/i18n";
@@ -75,17 +78,17 @@ function timeGreeting(name: string, locale: Locale) {
 }
 
 export default async function FamilyPage() {
-  const [{ conversations, hasStartedConversation, origin }, locale, { supabase, user }] = await Promise.all([
+  const [{ conversations, hasStartedConversation, origin }, locale, { user }] = await Promise.all([
     getFamilyConversations(),
     getPreferredLocale(),
     requireUser(),
   ]);
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, email")
-    .eq("id", user.id)
-    .maybeSingle();
-  const name = personName(profile?.display_name, profile?.email ?? user.email);
+  const [profile] = await db
+    .select({ displayName: profiles.displayName, email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, user.id))
+    .limit(1);
+  const name = personName(profile?.displayName, profile?.email ?? user.email);
   const copy = pageCopy[locale];
   const greeting = timeGreeting(name, locale);
 

@@ -1,5 +1,7 @@
+import { desc } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth";
-import type { Guest, InterviewSession } from "@/lib/types";
+import { db } from "@/lib/db";
+import { guests, sessions } from "@/lib/db/schema";
 import {
   AdminDashboardView,
   type AdminDashboardCopy,
@@ -74,32 +76,31 @@ const copyByLocale: Record<string, AdminDashboardCopy> = {
 };
 
 export default async function AdminDashboard() {
-  const { supabase } = await requireAdmin();
+  // The whole roster, which is what an admin is looking at this page for.
+  await requireAdmin();
 
-  const [{ data: guestRows }, { data: sessionRows }] = await Promise.all([
+  const [guestRows, sessionRows] = await Promise.all([
     // Every storyteller, however they got here: admins no longer add anyone by
     // hand, so filtering by origin would leave these counts permanently at zero.
-    supabase
-      .from("guests")
-      .select("id, user_id")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("sessions")
-      .select("guest_id, status, duration_ms, created_at")
-      .order("created_at", { ascending: false }),
+    db
+      .select({ id: guests.id, userId: guests.userId })
+      .from(guests)
+      .orderBy(desc(guests.createdAt)),
+    db
+      .select({
+        guestId: sessions.guestId,
+        status: sessions.status,
+        durationMs: sessions.durationMs,
+        createdAt: sessions.createdAt,
+      })
+      .from(sessions)
+      .orderBy(desc(sessions.createdAt)),
   ]);
 
-  type GuestRow = Pick<Guest, "id" | "user_id">;
-  type SessionRow = Pick<
-    InterviewSession,
-    "guest_id" | "status" | "duration_ms" | "created_at"
-  >;
-  const guests = (guestRows ?? []) as GuestRow[];
-  const sessions = (sessionRows ?? []) as SessionRow[];
   const today = dateKey(new Date());
-  const finishedSessions = sessions.filter((session) => session.status === "ready");
+  const finishedSessions = sessionRows.filter((session) => session.status === "ready");
   const durations = finishedSessions
-    .map((session) => session.duration_ms ?? 0)
+    .map((session) => session.durationMs ?? 0)
     .filter((duration) => duration > 0);
   const averageDurationMs = durations.length
     ? Math.round(durations.reduce((total, duration) => total + duration, 0) / durations.length)
@@ -112,24 +113,24 @@ export default async function AdminDashboard() {
     const key = dateKey(date);
     return {
       key,
-      value: sessions.filter((session) => dateKey(new Date(session.created_at)) === key).length,
+      value: sessionRows.filter((session) => dateKey(new Date(session.createdAt)) === key).length,
     };
   });
 
   return (
     <AdminDashboardView
       copies={copyByLocale}
-      totalUsers={guests.length}
+      totalUsers={guestRows.length}
       recordingsToday={finishedSessions.filter(
-        (session) => dateKey(new Date(session.created_at)) === today,
+        (session) => dateKey(new Date(session.createdAt)) === today,
       ).length}
       averageDurationMs={averageDurationMs}
-      registeredUsers={guests.filter((guest) => Boolean(guest.user_id)).length}
-      unregisteredUsers={guests.filter((guest) => !guest.user_id).length}
+      registeredUsers={guestRows.filter((guest) => Boolean(guest.userId)).length}
+      unregisteredUsers={guestRows.filter((guest) => !guest.userId).length}
       conversationCategories={{
-        ready: sessions.filter((session) => session.status === "ready").length,
-        recording: sessions.filter((session) => session.status === "recording").length,
-        pending: sessions.filter((session) => session.status === "pending").length,
+        ready: sessionRows.filter((session) => session.status === "ready").length,
+        recording: sessionRows.filter((session) => session.status === "recording").length,
+        pending: sessionRows.filter((session) => session.status === "pending").length,
       }}
       usage={usage}
     />

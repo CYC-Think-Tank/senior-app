@@ -1,7 +1,11 @@
 "use server";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { headers } from "next/headers";
+import { eq } from "drizzle-orm";
+import { APIError } from "better-auth/api";
+import { auth } from "@/lib/auth/config";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
 import { normalizeEmail } from "@/lib/email";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
@@ -26,45 +30,40 @@ export async function signInWithPassword(
     return { ok: false, error: t("authPasswordRequired") };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { data: signIn, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error || !signIn.user) {
+  let userId: string;
+  try {
+    // The nextCookies plugin turns the Set-Cookie this produces into the
+    // session cookie on the action's response.
+    const result = await auth.api.signInEmail({
+      body: { email, password },
+      headers: await headers(),
+    });
+    userId = result.user.id;
+  } catch (error) {
+    if (!(error instanceof APIError)) throw error;
     console.error("Could not sign in with password:", error);
-    // Supabase returns the same "invalid credentials" error whether the email
-    // is unknown or the password is wrong, so look the account up directly to
-    // tell the two apart. The admin client bypasses RLS; the email column is
-    // stored lowercase, matching normalizeEmail's output (see @/lib/email).
-    const admin = createSupabaseAdminClient();
-    const { data: account, error: lookupError } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle();
-    if (lookupError) {
-      console.error("Could not check for an existing account:", lookupError);
-      return { ok: false, error: t("loginError") };
-    }
+    // Better Auth answers the same way whether the address is unknown or the
+    // password is wrong, so look the account up directly to tell the two
+    // apart. The email column is lowercase, matching normalizeEmail's output.
+    const [account] = await db
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(eq(profiles.email, email))
+      .limit(1);
     return {
       ok: false,
       error: account ? t("loginIncorrectPassword") : t("loginAccountNotFound"),
     };
   }
 
-  // Filtered by id rather than left to RLS: an admin reads every profile, and
-  // anyone with a friend reads theirs too, so an unfiltered single() sees more
-  // than one row and fails — signing out the very people it just let in.
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", signIn.user.id)
-    .single();
-  if (profileError || !profile) {
-    await supabase.auth.signOut();
-    console.error("Could not load the signed-in profile:", profileError);
+  const [profile] = await db
+    .select({ role: profiles.role })
+    .from(profiles)
+    .where(eq(profiles.id, userId))
+    .limit(1);
+  if (!profile) {
+    await auth.api.signOut({ headers: await headers() });
+    console.error("Signed in an account with no profile row:", userId);
     return { ok: false, error: t("loginError") };
   }
 

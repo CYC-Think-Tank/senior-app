@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sessions } from "@/lib/db/schema";
+import { upload } from "@/lib/storage";
 import { RAW_BUCKET } from "@/lib/constants";
 import { encryptAudio } from "@/lib/audio/encryption";
 import { isValidAttemptId, partPath } from "@/lib/audio/parts";
@@ -45,12 +48,11 @@ export async function POST(
   // trusted to order one attempt after another.
   const attemptId = isValidAttemptId(attemptParam) ? attemptParam : Date.now();
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("sessions")
-    .select("id, status")
-    .eq("token", token)
-    .single();
+  const [session] = await db
+    .select({ id: sessions.id, status: sessions.status })
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
 
   if (!session) {
     return NextResponse.json({ error: "Invalid link." }, { status: 404 });
@@ -69,14 +71,9 @@ export async function POST(
 
   const path = partPath(session.id, attemptId, part, extensionFor(contentType));
 
-  const { error } = await admin.storage
-    .from(RAW_BUCKET)
-    .upload(path, encryptAudio(body), {
-      contentType: "application/octet-stream",
-      upsert: true,
-    });
-
-  if (error) {
+  try {
+    await upload(RAW_BUCKET, path, encryptAudio(body));
+  } catch (error) {
     console.error("part upload failed:", error);
     // The attempt id still goes back: the client pins it on the first reply
     // so a chunk that never lands cannot split the recording across two

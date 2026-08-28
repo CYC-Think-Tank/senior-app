@@ -1,4 +1,7 @@
+import { desc, eq } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
 import { personName } from "@/lib/names";
 import { UserManagement, type ManagedUser } from "./user-management";
 import { getPreferredLocale } from "@/lib/preferred-locale";
@@ -7,7 +10,7 @@ import styles from "../admin-management.module.css";
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  const [{ supabase }, locale] = await Promise.all([
+  const [, locale] = await Promise.all([
     requireAdmin(),
     getPreferredLocale(),
   ]);
@@ -16,14 +19,18 @@ export default async function UsersPage() {
     : locale === "zh-Hans"
       ? { eyebrow: "人员", title: "用户", intro: "所有慧享账户的私密姓名目录。", all: "所有用户", total: "人" }
       : { eyebrow: "人員", title: "使用者", intro: "所有慧享帳戶的私人姓名目錄。", all: "所有使用者", total: "人" };
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, display_name, email")
-    .eq("role", "family")
-    .order("created_at", { ascending: false });
-  const users: ManagedUser[] = (profiles ?? []).map((profile) => ({
-    id: profile.id as string,
-    name: personName(profile.display_name as string | null, profile.email as string),
+  const rows = await db
+    .select({
+      id: profiles.id,
+      displayName: profiles.displayName,
+      email: profiles.email,
+    })
+    .from(profiles)
+    .where(eq(profiles.role, "family"))
+    .orderBy(desc(profiles.createdAt));
+  const users: ManagedUser[] = rows.map((profile) => ({
+    id: profile.id,
+    name: personName(profile.displayName, profile.email),
   }));
 
   return (

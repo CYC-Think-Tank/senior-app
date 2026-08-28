@@ -1,17 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveCurrentGuestLanguage } from "@/lib/guest-language";
 import { resolveCurrentGuestName } from "@/lib/guest-name";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions, transcriptTurns } from "@/lib/db/schema";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { getGuestMemorySummary } from "@/lib/memory/summary";
 import { buildInterviewerInstructions } from "@/lib/realtime/interviewer-prompt";
 import { GUEST_FINISH_TOOL } from "@/lib/realtime/interview-ending";
+import type { Speaker } from "@/lib/types";
 import {
   isRealtimeVoice,
   REALTIME_MODEL,
   REALTIME_VOICE,
 } from "@/lib/constants";
-import type { Guest } from "@/lib/types";
 
 /**
  * Mints an ephemeral OpenAI Realtime client secret for an interview session,
@@ -24,13 +26,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing token." }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("sessions")
-    .select("id, status, topic, started_at, guests(*)")
-    .eq("token", token)
-    .single();
+  const [row] = await db
+    .select({
+      id: sessions.id,
+      status: sessions.status,
+      topic: sessions.topic,
+      startedAt: sessions.startedAt,
+      guest: guests,
+    })
+    .from(sessions)
+    .innerJoin(guests, eq(guests.id, sessions.guestId))
+    .where(eq(sessions.token, token))
+    .limit(1);
 
+  const session = row;
   if (!session) {
     return NextResponse.json(
       { error: "This interview link is not valid." },
@@ -47,17 +56,21 @@ export async function POST(request: NextRequest) {
   // Whatever the live checkpoints saved before the tab closed. Handing it to
   // the interviewer is what turns reopening the link into carrying on rather
   // than starting the conversation again.
-  const { data: savedTurns } = await admin
-    .from("transcript_turns")
-    .select("idx, speaker, text")
-    .eq("session_id", session.id)
-    .order("idx", { ascending: true });
+  const savedTurns = await db
+    .select({
+      idx: transcriptTurns.idx,
+      speaker: transcriptTurns.speaker,
+      text: transcriptTurns.text,
+    })
+    .from(transcriptTurns)
+    .where(eq(transcriptTurns.sessionId, session.id))
+    .orderBy(asc(transcriptTurns.idx));
 
-  const guest = session.guests as unknown as Guest;
+  const guest = session.guest;
   const [guestName, language, memorySummary] = await Promise.all([
-    resolveCurrentGuestName(admin, guest),
-    resolveCurrentGuestLanguage(admin, guest),
-    getGuestMemorySummary(admin, guest.id),
+    resolveCurrentGuestName(guest),
+    resolveCurrentGuestLanguage(guest),
+    getGuestMemorySummary(guest.id),
   ]);
   const instructions = buildInterviewerInstructions({
     guestName,
@@ -66,7 +79,7 @@ export async function POST(request: NextRequest) {
     memorySummary,
     language,
     topic: session.topic,
-    priorTurns: decryptTurns(session.id, savedTurns ?? []),
+    priorTurns: decryptTurns(session.id, savedTurns) as { speaker: Speaker; text: string }[],
   });
 
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
@@ -118,13 +131,13 @@ export async function POST(request: NextRequest) {
 
   // `started_at` marks when the conversation began, not this sitting, so a
   // resumed one leaves it alone.
-  await admin
-    .from("sessions")
-    .update({
+  await db
+    .update(sessions)
+    .set({
       status: "recording",
-      started_at: session.started_at ?? new Date().toISOString(),
+      startedAt: session.startedAt ?? new Date().toISOString(),
     })
-    .eq("id", session.id);
+    .where(eq(sessions.id, session.id));
 
   // The model rides along for clients that have to name it themselves. The
   // browser does not — WebRTC carries it in the offer — but a WebSocket

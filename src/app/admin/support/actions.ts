@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { db } from "@/lib/db";
+import { supportProviders, supportRequests } from "@/lib/db/schema";
 import {
   syncCycSeniorCareRegistrations,
   type CycRegistrationSyncResult,
@@ -16,12 +18,14 @@ export async function updateSupportRequestStatus(requestId: string, status: Supp
   await requireAdmin();
   if (!requestId || !statuses.includes(status)) return;
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("support_requests")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", requestId);
-  if (error) console.error("Could not update support request:", error);
+  try {
+    await db
+      .update(supportRequests)
+      .set({ status, updatedAt: new Date().toISOString() })
+      .where(eq(supportRequests.id, requestId));
+  } catch (error) {
+    console.error("Could not update support request:", error);
+  }
   revalidatePath("/admin/support");
   revalidatePath("/dashboard/support");
 }
@@ -39,9 +43,7 @@ export async function syncCycRegistrations(): Promise<SyncState> {
   await requireAdmin();
 
   try {
-    const result = await syncCycSeniorCareRegistrations(
-      createSupabaseAdminClient(),
-    );
+    const result = await syncCycSeniorCareRegistrations();
     revalidatePath("/admin/support");
     return { status: "done", result };
   } catch (error) {
@@ -64,11 +66,13 @@ export async function setProviderApproval(providerId: string, approved: boolean)
   await requireAdmin();
   if (!providerId) return;
 
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("support_providers")
-    .update({ verified: approved, active: approved })
-    .eq("id", providerId);
-  if (error) console.error("Could not update support provider:", error);
+  try {
+    await db
+      .update(supportProviders)
+      .set({ verified: approved, active: approved })
+      .where(eq(supportProviders.id, providerId));
+  } catch (error) {
+    console.error("Could not update support provider:", error);
+  }
   revalidatePath("/admin/support");
 }

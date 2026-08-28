@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { ownedConversationVideo } from "@/lib/authz";
 import {
   progressConversationVideo,
   publicConversationVideo,
@@ -27,15 +28,12 @@ export async function POST(_request: Request, { params }: Params) {
       );
     }
 
-    const { supabase } = await requireUser();
-    // RLS limits this lookup to films belonging to the signed-in storyteller.
-    const { data: visible } = await supabase
-      .from("conversation_videos")
-      .select("*")
-      .eq("id", id)
-      .eq("status", "ready")
-      .maybeSingle();
-    if (!visible) {
+    const { user } = await requireUser();
+    // Limits this to films belonging to the signed-in storyteller. The
+    // `ready` check is what makes "still processing" and "not yours" look the
+    // same from outside; the claim inside the database re-checks it anyway.
+    const owned = await ownedConversationVideo(user.id, id);
+    if (!owned || owned.status !== "ready") {
       return NextResponse.json({ error: "Video not found or is still processing." }, { status: 404 });
     }
 

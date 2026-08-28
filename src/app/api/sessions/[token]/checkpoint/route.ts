@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sessions } from "@/lib/db/schema";
 import { isTurnDraftArray, saveTurns } from "@/lib/transcript/save-turns";
 
 /**
@@ -22,12 +24,15 @@ export async function POST(
     return NextResponse.json({ error: "Invalid payload." }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data: session } = await admin
-    .from("sessions")
-    .select("id, status, started_at")
-    .eq("token", token)
-    .single();
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      status: sessions.status,
+      startedAt: sessions.startedAt,
+    })
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
 
   if (!session) {
     return NextResponse.json({ error: "Invalid link." }, { status: 404 });
@@ -38,22 +43,22 @@ export async function POST(
   }
 
   if (turns !== undefined) {
-    const { error } = await saveTurns(admin, session.id, turns);
+    const { error } = await saveTurns(session.id, turns);
     if (error) {
       return NextResponse.json({ error }, { status: 500 });
     }
   }
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
+  const updates: Partial<typeof sessions.$inferInsert> = {
     status: "recording",
-    last_checkpoint_at: now,
+    lastCheckpointAt: now,
   };
-  if (!session.started_at) updates.started_at = now;
+  if (!session.startedAt) updates.startedAt = now;
   if (typeof body.durationMs === "number" && body.durationMs >= 0) {
-    updates.duration_ms = Math.round(body.durationMs);
+    updates.durationMs = Math.round(body.durationMs);
   }
-  await admin.from("sessions").update(updates).eq("id", session.id);
+  await db.update(sessions).set(updates).where(eq(sessions.id, session.id));
 
   return NextResponse.json({ ok: true });
 }

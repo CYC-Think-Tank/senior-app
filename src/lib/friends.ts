@@ -21,16 +21,16 @@ export function friendshipPair(a: string, b: string) {
 
 /** The participant who is not `me`. */
 export function otherParticipant(
-  row: Pick<Friendship, "user_low" | "user_high">,
+  row: Pick<Friendship, "userLow" | "userHigh">,
   me: string,
 ) {
-  return row.user_low === me ? row.user_high : row.user_low;
+  return row.userLow === me ? row.userHigh : row.userLow;
 }
 
 /** Which way a pending request points, from `me`'s side of it. */
 export function requestDirection(
-  row: Pick<Friendship, "requester_id">,
+  row: Pick<Friendship, "requesterId">,
   me: string,
 ): "incoming" | "outgoing" {
-  return row.requester_id === me ? "outgoing" : "incoming";
+  return row.requesterId === me ? "outgoing" : "incoming";
 }

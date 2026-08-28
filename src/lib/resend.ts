@@ -3,7 +3,7 @@ import "server-only";
 import { Resend } from "resend";
 import { APP_NAME } from "@/lib/constants";
 
-type AuthEmailKind = "magic-link" | "invitation";
+type AuthEmailKind = "magic-link" | "invitation" | "password-reset";
 
 function escapeHtml(value: string) {
   return value
@@ -29,17 +29,28 @@ export async function sendAuthEmail({
   if (!apiKey) throw new Error("RESEND_API_KEY is not configured.");
   if (!from) throw new Error("RESEND_FROM_EMAIL is not configured.");
 
-  const isInvitation = kind === "invitation";
-  const subject = isInvitation
-    ? `You’re invited to ${APP_NAME}`
-    : `Sign in to ${APP_NAME}`;
-  const heading = isInvitation
-    ? "Your family stories are waiting"
-    : `Sign in to ${APP_NAME}`;
-  const introduction = isInvitation
-    ? `You’ve been invited to listen to private family stories on ${APP_NAME}.`
-    : `Use this secure link to sign in to ${APP_NAME}.`;
-  const buttonLabel = isInvitation ? "Accept invitation" : "Sign in";
+  const copy = {
+    invitation: {
+      subject: `You’re invited to ${APP_NAME}`,
+      heading: "Your family stories are waiting",
+      introduction: `You’ve been invited to listen to private family stories on ${APP_NAME}.`,
+      buttonLabel: "Accept invitation",
+    },
+    "magic-link": {
+      subject: `Sign in to ${APP_NAME}`,
+      heading: `Sign in to ${APP_NAME}`,
+      introduction: `Use this secure link to sign in to ${APP_NAME}.`,
+      buttonLabel: "Sign in",
+    },
+    "password-reset": {
+      subject: `Reset your ${APP_NAME} password`,
+      heading: "Choose a new password",
+      introduction: `Use this secure link to set a new password for your ${APP_NAME} account. It expires in an hour.`,
+      buttonLabel: "Set a new password",
+    },
+  }[kind];
+
+  const { subject, heading, introduction, buttonLabel } = copy;
   const safeActionLink = escapeHtml(actionLink);
 
   const resend = new Resend(apiKey);

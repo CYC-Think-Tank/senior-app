@@ -1,11 +1,11 @@
-import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, profiles } from "@/lib/db/schema";
 import { interviewLanguage, normalizeLocale } from "@/lib/i18n";
-
-type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
 type GuestLanguageSource = {
   id: string;
-  user_id: string | null;
+  userId: string | null;
   language: string;
 };
 
@@ -18,42 +18,38 @@ type GuestLanguageSource = {
  * Anonymous guests choose their language on the way into the conversation and
  * have no account preference, so their stored language stays authoritative.
  */
-export async function resolveCurrentGuestLanguage(
-  admin: AdminClient,
-  guest: GuestLanguageSource,
-) {
-  if (!guest.user_id) {
+export async function resolveCurrentGuestLanguage(guest: GuestLanguageSource) {
+  if (!guest.userId) {
     return guest.language;
   }
 
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("locale")
-    .eq("id", guest.user_id)
-    .maybeSingle();
-
-  if (profileError || !profile?.locale) {
-    if (profileError) {
-      console.error(
-        "Could not load the storyteller's language preference:",
-        profileError,
-      );
-    }
+  let locale: string | undefined;
+  try {
+    const [profile] = await db
+      .select({ locale: profiles.locale })
+      .from(profiles)
+      .where(eq(profiles.id, guest.userId))
+      .limit(1);
+    locale = profile?.locale;
+  } catch (error) {
+    console.error(
+      "Could not load the storyteller's language preference:",
+      error,
+    );
     return guest.language;
   }
 
-  const language = interviewLanguage(normalizeLocale(profile.locale));
+  if (!locale) return guest.language;
+
+  const language = interviewLanguage(normalizeLocale(locale));
   if (language === guest.language) {
     return language;
   }
 
-  const { error } = await admin
-    .from("guests")
-    .update({ language })
-    .eq("id", guest.id);
-
-  // The interview still follows their toggle; only the stored copy is stale.
-  if (error) {
+  try {
+    await db.update(guests).set({ language }).where(eq(guests.id, guest.id));
+  } catch (error) {
+    // The interview still follows their toggle; only the stored copy is stale.
     console.error(
       "Could not save the storyteller's language preference:",
       error,

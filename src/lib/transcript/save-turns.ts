@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { transcriptTurns } from "@/lib/db/schema";
 import { encryptTurnText } from "@/lib/transcript/encryption";
 import type { TurnDraft } from "@/lib/types";
 
@@ -9,14 +11,7 @@ export function isTurnDraftArray(value: unknown): value is TurnDraft[] {
   return Array.isArray(value) && value.length <= MAX_TURNS;
 }
 
-type TurnRow = {
-  session_id: string;
-  idx: number;
-  speaker: "ai" | "guest";
-  text: string;
-  start_ms: number;
-  end_ms: number;
-};
+type TurnRow = typeof transcriptTurns.$inferInsert;
 
 function toRows(sessionId: string, turns: TurnDraft[]): TurnRow[] {
   return turns
@@ -30,14 +25,14 @@ function toRows(sessionId: string, turns: TurnDraft[]): TurnRow[] {
     .map((t, idx) => {
       const start = Math.max(0, Math.round(Number(t.startMs) || 0));
       return {
-        session_id: sessionId,
+        sessionId,
         idx,
         speaker: t.speaker,
         // Capped before sealing: the limit is on what was said, not on the
         // framing, and the row is unreadable after this point.
         text: encryptTurnText(sessionId, idx, t.text.trim().slice(0, 10_000)),
-        start_ms: start,
-        end_ms: Math.max(start + 100, Math.round(Number(t.endMs) || 0)),
+        startMs: start,
+        endMs: Math.max(start + 100, Math.round(Number(t.endMs) || 0)),
       };
     });
 }
@@ -55,29 +50,42 @@ function toRows(sessionId: string, turns: TurnDraft[]): TurnRow[] {
  * not take the earlier sitting down with it.
  */
 export async function saveTurns(
-  admin: SupabaseClient,
   sessionId: string,
   turns: TurnDraft[]
 ): Promise<{ error: string | null; count: number }> {
   const rows = toRows(sessionId, turns);
   if (rows.length === 0) return { error: null, count: 0 };
 
-  const { error } = await admin
-    .from("transcript_turns")
-    .upsert(rows, { onConflict: "session_id,idx" });
-  if (error) {
+  try {
+    await db
+      .insert(transcriptTurns)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: [transcriptTurns.sessionId, transcriptTurns.idx],
+        set: {
+          speaker: sql`excluded.speaker`,
+          text: sql`excluded.text`,
+          startMs: sql`excluded.start_ms`,
+          endMs: sql`excluded.end_ms`,
+        },
+      });
+  } catch (error) {
     console.error("transcript upsert failed:", error);
     return { error: "Could not save the transcript.", count: 0 };
   }
 
-  // Drop turns left behind by a longer previous attempt on this session.
-  const { error: trimError } = await admin
-    .from("transcript_turns")
-    .delete()
-    .eq("session_id", sessionId)
-    .gte("idx", rows.length);
-  if (trimError) {
-    console.error("transcript trim failed:", trimError);
+  try {
+    // Drop turns left behind by a longer previous attempt on this session.
+    await db
+      .delete(transcriptTurns)
+      .where(
+        and(
+          eq(transcriptTurns.sessionId, sessionId),
+          gte(transcriptTurns.idx, rows.length),
+        ),
+      );
+  } catch (error) {
+    console.error("transcript trim failed:", error);
   }
 
   return { error: null, count: rows.length };

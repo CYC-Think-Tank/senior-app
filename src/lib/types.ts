@@ -1,102 +1,61 @@
+import type {
+  conversationComments,
+  conversationVideos,
+  friendships,
+  guests,
+  profiles,
+  sessions,
+  transcriptTurns,
+} from "@/lib/db/schema";
+
+/**
+ * The domain vocabulary, plus the row shapes inferred from the schema.
+ *
+ * The shapes used to be written out by hand, one field at a time, and had to
+ * be kept in step with the database by remembering to. They are derived now,
+ * so a column that changes shows up as a type error at every place that reads
+ * it. What stays hand-written is the part the database does not know: the
+ * unions behind the `text` columns, and the drafts that never touch a table.
+ *
+ * Field names are camelCase because that is what Drizzle returns. The JSON the
+ * iOS app receives is mapped explicitly in each route and is unaffected.
+ */
+
 export type Role = "admin" | "family";
 
-export type Profile = {
-  id: string;
-  email: string;
-  display_name: string | null;
-  locale: "en" | "zh-Hans" | "zh-Hant";
-  conversation_language_chosen_at: string | null;
-  /** Complete memoir films this account has generated, against the cap in
-      MEMOIR_MAX_GENERATIONS_PER_ACCOUNT. */
-  video_generations_used: number;
+export type Profile = typeof profiles.$inferSelect & {
   role: Role;
-  created_at: string;
+  locale: "en" | "zh-Hans" | "zh-Hant";
 };
 
 /** How a storyteller got here; only `admin_invite` shows on the admin side. */
 export type GuestOrigin = "admin_invite" | "self_serve" | "public";
 
-export type Guest = {
-  id: string;
-  user_id: string | null;
-  name: string;
-  bio: string | null;
-  photo_path: string | null;
-  topics: string[] | null;
-  language: string;
-  /** Null falls back to REALTIME_VOICE rather than pinning today's default. */
-  voice: string | null;
-  origin: GuestOrigin;
-  created_at: string;
-};
+export type Guest = typeof guests.$inferSelect & { origin: GuestOrigin };
 
 export type SessionStatus = "pending" | "recording" | "ready";
 
-export type InterviewSession = {
-  id: string;
-  guest_id: string;
-  token: string;
-  topic: string | null;
-  title: string | null;
+export type InterviewSession = typeof sessions.$inferSelect & {
   status: SessionStatus;
-  /** Sealed JSON: the share page's takeaway, per locale. Null until asked for. */
-  moral: string | null;
-  raw_audio_path: string | null;
-  share_token: string | null;
-  started_at: string | null;
-  /** Last time the live interview saved its progress; null before it starts. */
-  last_checkpoint_at: string | null;
-  duration_ms: number | null;
-  created_at: string;
 };
 
 export type FriendshipStatus = "pending" | "accepted";
 
 /**
- * One row per pair of accounts, with the ids in a fixed order — `user_low` is
+ * One row per pair of accounts, with the ids in a fixed order — `userLow` is
  * always the smaller uuid. Normalise through `friendshipPair()` before
  * querying; see supabase/migrations/013_friend_circle.sql.
  */
-export type Friendship = {
-  id: string;
-  user_low: string;
-  user_high: string;
-  /** Who sent the request. Decides who may accept while status is pending. */
-  requester_id: string;
+export type Friendship = typeof friendships.$inferSelect & {
   status: FriendshipStatus;
-  created_at: string;
-  responded_at: string | null;
 };
 
-/** Presence of the row *is* the whole-circle sharing switch for a session. */
-export type CircleShare = {
-  session_id: string;
-  /** Denormalised from guests.user_id so the friend policy stays one compare. */
-  owner_id: string;
-  created_at: string;
-};
-
-export type ConversationComment = {
-  id: string;
-  session_id: string;
-  author_id: string;
-  /** The author's name when they wrote it; see migration 016 for why. */
-  author_name: string;
-  body: string;
-  created_at: string;
-};
+export type ConversationComment = typeof conversationComments.$inferSelect;
 
 export type Speaker = "ai" | "guest";
 
-export type TranscriptTurn = {
-  id: string;
-  session_id: string;
-  idx: number;
+export type TranscriptTurn = typeof transcriptTurns.$inferSelect & {
   speaker: Speaker;
-  text: string;
-  start_ms: number;
-  end_ms: number;
-  excluded: boolean;
 };
 
 /** A finished turn assembled client-side during the live interview. */
@@ -115,19 +74,6 @@ export type ConversationVideoStatus =
   | "ready"
   | "failed";
 
-export type ConversationVideo = {
-  id: string;
-  session_id: string;
+export type ConversationVideo = typeof conversationVideos.$inferSelect & {
   status: ConversationVideoStatus;
-  title: string | null;
-  story_ciphertext: string | null;
-  narration_ciphertext: string | null;
-  visual_bible_ciphertext: string | null;
-  narration_path: string | null;
-  video_path: string | null;
-  duration_ms: number | null;
-  error_message: string | null;
-  scene_regenerations_used: number;
-  created_at: string;
-  updated_at: string;
 };

@@ -11,7 +11,9 @@ import {
   normalizeLocale,
   translate,
 } from "@/lib/i18n";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions } from "@/lib/db/schema";
 
 export type StartConversationState = {
   error: string | null;
@@ -103,32 +105,37 @@ export async function startConversation(
   }
 
   const language = interviewLanguage(locale);
-  const admin = createSupabaseAdminClient();
-  const { data: guest, error: guestError } = await admin
-    .from("guests")
-    .insert({ name, language, origin: "public" })
-    .select("id")
-    .single();
-
-  if (guestError || !guest) {
+  let guest;
+  try {
+    // A throwaway storyteller with no account behind it; the nightly sweep in
+    // src/lib/sessions/trash.ts is what eventually clears the abandoned ones.
+    [guest] = await db
+      .insert(guests)
+      .values({ name, language, origin: "public" })
+      .returning({ id: guests.id });
+  } catch (guestError) {
     console.error("Could not create a public conversation guest:", guestError);
     return { error: t("interviewStartGenericError") };
   }
+  if (!guest) return { error: t("interviewStartGenericError") };
 
-  const { data: session, error: sessionError } = await admin
-    .from("sessions")
-    .insert({ guest_id: guest.id })
-    .select("token")
-    .single();
-
-  if (sessionError || !session) {
+  let session;
+  try {
+    [session] = await db
+      .insert(sessions)
+      .values({ guestId: guest.id })
+      .returning({ token: sessions.token });
+  } catch (sessionError) {
     console.error(
       "Could not create a public conversation session:",
       sessionError,
     );
-    await admin.from("guests").delete().eq("id", guest.id);
+    // Nothing will ever surface a guest with no conversation, so take it back
+    // out rather than leaving a row nobody can reach.
+    await db.delete(guests).where(eq(guests.id, guest.id));
     return { error: t("interviewStartGenericError") };
   }
+  if (!session) return { error: t("interviewStartGenericError") };
 
   cookieStore.set(localeCookieName, locale, {
     path: "/",

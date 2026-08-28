@@ -1,6 +1,18 @@
 import { cache } from "react";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  canReadCircleConversation,
+  filterConnected,
+  readableCircleShare,
+} from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  circleShares,
+  conversationComments,
+  profiles,
+  sessions,
+} from "@/lib/db/schema";
 import { createAudioUrl } from "@/lib/audio/encryption";
 import { editedAudioDurationMs, type AudioCut } from "@/lib/audio/cuts";
 import { ensureMoral } from "@/lib/moral/generate";
@@ -8,11 +20,7 @@ import { RAW_BUCKET } from "@/lib/constants";
 import { personName } from "@/lib/names";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { getExcludedAudioCuts } from "@/lib/transcript/audio-cuts";
-import type {
-  ConversationComment,
-  InterviewSession,
-  Profile,
-} from "@/lib/types";
+import type { InterviewSession } from "@/lib/types";
 
 export type CommentView = {
   id: string;
@@ -25,30 +33,30 @@ export type CommentView = {
 /**
  * The comments on one conversation, oldest first.
  *
- * Runs entirely through the RLS client: "circle reads comments" is what limits
- * this to conversations the caller owns or has circle access to, so there is
- * no separate permission check here.
+ * `canReadCircleConversation` is the "circle reads comments" policy: the
+ * storyteller always sees the comments on their own conversation, even after
+ * switching circle sharing back off, and their friends see them only while the
+ * switch is on and the friendship stands.
  */
 export const getConversationComments = cache(
   async (sessionId: string): Promise<CommentView[]> => {
-    const { supabase } = await requireUser();
+    const { user } = await requireUser();
 
-    const { data } = await supabase
-      .from("conversation_comments")
-      .select("id, author_id, author_name, body, created_at")
-      .eq("session_id", sessionId)
-      .order("created_at", { ascending: true });
+    if (!(await canReadCircleConversation(user.id, sessionId))) return [];
 
-    return ((data ?? []) as Pick<
-      ConversationComment,
-      "id" | "author_id" | "author_name" | "body" | "created_at"
-    >[]).map((row) => ({
-      id: row.id,
-      authorId: row.author_id,
-      authorName: row.author_name,
-      body: row.body,
-      createdAt: row.created_at,
-    }));
+    const rows = await db
+      .select({
+        id: conversationComments.id,
+        authorId: conversationComments.authorId,
+        authorName: conversationComments.authorName,
+        body: conversationComments.body,
+        createdAt: conversationComments.createdAt,
+      })
+      .from(conversationComments)
+      .where(eq(conversationComments.sessionId, sessionId))
+      .orderBy(asc(conversationComments.createdAt));
+
+    return rows;
   },
 );
 
@@ -63,27 +71,28 @@ export type CircleConversation = {
 };
 
 /**
- * Looks up the display names of a set of accounts through the caller's RLS
- * client. "read connected profiles" (migration 014) is what allows it, so this
- * silently returns nothing for anyone the caller is not connected to.
+ * Display names for a set of accounts, limited to the ones the caller is
+ * connected to. Anyone else is simply missing from the map, and callers treat
+ * a missing name as "do not render this row".
  */
-async function connectedNames(
-  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
-  ids: string[],
-) {
+async function connectedNames(userId: string, ids: string[]) {
   const names = new Map<string, string>();
   if (ids.length === 0) return names;
 
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, display_name, email")
-    .in("id", ids);
+  const connected = await filterConnected(userId, ids);
+  if (connected.size === 0) return names;
 
-  for (const profile of (data ?? []) as Pick<
-    Profile,
-    "id" | "display_name" | "email"
-  >[]) {
-    names.set(profile.id, personName(profile.display_name, profile.email));
+  const rows = await db
+    .select({
+      id: profiles.id,
+      displayName: profiles.displayName,
+      email: profiles.email,
+    })
+    .from(profiles)
+    .where(inArray(profiles.id, [...connected]));
+
+  for (const profile of rows) {
+    names.set(profile.id, personName(profile.displayName, profile.email));
   }
   return names;
 }
@@ -91,66 +100,70 @@ async function connectedNames(
 /**
  * Everything a friend has shared with their circle, newest first.
  *
- * The first read is the authorisation: "friends read circle shares" means a
- * row only comes back if the caller is a friend of its owner. Only after that
- * does the service role fetch the sessions themselves — see the note in
- * migration 015 for why friends never read `sessions` directly.
+ * The friendship filter is the authorisation: a share is only listed when its
+ * owner is someone the caller is actually connected to. The sessions
+ * themselves are read afterwards, by id, and never joined into this query —
+ * see the note in migration 015, which is about `sessions.token` being a live
+ * credential that must not travel with a feed row.
  */
 export const getCircleFeed = cache(async (): Promise<CircleConversation[]> => {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  const { data: shares } = await supabase
-    .from("circle_shares")
-    .select("session_id, owner_id, created_at")
+  const shares = await db
+    .select()
+    .from(circleShares)
     // Your own conversations live on your own pages, not in the feed.
-    .neq("owner_id", user.id)
-    .order("created_at", { ascending: false });
+    .where(ne(circleShares.ownerId, user.id))
+    .orderBy(desc(circleShares.createdAt));
 
-  const rows = shares ?? [];
-  if (rows.length === 0) return [];
+  if (shares.length === 0) return [];
 
   const names = await connectedNames(
-    supabase,
-    [...new Set(rows.map((row) => row.owner_id))],
+    user.id,
+    [...new Set(shares.map((row) => row.ownerId))],
   );
+  // Shares from people the caller is not connected to never get this far.
+  const visible = shares.filter((row) => names.has(row.ownerId));
+  if (visible.length === 0) return [];
 
-  const admin = createSupabaseAdminClient();
-  const { data: sessions } = await admin
-    .from("sessions")
-    .select("id, title, topic, duration_ms, created_at")
-    .in(
-      "id",
-      rows.map((row) => row.session_id),
-    )
-    .eq("status", "ready");
+  const rows = await db
+    .select({
+      id: sessions.id,
+      title: sessions.title,
+      topic: sessions.topic,
+      durationMs: sessions.durationMs,
+      createdAt: sessions.createdAt,
+    })
+    .from(sessions)
+    .where(
+      and(
+        inArray(sessions.id, visible.map((row) => row.sessionId)),
+        eq(sessions.status, "ready"),
+      ),
+    );
 
-  const byId = new Map(
-    ((sessions ?? []) as Pick<
-      InterviewSession,
-      "id" | "title" | "topic" | "duration_ms" | "created_at"
-    >[]).map((session) => [session.id, session]),
-  );
+  const byId = new Map(rows.map((session) => [session.id, session]));
   const cutsBySession = await getExcludedAudioCuts([...byId.keys()]);
 
   const feed: CircleConversation[] = [];
-  for (const row of rows) {
-    const session = byId.get(row.session_id);
-    const ownerName = names.get(row.owner_id);
+  for (const row of visible) {
+    const session = byId.get(row.sessionId);
+    const ownerName = names.get(row.ownerId);
     // A share whose session is gone, or whose owner we can no longer name,
     // is not something to render half of.
     if (!session || !ownerName) continue;
 
     feed.push({
       sessionId: session.id,
-      ownerId: row.owner_id,
+      ownerId: row.ownerId,
       ownerName,
       name: session.title?.trim() || session.topic?.trim() || "",
-      createdAt: session.created_at,
+      createdAt: session.createdAt,
       durationMs: editedAudioDurationMs(
-        session.duration_ms,
+        session.durationMs,
         cutsBySession.get(session.id) ?? [],
       ),
-      sharedAt: row.created_at,
+      sharedAt: row.createdAt,
     });
   }
 
@@ -171,51 +184,47 @@ export type CircleConversationDetail = {
  * One shared conversation, or null when the caller may not hear it.
  *
  * Null covers "never shared with me", "unshared while I was looking at it",
- * and "unfriended while I was looking at it" alike — the circle_shares read is
+ * and "unfriended while I was looking at it" alike — the share is
  * re-authorised on every request, so revoking either half takes effect at the
  * next navigation. The caller turns all three into the same notFound(), which
  * is what keeps them indistinguishable from outside.
  */
 export const getCircleConversation = cache(
   async (sessionId: string): Promise<CircleConversationDetail | null> => {
-    const { supabase, user } = await requireUser();
+    const { user } = await requireUser();
 
-    const { data: share } = await supabase
-      .from("circle_shares")
-      .select("session_id, owner_id")
-      .eq("session_id", sessionId)
-      .maybeSingle();
+    const share = await readableCircleShare(user.id, sessionId);
     if (!share) return null;
 
-    const names = await connectedNames(supabase, [share.owner_id]);
-    const isOwner = share.owner_id === user.id;
-    // "read connected profiles" does not cover your own row — that is what
-    // "read own profile" is for — so fall back for the owner's own view.
-    let ownerName = names.get(share.owner_id) ?? null;
-    if (!ownerName && isOwner) {
-      const { data: me } = await supabase
-        .from("profiles")
-        .select("display_name, email")
-        .eq("id", user.id)
-        .maybeSingle();
-      ownerName = personName(me?.display_name, me?.email ?? user.email);
+    const isOwner = share.ownerId === user.id;
+    // A caller is not "connected" to themselves, so the owner's own name is
+    // read directly rather than through the friendship filter.
+    let ownerName: string | null;
+    if (isOwner) {
+      const [me] = await db
+        .select({ displayName: profiles.displayName, email: profiles.email })
+        .from(profiles)
+        .where(eq(profiles.id, user.id))
+        .limit(1);
+      ownerName = personName(me?.displayName, me?.email ?? user.email);
+    } else {
+      const names = await connectedNames(user.id, [share.ownerId]);
+      ownerName = names.get(share.ownerId) ?? null;
     }
     if (!ownerName) return null;
 
-    const admin = createSupabaseAdminClient();
-    const { data } = await admin
-      .from("sessions")
-      .select("*")
-      .eq("id", sessionId)
-      .eq("status", "ready")
-      .single();
-    if (!data) return null;
+    const [row] = await db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.id, sessionId), eq(sessions.status, "ready")))
+      .limit(1);
+    if (!row) return null;
 
-    const session = data as InterviewSession;
-    const audioUrl = session.raw_audio_path
+    const session = row as InterviewSession;
+    const audioUrl = session.rawAudioPath
       ? // Audio at rest is ciphertext, so playback always goes through the
-        // signed /api/audio proxy rather than a Supabase signed URL.
-        createAudioUrl(RAW_BUCKET, session.raw_audio_path, 60 * 60 * 6)
+        // signed /api/audio proxy rather than a storage URL.
+        createAudioUrl(RAW_BUCKET, session.rawAudioPath, 60 * 60 * 6)
       : null;
     const audioCuts =
       (await getExcludedAudioCuts([session.id])).get(session.id) ?? [];
@@ -223,11 +232,11 @@ export const getCircleConversation = cache(
     // Generated on the first view that needs it, then cached on the row —
     // exactly as the public share page does it.
     const locale = await getPreferredLocale();
-    const moralByLocale = await ensureMoral(admin, session, ownerName);
+    const moralByLocale = await ensureMoral(session, ownerName);
 
     return {
       session,
-      ownerId: share.owner_id,
+      ownerId: share.ownerId,
       ownerName,
       audioUrl,
       audioCuts,

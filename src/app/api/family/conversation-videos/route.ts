@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { ownsReadySession } from "@/lib/authz";
 import {
   getVideoGenerationQuota,
   progressConversationVideo,
@@ -26,15 +27,11 @@ export async function POST(request: Request) {
         { status: 503 },
       );
     }
-    const { supabase, user } = await requireUser();
-    const { data: session } = await supabase
-      .from("sessions")
-      .select("id, guests!inner(user_id)")
-      .eq("id", sessionId)
-      .eq("status", "ready")
-      .eq("guests.user_id", user.id)
-      .single();
-    if (!session) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
+    const { user } = await requireUser();
+    // Films cost money to make, so the conversation has to be theirs.
+    if (!(await ownsReadySession(user.id, sessionId))) {
+      return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
+    }
     const video = await startConversationVideo(sessionId, {
       userId: user.id,
       regenerate: regenerate === true,
@@ -51,7 +48,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({
       video: await publicConversationVideo(video),
-      quota: await getVideoGenerationQuota(supabase, user.id),
+      quota: await getVideoGenerationQuota(user.id),
     });
   } catch (error) {
     // Running out of films is an answer, not a fault: say so with a 403 so

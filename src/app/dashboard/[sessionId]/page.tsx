@@ -11,11 +11,20 @@ import { RAW_BUCKET } from "@/lib/constants";
 import { translate } from "@/lib/i18n";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import { conversationNames } from "@/lib/names";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { asc, eq } from "drizzle-orm";
+import { ownSessionCondition } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  circleShares,
+  conversationVideos,
+  guests,
+  sessions as sessionsTable,
+  transcriptTurns,
+} from "@/lib/db/schema";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { CommentThread } from "../circle/comment-thread";
 import { getConversationComments } from "../circle/circle-data";
-import type { Guest, InterviewSession, TranscriptTurn } from "@/lib/types";
+import type { TranscriptTurn } from "@/lib/types";
 import type { ConversationVideo } from "@/lib/types";
 import { getVideoGenerationQuota, publicConversationVideo } from "@/lib/memoir/workflow";
 import { MemoirVideoCard } from "./memoir-video-card";
@@ -29,21 +38,28 @@ export default async function FamilyConversationPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
   const locale = await getPreferredLocale();
   const t = (key: Parameters<typeof translate>[1], values = {}) =>
     translate(locale, key, values);
 
-  // Read through the user's client so RLS keeps this inside the family; the
-  // service role is only used afterwards to sign the audio URL. The siblings
-  // come along so an unnamed conversation gets the same number as the list.
-  const { data: sessions } = await supabase
-    .from("sessions")
-    .select("*, guests(name)")
-    .in("status", ["ready", "recording"]);
+  // Every conversation this account may see, which is both the authorisation
+  // for this one and the sibling list an unnamed conversation is numbered
+  // against — it has to get the same number here as it does in the list.
+  const all = await db
+    .select({
+      id: sessionsTable.id,
+      title: sessionsTable.title,
+      status: sessionsTable.status,
+      createdAt: sessionsTable.createdAt,
+      durationMs: sessionsTable.durationMs,
+      rawAudioPath: sessionsTable.rawAudioPath,
+      guestName: guests.name,
+    })
+    .from(sessionsTable)
+    .innerJoin(guests, eq(guests.id, sessionsTable.guestId))
+    .where(ownSessionCondition(user.id));
 
-  type SessionRow = InterviewSession & { guests: Pick<Guest, "name"> };
-  const all = (sessions ?? []) as unknown as SessionRow[];
   const s = all.find((row) => row.id === sessionId);
   if (!s) notFound();
 
@@ -52,55 +68,54 @@ export default async function FamilyConversationPage({
       t("familyConversationNumbered", { number })
     ).get(s.id) ?? "";
 
-  const audioUrl = s.raw_audio_path
-    ? createAudioUrl(RAW_BUCKET, s.raw_audio_path, 60 * 60 * 6)
+  const audioUrl = s.rawAudioPath
+    ? createAudioUrl(RAW_BUCKET, s.rawAudioPath, 60 * 60 * 6)
     : null;
 
   const finished = s.status === "ready";
-  // Transcript rows are intentionally absent from family RLS. The session read
-  // above proved this is the caller's own conversation before the service role
-  // fetches and decrypts its editable lines.
-  const admin = createSupabaseAdminClient();
-  const { data: turnRows } = finished
-    ? await admin
-        .from("transcript_turns")
-        .select("*")
-        .eq("session_id", s.id)
-        .order("idx")
-    : { data: [] };
+  // The read above already proved this is the caller's own conversation, so
+  // the transcript — which no family-facing query may reach on its own — can
+  // be fetched and decrypted here.
+  const turnRows = finished
+    ? await db
+        .select()
+        .from(transcriptTurns)
+        .where(eq(transcriptTurns.sessionId, s.id))
+        .orderBy(asc(transcriptTurns.idx))
+    : [];
   const turns = finished
-    ? decryptTurns(s.id, (turnRows ?? []) as TranscriptTurn[])
+    ? decryptTurns(s.id, turnRows as TranscriptTurn[])
     : [];
   const cuts = turns
     .filter((turn) => turn.excluded)
-    .map((turn) => ({ startMs: turn.start_ms, endMs: turn.end_ms }));
-  const editedDuration = editedAudioDurationMs(s.duration_ms, cuts);
+    .map((turn) => ({ startMs: turn.startMs, endMs: turn.endMs }));
+  const editedDuration = editedAudioDurationMs(s.durationMs, cuts);
 
-  const { data: videoRow } = finished
-    ? await supabase
-        .from("conversation_videos")
-        .select("*")
-        .eq("session_id", s.id)
-        .maybeSingle()
-    : { data: null };
+  const [videoRow] = finished
+    ? await db
+        .select()
+        .from(conversationVideos)
+        .where(eq(conversationVideos.sessionId, s.id))
+        .limit(1)
+    : [];
   const initialVideo = videoRow
     ? await publicConversationVideo(videoRow as ConversationVideo)
     : null;
   // How many complete films this account has left, so the card can say so
   // before the storyteller commits to one.
   const videoQuota = finished
-    ? await getVideoGenerationQuota(supabase, user.id)
+    ? await getVideoGenerationQuota(user.id)
     : null;
 
   // Only finished conversations can be shared, and the comment thread is only
   // worth showing once there is a circle that could have written in it.
-  const { data: share } = finished
-    ? await supabase
-        .from("circle_shares")
-        .select("session_id")
-        .eq("session_id", sessionId)
-        .maybeSingle()
-    : { data: null };
+  const [share] = finished
+    ? await db
+        .select({ sessionId: circleShares.sessionId })
+        .from(circleShares)
+        .where(eq(circleShares.sessionId, sessionId))
+        .limit(1)
+    : [];
   const sharedWithCircle = Boolean(share);
   const comments = finished ? await getConversationComments(sessionId) : [];
 
@@ -114,13 +129,13 @@ export default async function FamilyConversationPage({
       </Link>
 
       <div className="flex items-center gap-5">
-        <Monogram name={s.guests.name} size="lg" />
+        <Monogram name={s.guestName} size="lg" />
         <div>
           <h1 className="font-serif text-3xl font-semibold sm:text-4xl">
             {name}
           </h1>
           <p className="mt-1 text-sm text-ink-faint">
-            {new Date(s.created_at).toLocaleDateString(locale, {
+            {new Date(s.createdAt).toLocaleDateString(locale, {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -133,13 +148,13 @@ export default async function FamilyConversationPage({
       {finished ? (
         <ConversationTranscriptEditor
           sessionId={s.id}
-          guestName={s.guests.name}
+          guestName={s.guestName}
           initialTurns={turns}
           audioUrl={audioUrl}
-          durationMs={s.duration_ms}
+          durationMs={s.durationMs}
         />
       ) : audioUrl ? (
-        <AudioPlayer src={audioUrl} durationMs={s.duration_ms} />
+        <AudioPlayer src={audioUrl} durationMs={s.durationMs} />
       ) : s.status === "recording" ? (
         <Card className="space-y-4 p-6">
           <p className="text-ink-soft">{t("familyUnfinishedNote")}</p>

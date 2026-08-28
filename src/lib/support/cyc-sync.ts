@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { supportProviders } from "@/lib/db/schema";
 import { queryAllWixCmsItems } from "@/lib/wix-cms";
 import {
   providerFromRegistration,
@@ -30,9 +32,7 @@ const sameArray = (a: string[], b: unknown) =>
  * only the fields the registration form owns — staff edits to languages,
  * skills, availability, and verification survive.
  */
-export async function syncCycSeniorCareRegistrations(
-  admin: SupabaseClient,
-): Promise<CycRegistrationSyncResult> {
+export async function syncCycSeniorCareRegistrations(): Promise<CycRegistrationSyncResult> {
   const items = await queryAllWixCmsItems({
     collectionId: registrationsCollectionId(),
     filter: seniorCareFilter(),
@@ -53,24 +53,53 @@ export async function syncCycSeniorCareRegistrations(
   };
   if (!candidates.size) return result;
 
-  const { data: existingRows, error: existingError } = await admin
-    .from("support_providers")
-    .select("id, external_id, display_name, provider_type, email, phone, school, grade, locations")
-    .in("external_id", [...candidates.keys()]);
-  if (existingError) throw new Error(existingError.message);
+  const existingRows = await db
+    .select({
+      id: supportProviders.id,
+      externalId: supportProviders.externalId,
+      displayName: supportProviders.displayName,
+      providerType: supportProviders.providerType,
+      email: supportProviders.email,
+      phone: supportProviders.phone,
+      school: supportProviders.school,
+      grade: supportProviders.grade,
+      locations: supportProviders.locations,
+    })
+    .from(supportProviders)
+    .where(inArray(supportProviders.externalId, [...candidates.keys()]));
 
   const existing = new Map(
-    (existingRows ?? []).map((row) => [row.external_id as string, row]),
+    existingRows.flatMap((row) => (row.externalId ? [[row.externalId, row] as const] : [])),
   );
   const syncedAt = new Date().toISOString();
 
   const inserts = [...candidates.values()]
     .filter((row) => !existing.has(row.external_id))
-    .map((row) => ({ ...row, verified: false, active: false, synced_at: syncedAt }));
+    .map((row) => ({
+      externalId: row.external_id,
+      source: row.source,
+      displayName: row.display_name,
+      providerType: row.provider_type,
+      email: row.email,
+      phone: row.phone,
+      school: row.school,
+      grade: row.grade,
+      locations: row.locations,
+      languages: row.languages,
+      serviceModes: row.service_modes,
+      // Columns the registration form has nothing to say about. They are NOT
+      // NULL with no default here, unlike the old table, so they are spelled
+      // out rather than left to the database.
+      skills: [],
+      interests: [],
+      // New people arrive unverified and inactive on purpose; see above.
+      verified: false,
+      active: false,
+      syncedAt,
+    }));
 
   if (inserts.length) {
-    const { error } = await admin.from("support_providers").insert(inserts);
-    if (error) throw new Error(error.message);
+    await db.insert(supportProviders).values(inserts);
     result.created = inserts.length;
   }
 
@@ -79,8 +108,8 @@ export async function syncCycSeniorCareRegistrations(
     if (!current) continue;
 
     const unchanged =
-      current.display_name === row.display_name
-      && current.provider_type === row.provider_type
+      current.displayName === row.display_name
+      && current.providerType === row.provider_type
       && current.email === row.email
       && current.phone === row.phone
       && current.school === row.school
@@ -88,20 +117,19 @@ export async function syncCycSeniorCareRegistrations(
       && sameArray(row.locations, current.locations);
     if (unchanged) continue;
 
-    const { error } = await admin
-      .from("support_providers")
-      .update({
-        display_name: row.display_name,
-        provider_type: row.provider_type,
+    await db
+      .update(supportProviders)
+      .set({
+        displayName: row.display_name,
+        providerType: row.provider_type,
         email: row.email,
         phone: row.phone,
         school: row.school,
         grade: row.grade,
         locations: row.locations,
-        synced_at: syncedAt,
+        syncedAt,
       })
-      .eq("id", current.id);
-    if (error) throw new Error(error.message);
+      .where(eq(supportProviders.id, current.id));
     result.updated += 1;
   }
 

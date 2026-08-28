@@ -38,13 +38,13 @@ test("friendshipPair orders by byte value, the way Postgres compares uuid", () =
 });
 
 test("otherParticipant returns the person who is not me, from either slot", () => {
-  const row = { user_low: alice, user_high: bob };
+  const row = { userLow: alice, userHigh: bob };
   assert.equal(otherParticipant(row, alice), bob);
   assert.equal(otherParticipant(row, bob), alice);
 });
 
 test("requestDirection is outgoing for the requester and incoming for the other", () => {
-  const row = { requester_id: alice };
+  const row = { requesterId: alice };
   assert.equal(requestDirection(row, alice), "outgoing");
   assert.equal(requestDirection(row, bob), "incoming");
 });

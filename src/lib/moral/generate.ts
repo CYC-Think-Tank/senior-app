@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sessions, transcriptTurns } from "@/lib/db/schema";
 import { MORAL_MODEL } from "@/lib/constants";
 import { locales } from "@/lib/i18n";
 import { LEGACY_QUESTION } from "@/lib/realtime/interviewer-prompt";
@@ -155,7 +157,6 @@ async function requestMoral(
  * thing the link was sent for.
  */
 export async function ensureMoral(
-  admin: SupabaseClient,
   session: { id: string; moral: string | null; topic: string | null },
   guestName: string
 ): Promise<Moral | null> {
@@ -164,20 +165,36 @@ export async function ensureMoral(
 
   // Admin-excluded turns are cut from the story the family publishes, so they
   // are not part of what it means either.
-  const { data: rows, error } = await admin
-    .from("transcript_turns")
-    .select("idx, speaker, text, excluded")
-    .eq("session_id", session.id)
-    .eq("excluded", false)
-    .order("idx", { ascending: true });
-  if (error || !rows?.length) {
+  let rows: TurnRow[] = [];
+  try {
+    rows = await db
+      .select({
+        idx: transcriptTurns.idx,
+        speaker: transcriptTurns.speaker,
+        text: transcriptTurns.text,
+        excluded: transcriptTurns.excluded,
+      })
+      .from(transcriptTurns)
+      .where(
+        and(
+          eq(transcriptTurns.sessionId, session.id),
+          eq(transcriptTurns.excluded, false),
+        ),
+      )
+      .orderBy(asc(transcriptTurns.idx));
+  } catch (error) {
+    console.error(`could not read the transcript for ${session.id}:`, error);
+    return null;
+  }
+
+  if (!rows.length) {
     console.warn(`no moral for session ${session.id}: transcript is empty`);
     return null;
   }
 
   let turns: TurnRow[];
   try {
-    turns = decryptTurns(session.id, rows as TurnRow[]);
+    turns = decryptTurns(session.id, rows);
   } catch (cause) {
     console.error(`transcript for session ${session.id} is unreadable:`, cause);
     return null;
@@ -200,11 +217,12 @@ export async function ensureMoral(
   );
   if (!moral) return null;
 
-  const { error: saveError } = await admin
-    .from("sessions")
-    .update({ moral: encryptMoral(session.id, moral) })
-    .eq("id", session.id);
-  if (saveError) {
+  try {
+    await db
+      .update(sessions)
+      .set({ moral: encryptMoral(session.id, moral) })
+      .where(eq(sessions.id, session.id));
+  } catch (saveError) {
     // Worth showing now even if the next visitor has to pay for it again.
     console.error("moral could not be saved:", saveError);
   }

@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
 import {
   PortalShell,
   portalStyles,
@@ -14,13 +17,13 @@ export default async function FamilyLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { supabase, user } = await requireUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, display_name, email")
-    .eq("id", user.id)
-    .single();
-  const name = personName(profile?.display_name, profile?.email ?? user.email);
+  const { user } = await requireUser();
+  const [profile] = await db
+    .select({ displayName: profiles.displayName, email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, user.id))
+    .limit(1);
+  const name = personName(profile?.displayName, profile?.email ?? user.email);
   // Drives the badge on the Friend circle nav item; accepting or declining a
   // request revalidates this layout so it clears.
   const pendingRequests = await getPendingRequestCount();

@@ -32,7 +32,7 @@ export function ConversationTranscriptEditor({
     () =>
       turns
         .filter((turn) => turn.excluded)
-        .map((turn) => ({ startMs: turn.start_ms, endMs: turn.end_ms })),
+        .map((turn) => ({ startMs: turn.startMs, endMs: turn.endMs })),
     [turns],
   );
 
@@ -116,7 +116,7 @@ export function ConversationTranscriptEditor({
                 }`}
               >
                 <span className="mt-0.5 shrink-0 font-mono text-xs text-ink-faint">
-                  {formatTimestamp(turn.start_ms)}
+                  {formatTimestamp(turn.startMs)}
                 </span>
                 <div className="min-w-0 flex-1">
                   <span

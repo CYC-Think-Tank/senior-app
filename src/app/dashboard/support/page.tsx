@@ -1,8 +1,10 @@
 import { Brain, HandHeart, ShieldCheck, UserRoundSearch } from "lucide-react";
 import { getPreferredLocale } from "@/lib/preferred-locale";
 import type { Locale } from "@/lib/i18n";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { db } from "@/lib/db";
+import { supportProviders, supportRequests } from "@/lib/db/schema";
 import { SupportRequestForm } from "./support-request-form";
 import { SupportHistory, type SupportHistoryItem } from "./support-history";
 import styles from "./support.module.css";
@@ -59,25 +61,45 @@ export default async function SupportPage() {
   const [{ user }, locale] = await Promise.all([requireUser(), getPreferredLocale()]);
   const c = copy[locale];
   const icons = [Brain, UserRoundSearch, HandHeart];
-  const admin = createSupabaseAdminClient();
-  const { data: requestRows } = await admin
-    .from("support_requests")
-    .select("id, assessment_summary, status, matched_provider_id, created_at")
-    .eq("requester_id", user.id)
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: false })
+  // Filtered to the caller's own requests, which is the whole of the
+  // "people read their own support requests" policy.
+  const requestRows = await db
+    .select({
+      id: supportRequests.id,
+      assessmentSummary: supportRequests.assessmentSummary,
+      status: supportRequests.status,
+      matchedProviderId: supportRequests.matchedProviderId,
+      createdAt: supportRequests.createdAt,
+    })
+    .from(supportRequests)
+    .where(
+      and(
+        eq(supportRequests.requesterId, user.id),
+        ne(supportRequests.status, "cancelled"),
+      ),
+    )
+    .orderBy(desc(supportRequests.createdAt))
     .limit(8);
-  const providerIds = [...new Set((requestRows ?? []).map((row) => row.matched_provider_id).filter((id): id is string => Boolean(id)))];
-  const { data: providers } = providerIds.length
-    ? await admin.from("support_providers").select("id, display_name").in("id", providerIds)
-    : { data: [] };
-  const providerNames = new Map((providers ?? []).map((provider) => [provider.id, provider.display_name]));
-  const history: SupportHistoryItem[] = (requestRows ?? []).map((row) => ({
+
+  // Provider rosters are staff-only (migration 020), so only the matched
+  // person's name is read, and only their name reaches the page.
+  const providerIds = [...new Set(requestRows.map((row) => row.matchedProviderId).filter((id): id is string => Boolean(id)))];
+  const providers = providerIds.length
+    ? await db
+        .select({
+          id: supportProviders.id,
+          displayName: supportProviders.displayName,
+        })
+        .from(supportProviders)
+        .where(inArray(supportProviders.id, providerIds))
+    : [];
+  const providerNames = new Map(providers.map((provider) => [provider.id, provider.displayName]));
+  const history: SupportHistoryItem[] = requestRows.map((row) => ({
     id: row.id,
-    summary: row.assessment_summary,
+    summary: row.assessmentSummary,
     status: row.status,
-    providerName: row.matched_provider_id ? providerNames.get(row.matched_provider_id) ?? null : null,
-    createdAt: row.created_at,
+    providerName: row.matchedProviderId ? providerNames.get(row.matchedProviderId) ?? null : null,
+    createdAt: row.createdAt,
   }));
 
   return (

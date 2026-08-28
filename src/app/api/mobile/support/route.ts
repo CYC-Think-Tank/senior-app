@@ -7,65 +7,74 @@ import {
   serverError,
   unauthorized,
 } from "@/lib/mobile/auth";
+import { desc, eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { supportProviders, supportRequests } from "@/lib/db/schema";
 import { assessSupportRequest } from "@/lib/support/ai";
 import {
-  rankProviders,
-  type ProviderType,
-  type ServiceMode,
-  type SupportPreference,
-  type SupportProvider,
-} from "@/lib/support/matching";
+  saveSupportRequest,
+  serviceModes as modes,
+  supportPreferences,
+} from "@/lib/support/requests";
+import type { ServiceMode, SupportPreference } from "@/lib/support/matching";
 
 export const dynamic = "force-dynamic";
-
-const providerTypes: ProviderType[] = ["high_school", "college", "staff"];
-const modes: ServiceMode[] = ["virtual", "nearby", "either"];
 
 /** The caller's own requests, newest first. */
 export async function GET(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { supabase, admin, user } = auth;
+  const { user } = auth;
 
-  // "people read their own support requests" scopes this to the caller.
-  const { data } = await supabase
-    .from("support_requests")
-    .select(
-      "id, request_text, assistance_type, urgency, status, assessment_summary, matched_provider_id, created_at"
-    )
-    .eq("requester_id", user.id)
-    .order("created_at", { ascending: false });
+  // Filtered to the caller's own requests, which is the whole of the
+  // "people read their own support requests" policy.
+  const rows = await db
+    .select({
+      id: supportRequests.id,
+      requestText: supportRequests.requestText,
+      assistanceType: supportRequests.assistanceType,
+      urgency: supportRequests.urgency,
+      status: supportRequests.status,
+      assessmentSummary: supportRequests.assessmentSummary,
+      matchedProviderId: supportRequests.matchedProviderId,
+      createdAt: supportRequests.createdAt,
+    })
+    .from(supportRequests)
+    .where(eq(supportRequests.requesterId, user.id))
+    .orderBy(desc(supportRequests.createdAt));
 
-  const rows = data ?? [];
-  // Provider rosters are staff-only (migration 020), so the matched provider's
-  // name is looked up with the service role and only their name is returned.
+  // Provider rosters are staff-only (migration 020), so only the matched
+  // person's name is looked up, and only their name is returned.
   const providerIds = [
-    ...new Set(rows.map((row) => row.matched_provider_id).filter(Boolean)),
-  ] as string[];
+    ...new Set(rows.map((row) => row.matchedProviderId).filter((id): id is string => Boolean(id))),
+  ];
 
   const providerNames = new Map<string, string>();
   if (providerIds.length > 0) {
-    const { data: providers } = await admin
-      .from("support_providers")
-      .select("id, display_name")
-      .in("id", providerIds);
-    for (const provider of providers ?? []) {
-      providerNames.set(provider.id, provider.display_name);
+    const providers = await db
+      .select({
+        id: supportProviders.id,
+        displayName: supportProviders.displayName,
+      })
+      .from(supportProviders)
+      .where(inArray(supportProviders.id, providerIds));
+    for (const provider of providers) {
+      providerNames.set(provider.id, provider.displayName);
     }
   }
 
   return NextResponse.json(
     rows.map((row) => ({
       id: row.id,
-      requestText: row.request_text,
-      assistanceType: row.assistance_type,
+      requestText: row.requestText,
+      assistanceType: row.assistanceType,
       urgency: row.urgency,
       status: row.status,
-      assessmentSummary: row.assessment_summary,
-      matchedProviderName: row.matched_provider_id
-        ? providerNames.get(row.matched_provider_id) ?? null
+      assessmentSummary: row.assessmentSummary,
+      matchedProviderName: row.matchedProviderId
+        ? providerNames.get(row.matchedProviderId) ?? null
         : null,
-      createdAt: row.created_at,
+      createdAt: row.createdAt,
     }))
   );
 }
@@ -80,7 +89,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireMobileUser(request);
   if (!auth) return unauthorized();
-  const { admin, user } = auth;
+  const { user } = auth;
 
   const body = await readJson(request);
   const requestText = readString(body, "requestText", 2000);
@@ -90,7 +99,7 @@ export async function POST(request: NextRequest) {
   const rawMode = readString(body, "serviceMode", 20) as ServiceMode;
   const mode = modes.includes(rawMode) ? rawMode : "either";
   const rawPreference = readString(body, "providerPreference", 40) as SupportPreference;
-  const preference = [...providerTypes, "no_preference"].includes(rawPreference)
+  const preference = supportPreferences.includes(rawPreference)
     ? rawPreference
     : "no_preference";
 
@@ -106,97 +115,29 @@ export async function POST(request: NextRequest) {
     availability,
   });
 
-  const { data: providerRows, error: providerError } = await admin
-    .from("support_providers")
-    .select(
-      "id, display_name, provider_type, languages, skills, interests, service_modes, locations, availability, successful_matches"
-    )
-    .eq("active", true)
-    .eq("verified", true);
-  if (providerError) {
-    console.error("Could not load support providers:", providerError);
-  }
+  const saved = await saveSupportRequest({
+    requesterId: user.id,
+    requestText,
+    assessment,
+    preference,
+    mode,
+    location,
+    availability,
+  });
 
-  const providers = (providerRows ?? [])
-    .map((row) => providerFromRow(row as Record<string, unknown>))
-    .filter((provider): provider is SupportProvider => Boolean(provider));
-  const match =
-    rankProviders({ assessment, providers, preference, mode, location })[0] ?? null;
-  const status = match
-    ? "matched"
-    : assessment.safetyLevel === "staff_required" ||
-        assessment.safetyLevel === "emergency"
-      ? "escalated"
-      : "open";
-
-  const { data, error } = await admin
-    .from("support_requests")
-    .insert({
-      requester_id: user.id,
-      request_text: requestText,
-      assistance_type: assessment.assistanceType,
-      urgency: assessment.urgency,
-      preferred_language: assessment.preferredLanguage,
-      location,
-      service_mode: mode,
-      availability,
-      required_skills: assessment.requiredSkills,
-      provider_preference: preference,
-      safety_level: assessment.safetyLevel,
-      recommended_tier: assessment.recommendedTier,
-      assessment_summary: assessment.summary,
-      safety_reason: assessment.safetyReason,
-      share_summary: assessment.shareSummary,
-      match_score: match?.score ?? null,
-      matched_provider_id: match?.provider.id ?? null,
-      status,
-    })
-    .select("id, created_at")
-    .single();
-
-  if (error || !data) {
-    console.error("Could not save support request:", error);
+  if (!saved) {
     return serverError("We could not save your request. Please try again.");
   }
 
   return NextResponse.json({
-    id: data.id,
+    id: saved.id,
     requestText,
     assistanceType: assessment.assistanceType,
     urgency: assessment.urgency,
-    status,
+    status: saved.status,
     assessmentSummary: assessment.summary,
     // Only the matched person's name — never the roster row behind it.
-    matchedProviderName: match?.provider.displayName ?? null,
-    createdAt: data.created_at,
+    matchedProviderName: saved.match?.provider.displayName ?? null,
+    createdAt: saved.createdAt,
   });
-}
-
-function providerFromRow(row: Record<string, unknown>): SupportProvider | null {
-  if (
-    typeof row.id !== "string" ||
-    typeof row.display_name !== "string" ||
-    !providerTypes.includes(row.provider_type as ProviderType)
-  ) {
-    return null;
-  }
-
-  const strings = (value: unknown) =>
-    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-
-  return {
-    id: row.id,
-    displayName: row.display_name,
-    providerType: row.provider_type as ProviderType,
-    languages: strings(row.languages),
-    skills: strings(row.skills),
-    interests: strings(row.interests),
-    serviceModes: strings(row.service_modes).filter((mode): mode is ServiceMode =>
-      modes.includes(mode as ServiceMode)
-    ),
-    locations: strings(row.locations),
-    availability: typeof row.availability === "string" ? row.availability : "",
-    successfulMatches:
-      typeof row.successful_matches === "number" ? row.successful_matches : 0,
-  };
 }

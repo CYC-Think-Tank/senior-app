@@ -1,11 +1,13 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, eq, isNull, lt, ne } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { guests, sessions } from "@/lib/db/schema";
 import { ANON_RETENTION_MS, RAW_BUCKET } from "@/lib/constants";
 import { partsPrefix } from "@/lib/audio/parts";
+import { list, remove } from "@/lib/storage";
 
 // One sweep handles this many sessions; the rest wait for the next run so a
 // backlog cannot outlast the request budget.
 const BATCH = 200;
-const LIST_PAGE = 1000;
 
 export type TrashResult = {
   sessions: number;
@@ -15,24 +17,12 @@ export type TrashResult = {
 };
 
 /** Every stored object under a session's folder, chunks included. */
-async function listSessionObjects(
-  admin: SupabaseClient,
-  sessionId: string
-): Promise<string[]> {
+async function listSessionObjects(sessionId: string): Promise<string[]> {
   const paths: string[] = [];
 
   for (const prefix of [sessionId, partsPrefix(sessionId)]) {
-    for (let offset = 0; ; offset += LIST_PAGE) {
-      const { data, error } = await admin.storage
-        .from(RAW_BUCKET)
-        .list(prefix, { limit: LIST_PAGE, offset });
-      if (error) throw new Error(error.message);
-      if (!data || data.length === 0) break;
-      for (const entry of data) {
-        // Folders come back with a null id; only files can be removed.
-        if (entry.id) paths.push(`${prefix}/${entry.name}`);
-      }
-      if (data.length < LIST_PAGE) break;
+    for (const object of await list(RAW_BUCKET, prefix)) {
+      paths.push(`${prefix}/${object.name}`);
     }
   }
 
@@ -42,14 +32,13 @@ async function listSessionObjects(
 /**
  * Deletes conversations from the public /interview flow that were never
  * finished: the guest closed the tab, and because the guest belongs to no
- * family and no account, nothing will ever surface or salvage them.
+ * account, nothing will ever surface or salvage them.
  *
  * Only sessions past the retention window are touched, so someone who steps
  * away and reopens their link still finds the conversation waiting. Finished
  * ('ready') conversations are never trashed, anonymous or not.
  */
 export async function trashAbandonedAnonymousSessions(
-  admin: SupabaseClient,
   retentionMs: number = ANON_RETENTION_MS
 ): Promise<TrashResult> {
   const cutoff = new Date(Date.now() - retentionMs).toISOString();
@@ -60,55 +49,51 @@ export async function trashAbandonedAnonymousSessions(
     errors: [],
   };
 
-  // `!inner` makes the guest filter narrow the sessions themselves: no account
-  // to claim it, i.e. an anonymous walk-in from the public /interview flow.
-  const { data: sessions, error } = await admin
-    .from("sessions")
-    .select("id, guest_id, guests!inner(user_id)")
-    .neq("status", "ready")
-    .lt("created_at", cutoff)
-    .is("guests.user_id", null)
-    .limit(BATCH);
-
-  if (error) {
-    result.errors.push(`Could not list abandoned sessions: ${error.message}`);
+  let abandoned;
+  try {
+    // The join to guests is what narrows this to anonymous walk-ins: no
+    // account to claim the conversation, i.e. the public /interview flow.
+    abandoned = await db
+      .select({ id: sessions.id, guestId: sessions.guestId })
+      .from(sessions)
+      .innerJoin(guests, eq(guests.id, sessions.guestId))
+      .where(
+        and(
+          ne(sessions.status, "ready"),
+          lt(sessions.createdAt, cutoff),
+          isNull(guests.userId),
+        ),
+      )
+      .limit(BATCH);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    result.errors.push(`Could not list abandoned sessions: ${detail}`);
     return result;
   }
 
-  for (const session of sessions ?? []) {
+  for (const session of abandoned) {
     try {
       // Storage first: a row deleted before its audio would strand the chunks
       // with nothing left to point at them.
-      const paths = await listSessionObjects(admin, session.id);
+      const paths = await listSessionObjects(session.id);
       if (paths.length > 0) {
-        const { error: removeError } = await admin.storage
-          .from(RAW_BUCKET)
-          .remove(paths);
-        if (removeError) throw new Error(removeError.message);
+        await remove(RAW_BUCKET, paths);
         result.objects += paths.length;
       }
 
       // Cascades the transcript turns saved by the live checkpoints.
-      const { error: deleteError } = await admin
-        .from("sessions")
-        .delete()
-        .eq("id", session.id);
-      if (deleteError) throw new Error(deleteError.message);
+      await db.delete(sessions).where(eq(sessions.id, session.id));
       result.sessions += 1;
 
       // The public flow mints one throwaway guest per conversation, so the
       // guest goes too — unless an admin has since given them another session.
-      const { data: remaining } = await admin
-        .from("sessions")
-        .select("id")
-        .eq("guest_id", session.guest_id)
+      const [remaining] = await db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.guestId, session.guestId))
         .limit(1);
-      if (!remaining || remaining.length === 0) {
-        const { error: guestError } = await admin
-          .from("guests")
-          .delete()
-          .eq("id", session.guest_id);
-        if (guestError) throw new Error(guestError.message);
+      if (!remaining) {
+        await db.delete(guests).where(eq(guests.id, session.guestId));
         result.guests += 1;
       }
     } catch (err) {

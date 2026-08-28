@@ -14,6 +14,10 @@ import {
   VideoGenerationLimitError,
 } from "@/lib/memoir/workflow";
 import { isSeegenConfigured } from "@/lib/memoir/seedance";
+import { eq } from "drizzle-orm";
+import { ownsReadySession } from "@/lib/authz";
+import { db } from "@/lib/db";
+import { conversationVideos } from "@/lib/db/schema";
 import type { ConversationVideo } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -37,20 +41,24 @@ export async function GET(request: NextRequest, { params }: Params) {
   try {
     const auth = await requireMobileUser(request);
     if (!auth) return unauthorized();
-    const { supabase, user } = auth;
+    const { user } = auth;
     const { id } = await params;
 
-    // The RLS policy on this table is the whole access check: a row only comes
-    // back to the storyteller who recorded the conversation (migration 017).
-    const { data } = await supabase
-      .from("conversation_videos")
-      .select("*")
-      .eq("session_id", id)
-      .maybeSingle();
+    // The film belongs to whoever recorded the conversation (migration 017),
+    // so ownership of the conversation is the whole access check.
+    const owned = await ownsReadySession(user.id, id);
 
     // The app labels its create/remake button with what is left, so the
     // allowance travels with the film on every refresh.
-    const quota = await getVideoGenerationQuota(supabase, user.id);
+    const quota = await getVideoGenerationQuota(user.id);
+
+    const [data] = owned
+      ? await db
+          .select()
+          .from(conversationVideos)
+          .where(eq(conversationVideos.sessionId, id))
+          .limit(1)
+      : [];
 
     // Nothing made yet is not an error — it is the state the app offers the
     // "create a film" button in.
@@ -78,7 +86,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   try {
     const auth = await requireMobileUser(request);
     if (!auth) return unauthorized();
-    const { supabase, user } = auth;
+    const { user } = auth;
     const { id } = await params;
 
     if (!isSeegenConfigured()) {
@@ -91,16 +99,11 @@ export async function POST(request: NextRequest, { params }: Params) {
     const body = await readJson(request);
     const regenerate = body.regenerate === true;
 
-    // Authorise through the caller's client before the service role writes —
-    // and only a finished conversation has a story to adapt.
-    const { data: session } = await supabase
-      .from("sessions")
-      .select("id, guests!inner(user_id)")
-      .eq("id", id)
-      .eq("status", "ready")
-      .eq("guests.user_id", user.id)
-      .maybeSingle();
-    if (!session) return notFound("This conversation could not be opened.");
+    // Films cost money to make, so the conversation has to be theirs — and
+    // only a finished one has a story to adapt.
+    if (!(await ownsReadySession(user.id, id))) {
+      return notFound("This conversation could not be opened.");
+    }
 
     const video = await startConversationVideo(id, { userId: user.id, regenerate });
     if (ACTIVE.includes(video.status)) {
@@ -114,7 +117,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
     return NextResponse.json({
       video: await publicConversationVideo(video),
-      quota: await getVideoGenerationQuota(supabase, user.id),
+      quota: await getVideoGenerationQuota(user.id),
     });
   } catch (error) {
     // Out of films is a plain answer, not a server fault.

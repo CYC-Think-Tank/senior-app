@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { syncCycSeniorCareRegistrations } from "@/lib/support/cyc-sync";
 import { WixCmsError } from "@/lib/wix-cms";
 
@@ -23,9 +22,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await syncCycSeniorCareRegistrations(
-      createSupabaseAdminClient(),
-    );
+    const result = await syncCycSeniorCareRegistrations();
     console.info(
       `Synced ${result.fetched} Senior Care registration(s): ` +
         `${result.created} added, ${result.updated} refreshed, ${result.skipped} skipped.`,
