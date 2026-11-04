@@ -70,20 +70,13 @@ export default async function LandingPage() {
 
         <div className={styles.heroGrid}>
           <div className={styles.heroCopy}>
-            <h1
-              className={`${styles.slogan} ${
-                locale === "en" ? "" : styles.localizedSlogan
-              }`}
-            >
+            <h1 className={styles.slogan}>
               <span className={styles.sloganLine}>
                 {t("landingHeroLine").split("\n").map((line) => (
                   <span key={line} className={styles.sloganSegment}>
                     {line}
                   </span>
                 ))}
-              </span>
-              <span className={styles.flipSlot}>
-                <span className={styles.flipWord}>{t("landingHeroForever")}</span>
               </span>
             </h1>
             <p className={styles.heroDescription}>

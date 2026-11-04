@@ -197,6 +197,57 @@ export const friendships = pgTable(
   ],
 );
 
+/**
+ * A direct message or a named group. Direct threads store the ordered pair so
+ * two friends only ever share one conversation. See 025_chat.sql.
+ */
+export const chatThreads = pgTable(
+  "chat_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(),
+    title: text("title"),
+    createdBy: uuid("created_by"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    directLow: uuid("direct_low"),
+    directHigh: uuid("direct_high"),
+  },
+  (table) => [
+    uniqueIndex("chat_threads_direct_pair_key").on(
+      table.directLow,
+      table.directHigh,
+    ),
+  ],
+);
+
+/** Who can read and write a thread. `lastReadAt` drives the unread dot. */
+export const chatMembers = pgTable(
+  "chat_members",
+  {
+    threadId: uuid("thread_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    joinedAt: timestamptz("joined_at").notNull().defaultNow(),
+    lastReadAt: timestamptz("last_read_at"),
+  },
+  (table) => [
+    uniqueIndex("chat_members_thread_id_user_id_key").on(
+      table.threadId,
+      table.userId,
+    ),
+  ],
+);
+
+/** Plain text, the way comments are: written to be read by the other members. */
+export const chatMessages = pgTable("chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  threadId: uuid("thread_id").notNull(),
+  authorId: uuid("author_id").notNull(),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
+});
+
 /** Allowlist of addresses that get the admin role. Lowercase, see seed.sql. */
 export const adminEmails = pgTable("admin_emails", {
   email: text("email").primaryKey(),

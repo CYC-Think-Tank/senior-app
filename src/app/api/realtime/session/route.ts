@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
             transcription: { model: "gpt-4o-transcribe" },
             // Semantic VAD understands when a thought is finished while still
             // allowing natural pauses. Medium eagerness closes the turn after
-            // a reasonable silence instead of leaving Rosie waiting forever.
+            // a reasonable silence instead of leaving Linda waiting forever.
             turn_detection: {
               type: "semantic_vad",
               eagerness: "medium",

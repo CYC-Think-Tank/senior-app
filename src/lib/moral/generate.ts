@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { sessions, transcriptTurns } from "@/lib/db/schema";
 import { MORAL_MODEL } from "@/lib/constants";
 import { locales } from "@/lib/i18n";
-import { LEGACY_QUESTION } from "@/lib/realtime/interviewer-prompt";
+import { HOST_NAME, LEGACY_QUESTION } from "@/lib/realtime/interviewer-prompt";
 import { decryptTurns } from "@/lib/transcript/encryption";
 import { decryptMoral, encryptMoral, type Moral } from "./encryption";
 
@@ -24,7 +24,7 @@ const MIN_GUEST_CHARS = 120;
  */
 const MAX_TRANSCRIPT_CHARS = 40_000;
 
-const INSTRUCTIONS = `You read transcripts of older adults telling their life stories to Rosie, an AI interviewer, and distil the one thing a young person should carry away from them.
+const INSTRUCTIONS = `You read transcripts of older adults telling their life stories to ${HOST_NAME}, an AI interviewer, and distil the one thing a young person should carry away from them.
 
 Write a single sentence:
 - Ground it in what this person actually said. Name the specific thing they lived through or chose; never reach for a proverb that would fit any life.
@@ -33,7 +33,7 @@ Write a single sentence:
 - Speak to someone young without talking down to them.
 - Write it in the third person about the storyteller's life or as a plain statement of what holds true. Do not address the storyteller.
 
-If Rosie asked the storyteller near the end of the conversation what message they would leave with the youth of the next generation — "${LEGACY_QUESTION}", in any wording or language — then do not distil a takeaway of your own. The sentence must be a one-line summary of the answer they actually gave to that question, in their own terms, still obeying the length and style rules above. Ignore the rest of the transcript except to make that answer readable on its own.
+If ${HOST_NAME} asked the storyteller near the end of the conversation what message they would leave with the youth of the next generation — "${LEGACY_QUESTION}", in any wording or language — then do not distil a takeaway of your own. The sentence must be a one-line summary of the answer they actually gave to that question, in their own terms, still obeying the length and style rules above. Ignore the rest of the transcript except to make that answer readable on its own.
 
 Return that same moral written naturally in each language — idiomatic in all three, not translated word for word:
 - en: English
@@ -47,7 +47,7 @@ function renderTranscript(turns: TurnRow[], guestName: string): string {
   const body = turns
     .map(
       (turn) =>
-        `${turn.speaker === "ai" ? "Rosie" : guestName}: ${turn.text.trim()}`
+        `${turn.speaker === "ai" ? HOST_NAME : guestName}: ${turn.text.trim()}`
     )
     .join("\n\n");
   if (body.length <= MAX_TRANSCRIPT_CHARS) return body;

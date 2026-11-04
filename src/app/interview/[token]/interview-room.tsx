@@ -41,7 +41,7 @@ import { useI18n } from "@/components/i18n-provider";
  */
 const ICEBREAKER_GUEST_TURNS = 8;
 
-/** Long enough that a brisk reply from Rosie still leaves the image readable. */
+/** Long enough that a brisk reply from Linda still leaves the image readable. */
 const BACKDROP_MIN_VISIBLE_MS = 3500;
 
 type Props = {
@@ -227,7 +227,7 @@ export default function InterviewRoom({
     }
   }, [turns, phase]);
 
-  // "The question is finished" is Rosie having answered and fallen silent. The
+  // "The question is finished" is Linda having answered and fallen silent. The
   // floor keeps a quick acknowledgement from flashing the image and losing it.
   useEffect(() => {
     if (!backdrop) return;
@@ -422,7 +422,7 @@ export default function InterviewRoom({
               />
             </div>
 
-            {/* Rosie still starts her own wrap-up when the guest says they are
+            {/* Linda still starts her own wrap-up when the guest says they are
                 done, so the state needs to stay visible now that the button
                 that used to announce it is gone. */}
             <p className={theme.liveLabel}>
@@ -460,7 +460,7 @@ export default function InterviewRoom({
               </button>
 
               {/* Stays enabled through wrap-up: someone who wants out now
-                  should not have to sit through Rosie's closing. */}
+                  should not have to sit through Linda's closing. */}
               <button
                 type="button"
                 onClick={endCall}
@@ -661,7 +661,7 @@ function GreetingText({ guestName }: { guestName: string }) {
 }
 
 /**
- * Rosie becomes a five-bar microphone visualizer while the guest is speaking.
+ * Linda becomes a five-bar microphone visualizer while the guest is speaking.
  * During her turn, the fluid orb follows the realtime speaking callback.
  */
 function BreathingCircle({

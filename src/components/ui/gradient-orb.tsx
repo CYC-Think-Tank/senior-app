@@ -29,7 +29,7 @@ const vertexShader = /* glsl */ `
 `;
 
 // This is the supplied gradient-orb shader, with its colours mapped from the
-// original blue/purple range into Rosie's ember interview palette.
+// original blue/purple range into Linda's ember interview palette.
 const fragmentShader = /* glsl */ `
   precision highp float;
   uniform float iTime;

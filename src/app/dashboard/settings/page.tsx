@@ -14,17 +14,17 @@ const copyByLocale: Record<Locale, { eyebrow: string; title: string; intro: stri
   en: {
     eyebrow: "My space",
     title: "Settings",
-    intro: "Tell us what to call you, and a little about yourself. Rosie reads this before each conversation begins.",
+    intro: "Tell us what to call you, and a little about yourself. Linda reads this before each conversation begins.",
   },
   "zh-Hans": {
     eyebrow: "我的空间",
     title: "设置",
-    intro: "告诉我们该怎么称呼您，以及一些关于您的事情。Rosie 会在对话开始前读到这些。",
+    intro: "告诉我们该怎么称呼您，以及一些关于您的事情。Linda 会在对话开始前读到这些。",
   },
   "zh-Hant": {
     eyebrow: "我的空間",
     title: "設定",
-    intro: "告訴我們該怎麼稱呼您，以及一些關於您的事情。Rosie 會在對話開始前讀到這些。",
+    intro: "告訴我們該怎麼稱呼您，以及一些關於您的事情。Linda 會在對話開始前讀到這些。",
   },
 };
 

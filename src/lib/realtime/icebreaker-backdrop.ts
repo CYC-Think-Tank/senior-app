@@ -1,7 +1,7 @@
 /**
  * Maps an icebreaker answer to the backdrop that should rise behind the room.
  *
- * Rosie opens with "What's your favourite season?" and "Tea or coffee?", so the
+ * Linda opens with "What's your favourite season?" and "Tea or coffee?", so the
  * answers are short and tightly constrained. Reading them off the transcript
  * keeps the backdrop working without spending a model turn on a tool call.
  */

@@ -1,6 +1,6 @@
 import type { Speaker } from "@/lib/types";
 
-export const HOST_NAME = "Rosie";
+export const HOST_NAME = "Linda";
 
 /**
  * Asked once, when the conversation has genuinely run dry. Whatever the guest

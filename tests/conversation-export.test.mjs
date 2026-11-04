@@ -59,7 +59,7 @@ test("exports transcripts in speaking order with edit state", () => {
     transcript.indexOf("What was your first job?") <
       transcript.indexOf("My first job was at the bakery."),
   );
-  assert.match(transcript, /Rosie/);
+  assert.match(transcript, /Linda/);
   assert.match(transcript, /Margaret \[excluded from episode\]/);
 });
 

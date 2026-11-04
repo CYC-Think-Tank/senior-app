@@ -43,7 +43,7 @@ export type InterviewCallbacks = {
   onWrapUpStarted: () => void;
   /** ~60fps: mic input level (0..1), elapsed recording ms, and RNNoise VAD. */
   onMeter: (level: number, elapsedMs: number, voiceActivity?: number) => void;
-  /** ~60fps: the RMS level of Rosie's output audio (0..1). */
+  /** ~60fps: the RMS level of Linda's output audio (0..1). */
   onAiMeter: (level: number) => void;
 };
 
@@ -899,13 +899,13 @@ export class InterviewClient {
    * wired upstream of `processedMicStream`, so disabling that stream — what
    * wrap-up does — would still record a muted guest and still bounce the
    * visualizer. Disabling the raw track feeds silence to the whole graph, so a
-   * muted stretch reaches neither Rosie nor the recording.
+   * muted stretch reaches neither Linda nor the recording.
    *
    * Returns false when muting no longer applies, leaving the button as it was.
    */
   setMuted(muted: boolean) {
     // Wrap-up has already cut the microphone; unmuting here would let a late
-    // guest turn race Rosie's closing.
+    // guest turn race Linda's closing.
     if (this.stopped || this.wrapUpRequested) return false;
     const tracks = this.micStream?.getAudioTracks() ?? [];
     if (!tracks.length) return false;
@@ -927,7 +927,7 @@ export class InterviewClient {
     this.wrapUpStyle = style;
     this.cb.onWrapUpStarted();
 
-    // Prevent a new guest turn from interrupting or racing Rosie's closing.
+    // Prevent a new guest turn from interrupting or racing Linda's closing.
     this.processedMicStream?.getAudioTracks().forEach((track) => {
       track.enabled = false;
     });
