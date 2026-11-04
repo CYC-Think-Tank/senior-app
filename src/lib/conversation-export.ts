@@ -1,3 +1,5 @@
+import { HOST_NAME } from "@/lib/realtime/interviewer-prompt";
+
 /**
  * What the export writer needs from a conversation.
  *
@@ -83,7 +85,7 @@ export function conversationTranscript(
     "",
     ...turns.flatMap((turn) => [
       `[${timestamp(turn.startMs)}] ${
-        turn.speaker === "ai" ? "Rosie" : conversation.guestName
+        turn.speaker === "ai" ? HOST_NAME : conversation.guestName
       }${turn.excluded ? " [excluded from episode]" : ""}`,
       turn.text,
       "",

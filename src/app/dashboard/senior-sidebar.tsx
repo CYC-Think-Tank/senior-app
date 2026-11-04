@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { HandHeart, Headphones, Home, LogOut, Settings, Users } from "lucide-react";
+import { HandHeart, Headphones, Home, LogOut, MessageCircle, Settings, Users } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Wordmark } from "@/components/ui";
@@ -41,6 +41,7 @@ const namedRoutes = [
   "/dashboard/friends",
   "/dashboard/circle",
   "/dashboard/support",
+  "/dashboard/chat",
 ];
 
 const sidebarCopy: Record<Locale, {
@@ -48,6 +49,9 @@ const sidebarCopy: Record<Locale, {
   conversations: string;
   settings: string;
   support: string;
+  messages: string;
+  unreadOne: string;
+  unreadMany: string;
   space: string;
   navigation: string;
 }> = {
@@ -56,6 +60,9 @@ const sidebarCopy: Record<Locale, {
     conversations: "Conversations",
     settings: "Settings",
     support: "Get help",
+    messages: "Messages",
+    unreadOne: "1 unread chat",
+    unreadMany: "{count} unread chats",
     space: "My space",
     navigation: "Senior navigation",
   },
@@ -64,6 +71,9 @@ const sidebarCopy: Record<Locale, {
     conversations: "我的对话",
     settings: "设置",
     support: "寻求帮助",
+    messages: "消息",
+    unreadOne: "1 个未读聊天",
+    unreadMany: "{count} 个未读聊天",
     space: "我的空间",
     navigation: "长辈导航",
   },
@@ -72,6 +82,9 @@ const sidebarCopy: Record<Locale, {
     conversations: "我的對話",
     settings: "設定",
     support: "尋求協助",
+    messages: "訊息",
+    unreadOne: "1 個未讀聊天",
+    unreadMany: "{count} 個未讀聊天",
     space: "我的空間",
     navigation: "長輩導覽",
   },
@@ -80,9 +93,11 @@ const sidebarCopy: Record<Locale, {
 export function SeniorSidebar({
   name,
   pendingRequests = 0,
+  unreadChats = 0,
 }: {
   name: string;
   pendingRequests?: number;
+  unreadChats?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -113,6 +128,17 @@ export function SeniorSidebar({
         pathname.startsWith("/dashboard/circle") ||
         pathname.startsWith("/dashboard/friends"),
       badge: pendingRequests,
+    },
+    {
+      href: "/dashboard/chat",
+      label: copy.messages,
+      icon: MessageCircle,
+      active: pathname.startsWith("/dashboard/chat"),
+      badge: unreadChats,
+      badgeLabel:
+        unreadChats === 1
+          ? copy.unreadOne
+          : copy.unreadMany.replace("{count}", String(unreadChats)),
     },
     {
       href: "/dashboard/support",
@@ -156,9 +182,11 @@ export function SeniorSidebar({
               <span
                 className={styles.navBadge}
                 aria-label={
-                  item.badge === 1
-                    ? t("circlePendingBannerOne")
-                    : t("circlePendingBanner", { count: String(item.badge) })
+                  "badgeLabel" in item && item.badgeLabel
+                    ? item.badgeLabel
+                    : item.badge === 1
+                      ? t("circlePendingBannerOne")
+                      : t("circlePendingBanner", { count: String(item.badge) })
                 }
               >
                 {item.badge}

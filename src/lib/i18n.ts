@@ -31,7 +31,7 @@ export function normalizeLocale(value: string | undefined | null): Locale {
 }
 
 /**
- * The language Rosie speaks with someone who reads the app in `locale`. The two
+ * The language Linda speaks with someone who reads the app in `locale`. The two
  * Chinese locales share a written form but map to different spoken varieties:
  * readers of Traditional Chinese hear Cantonese, readers of Simplified hear
  * Mandarin.
@@ -105,7 +105,7 @@ const en = {
   landingCta: "Listen to WiseShare stories",
   landingCardTalkTitle: "They just talk",
   landingCardTalkBody:
-    "Rosie, a patient AI host, asks about their life — the village, the first job, the day they met — and simply listens.",
+    "Linda, a patient AI host, asks about their life — the village, the first job, the day they met — and simply listens.",
   landingCardCraftTitle: "We keep it safe",
   landingCardCraftBody:
     "Each conversation is saved the moment it ends — and it goes nowhere until the storyteller decides to share it.",
@@ -115,9 +115,7 @@ const en = {
   landingFooter: "WiseShare — stories shared publicly, always with permission.",
   landingLogin: "Log in",
   landingGetStarted: "Get started",
-  landingHeroLine:
-    "Turn your stories into videos,\nconnect generations and pass on wisdom.",
-  landingHeroForever: "Preserve family history.",
+  landingHeroLine: "AI: Turn Your Stories Into Videos.",
   landingHeroDescription:
     "Your AI Companion — Chat, Connect & Enjoy Every Day.",
   landingStartConversation: "Start a conversation",
@@ -251,7 +249,7 @@ const en = {
     "We couldn't start the conversation. Please try again.",
   interviewStartRateLimit:
     "Please wait a few minutes before starting another conversation.",
-  interviewStartNameError: "Enter the name you would like Rosie to use.",
+  interviewStartNameError: "Enter the name you would like Linda to use.",
   interviewAlreadyTitle: "This chat is already saved",
   interviewAlreadyBody:
     "Thank you, {guestName}. Your stories from this conversation are safe with us.",
@@ -261,25 +259,25 @@ const en = {
   interviewWelcomeBack: "Welcome back, {guestName}.",
   interviewCarryOn: "Shall we carry on?",
   interviewResumeIntro:
-    "Rosie remembers everything you told her last time. Just start talking whenever you're ready.",
+    "Linda remembers everything you told her last time. Just start talking whenever you're ready.",
   interviewContinue: "Continue",
   interviewTopic: "Today we'll talk about {topic}",
   interviewIntro:
-    "Rosie, your host, will ask the questions. Just speak naturally — there's nothing to read and nothing to type.",
+    "Linda, your host, will ask the questions. Just speak naturally — there's nothing to read and nothing to type.",
   interviewBegin: "Begin",
   interviewAllowMic: "Please allow the microphone...",
-  interviewFinding: "Finding Rosie...",
+  interviewFinding: "Finding Linda...",
   interviewMoment: "Just a moment.",
   interviewRecording: "Recording",
-  interviewAiSpeaking: "Rosie is speaking...",
+  interviewAiSpeaking: "Linda is speaking...",
   interviewListening: "We're listening.",
-  interviewWrapBusy: "Rosie is wrapping up...",
+  interviewWrapBusy: "Linda is wrapping up...",
   interviewWrap: "Time to finish",
   interviewEndSave: "End & save",
   interviewEndConfirm: "Tap again to end",
   interviewMute: "Mute",
   interviewUnmute: "Unmute",
-  interviewMutedNotice: "Your microphone is off. Rosie can't hear you.",
+  interviewMutedNotice: "Your microphone is off. Linda can't hear you.",
   interviewSaving: "Saving your stories...",
   interviewKeepOpen: "Please keep this page open.",
   interviewThanks: "Thank you, {guestName}.",
@@ -427,7 +425,7 @@ const zhHans: typeof en = {
   landingCta: "收听慧享故事",
   landingCardTalkTitle: "他们只需开口",
   landingCardTalkBody:
-    "耐心的 AI 主持人 Rosie 会询问他们的人生：故乡、第一份工作、相遇的那一天，然后静静聆听。",
+    "耐心的 AI 主持人 Linda 会询问他们的人生：故乡、第一份工作、相遇的那一天，然后静静聆听。",
   landingCardCraftTitle: "我们妥善保存",
   landingCardCraftBody:
     "对话结束即刻保存；在讲述者决定分享之前，不会传给任何人。",
@@ -437,8 +435,7 @@ const zhHans: typeof en = {
   landingFooter: "慧享 — 经本人同意，把故事分享给所有人。",
   landingLogin: "登录",
   landingGetStarted: "开始体验",
-  landingHeroLine: "慧享 AI｜将您的故事编成动画，经历记录历史，",
-  landingHeroForever: "智慧相传。",
+  landingHeroLine: "AI：将您的故事制成微电影",
   landingHeroDescription: "AI 常伴，聊天互动，笑口常开。",
   landingStartConversation: "开始对话",
   landingDemoAria: "慧享产品演示视频",
@@ -563,7 +560,7 @@ const zhHans: typeof en = {
   interviewPreparingGreeting: "正在准备问候语。",
   interviewStartGenericError: "无法开始对话，请重试。",
   interviewStartRateLimit: "请稍等几分钟后再开始新的对话。",
-  interviewStartNameError: "请输入您希望 Rosie 使用的称呼。",
+  interviewStartNameError: "请输入您希望 Linda 使用的称呼。",
   interviewAlreadyTitle: "这次访谈已经保存",
   interviewAlreadyBody: "谢谢你，{guestName}。这次对话里的故事已经安全保存。",
   interviewHello: "你好，{guestName}。",
@@ -572,24 +569,24 @@ const zhHans: typeof en = {
   interviewWelcomeBack: "欢迎回来，{guestName}。",
   interviewCarryOn: "我们继续吧？",
   interviewResumeIntro:
-    "Rosie 记得你上次说过的每一句话。准备好了就直接开口。",
+    "Linda 记得你上次说过的每一句话。准备好了就直接开口。",
   interviewContinue: "继续",
   interviewTopic: "今天我们会聊 {topic}",
-  interviewIntro: "主持人 Rosie 会提问。自然说话就好，不需要读稿，也不需要打字。",
+  interviewIntro: "主持人 Linda 会提问。自然说话就好，不需要读稿，也不需要打字。",
   interviewBegin: "开始",
   interviewAllowMic: "请允许使用麦克风...",
-  interviewFinding: "正在连接 Rosie...",
+  interviewFinding: "正在连接 Linda...",
   interviewMoment: "请稍等。",
   interviewRecording: "录制中",
-  interviewAiSpeaking: "Rosie 正在说话...",
+  interviewAiSpeaking: "Linda 正在说话...",
   interviewListening: "我们正在听。",
-  interviewWrapBusy: "Rosie 正在收尾...",
+  interviewWrapBusy: "Linda 正在收尾...",
   interviewWrap: "准备结束",
   interviewEndSave: "结束并保存",
   interviewEndConfirm: "再次点击结束",
   interviewMute: "静音",
   interviewUnmute: "取消静音",
-  interviewMutedNotice: "麦克风已关闭，Rosie 听不到您的声音。",
+  interviewMutedNotice: "麦克风已关闭，Linda 听不到您的声音。",
   interviewSaving: "正在保存你的故事...",
   interviewKeepOpen: "请保持此页面打开。",
   interviewThanks: "谢谢你，{guestName}。",
@@ -701,8 +698,7 @@ const zhHant: typeof en = {
   landingCardFamilyTitle: "所有人都能收聽",
   landingLogin: "登入",
   landingGetStarted: "開始體驗",
-  landingHeroLine: "慧享 AI｜將您的故事編成動畫，經歷記載歷史，",
-  landingHeroForever: "智慧相傳。",
+  landingHeroLine: "AI：將您的故事製成微電影",
   landingStartConversation: "開始對話",
   landingCompanionKicker: "日常陪伴",
   landingCompanionTitleOne: "一聲溫暖的問候，",
@@ -741,9 +737,9 @@ const zhHant: typeof en = {
   interviewReady: "準備好分享",
   interviewSomeStories: "一些故事了嗎？",
   interviewBegin: "開始",
-  interviewFinding: "正在連接 Rosie...",
-  interviewAiSpeaking: "Rosie 正在說話...",
-  interviewWrapBusy: "Rosie 正在收尾...",
+  interviewFinding: "正在連接 Linda...",
+  interviewAiSpeaking: "Linda 正在說話...",
+  interviewWrapBusy: "Linda 正在收尾...",
   interviewWrap: "準備結束",
   interviewThanks: "謝謝你，{guestName}。",
   commonDashboard: "控制台",
@@ -775,7 +771,7 @@ const zhHant: typeof en = {
   landingBody:
     "慧享會進行溫暖、不急不慢的對話。不用打字，不用讀稿，只要說話；錄音會妥善保存，並只分享給講述者選擇的家人。",
   landingCardTalkBody:
-    "耐心的 AI 主持人 Rosie 會詢問他們的人生：故鄉、第一份工作、相遇的那一天，然後靜靜聆聽。",
+    "耐心的 AI 主持人 Linda 會詢問他們的人生：故鄉、第一份工作、相遇的那一天，然後靜靜聆聽。",
   landingCardCraftBody:
     "對話結束即刻保存；在講述者決定分享之前，不會傳給任何人。",
   landingCardFamilyBody:
@@ -869,16 +865,16 @@ const zhHant: typeof en = {
   interviewPreparingGreeting: "正在準備問候語。",
   interviewStartGenericError: "無法開始對話，請重試。",
   interviewStartRateLimit: "請稍等幾分鐘後再開始新的對話。",
-  interviewStartNameError: "請輸入您希望 Rosie 使用的稱呼。",
+  interviewStartNameError: "請輸入您希望 Linda 使用的稱呼。",
   interviewAlreadyTitle: "這次訪談已經儲存",
   interviewAlreadyBody: "謝謝你，{guestName}。這次對話裡的故事已經安全儲存。",
   interviewWelcomeBack: "歡迎回來，{guestName}。",
   interviewCarryOn: "我們繼續吧？",
   interviewResumeIntro:
-    "Rosie 記得你上次說過的每一句話。準備好了就直接開口。",
+    "Linda 記得你上次說過的每一句話。準備好了就直接開口。",
   interviewContinue: "繼續",
   interviewTopic: "今天我們會聊 {topic}",
-  interviewIntro: "主持人 Rosie 會提問。自然說話就好，不需要讀稿，也不需要打字。",
+  interviewIntro: "主持人 Linda 會提問。自然說話就好，不需要讀稿，也不需要打字。",
   interviewAllowMic: "請允許使用麥克風...",
   interviewMoment: "請稍等。",
   interviewRecording: "錄製中",
@@ -887,7 +883,7 @@ const zhHant: typeof en = {
   interviewEndConfirm: "再次點擊結束",
   interviewMute: "靜音",
   interviewUnmute: "取消靜音",
-  interviewMutedNotice: "麥克風已關閉，Rosie 聽不到您的聲音。",
+  interviewMutedNotice: "麥克風已關閉，Linda 聽不到您的聲音。",
   interviewSaving: "正在儲存你的故事...",
   interviewKeepOpen: "請保持此頁面開啟。",
   interviewDone: "你的故事已經儲存。家人一定會喜歡。請在下方分享這次對話。",

@@ -11,9 +11,9 @@ type GuestLanguageSource = {
 
 /**
  * A signed-in storyteller's interview language follows the language saved on
- * their profile. That makes Rosie use the same language when they return from
+ * their profile. That makes Linda use the same language when they return from
  * a different device. The guest row is updated too so admin views and later
- * sessions agree with what Rosie actually spoke.
+ * sessions agree with what Linda actually spoke.
  *
  * Anonymous guests choose their language on the way into the conversation and
  * have no account preference, so their stored language stays authoritative.

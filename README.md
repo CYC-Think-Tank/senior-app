@@ -75,9 +75,9 @@ If those files are missing or the browser is unsupported, interviews fall back t
 ## The pipeline
 
 1. A conversation starts either from `/dashboard` (a signed-in account records their own) or from the public `/interview` flow.
-2. The storyteller presses the one big button and talks with "Rosie" (WebRTC → OpenAI Realtime, `gpt-realtime`). Both sides of the audio are recorded in the browser and uploaded to Supabase Storage in chunks, with a timestamped transcript.
+2. The storyteller presses the one big button and talks with "Linda" (WebRTC → OpenAI Realtime, `gpt-realtime`). Both sides of the audio are recorded in the browser and uploaded to Supabase Storage in chunks, with a timestamped transcript.
 3. On finish, ffmpeg stitches the chunks into the session's recording and marks it `ready`.
-4. For a reusable senior, the server folds confirmed facts, interests, current activities, and safe follow-ups into an encrypted private continuity summary. Later, Rosie receives it only inside server-authored instructions and uses one safe detail as a natural icebreaker.
+4. For a reusable senior, the server folds confirmed facts, interests, current activities, and safe follow-ups into an encrypted private continuity summary. Later, Linda receives it only inside server-authored instructions and uses one safe detail as a natural icebreaker.
 5. The recording appears under `/dashboard`, where it can be renamed, deleted, or given a permanent private share link (`/share/<token>`).
 
 ## Notes
