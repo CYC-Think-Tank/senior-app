@@ -11,7 +11,10 @@ create table public.admin_emails (
   email text primary key
 );
 
-insert into public.admin_emails (email) values ('jiabaowu07@gmail.com');
+insert into public.admin_emails (email) values
+  ('jiabaowu07@gmail.com'),
+  ('curtis.poon@thecyc.org'),
+  ('jason@thecyc.org');
 
 -- ---------------------------------------------------------------------------
 -- Tables

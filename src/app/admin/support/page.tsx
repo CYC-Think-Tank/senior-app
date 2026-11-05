@@ -140,9 +140,7 @@ export default async function SupportAdminPage() {
           <SyncRegistrations
             label={c.sync}
             pendingLabel={c.syncing}
-            summary={(result) =>
-              `${c.synced}: +${result.created} · ${result.updated} · ${result.fetched}`
-            }
+            syncedLabel={c.synced}
           />
         </header>
 
