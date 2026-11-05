@@ -69,15 +69,49 @@ function needsTls(connectionString: string): boolean {
   }
 }
 
+/**
+ * Azure's portal connection string uses `sslmode=require`. pg 8 treats
+ * `require`, `prefer`, and `verify-ca` as `verify-full`, prints a warning
+ * about that, and the parsed `ssl` object replaces any `ssl` option passed
+ * next to `connectionString`. Rewrite those modes to `no-verify` so the pool
+ * below is what actually runs: the connection stays encrypted, and Node does
+ * not reject Azure's certificate chain.
+ */
+function normalizeConnectionString(connectionString: string): string {
+  const queryStart = connectionString.indexOf("?");
+  if (queryStart === -1) return connectionString;
+
+  const base = connectionString.slice(0, queryStart);
+  const params = connectionString
+    .slice(queryStart + 1)
+    .split("&")
+    .filter(Boolean)
+    .map((part) => {
+      const separator = part.indexOf("=");
+      const key = (separator === -1 ? part : part.slice(0, separator)).toLowerCase();
+      const value = separator === -1 ? "" : part.slice(separator + 1).toLowerCase();
+      if (
+        key === "sslmode" &&
+        (value === "require" || value === "prefer" || value === "verify-ca")
+      ) {
+        return "sslmode=no-verify";
+      }
+      return part;
+    });
+
+  return params.length ? `${base}?${params.join("&")}` : base;
+}
+
 function createPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not set.");
+  const normalized = normalizeConnectionString(connectionString);
 
   const pool = new Pool({
-    connectionString,
+    connectionString: normalized,
     // Azure's certificate chain is not in Node's default store on Vercel, so
     // verification is off while the connection itself stays encrypted.
-    ssl: needsTls(connectionString) ? { rejectUnauthorized: false } : false,
+    ssl: needsTls(normalized) ? { rejectUnauthorized: false } : false,
     // Serverless functions are short-lived and many run at once, so each
     // instance keeps a small pool and returns connections quickly rather than
     // holding a slice of the server's connection budget open.

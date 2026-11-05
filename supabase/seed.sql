@@ -16,5 +16,7 @@
 
 INSERT INTO public.admin_emails (email)
 VALUES
-  ('jiabaowu07@gmail.com')
+  ('jiabaowu07@gmail.com'),
+  ('curtis.poon@thecyc.org'),
+  ('jason@thecyc.org')
 ON CONFLICT (email) DO NOTHING;

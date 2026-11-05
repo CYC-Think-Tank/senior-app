@@ -8,11 +8,11 @@ import styles from "./support-admin.module.css";
 export function SyncRegistrations({
   label,
   pendingLabel,
-  summary,
+  syncedLabel,
 }: {
   label: string;
   pendingLabel: string;
-  summary: (result: { created: number; updated: number; fetched: number }) => string;
+  syncedLabel: string;
 }) {
   const [state, setState] = useState<SyncState>({ status: "idle" });
   const [pending, startTransition] = useTransition();
@@ -22,7 +22,9 @@ export function SyncRegistrations({
       {state.status === "error" ? (
         <span className={styles.syncError}>{state.message}</span>
       ) : state.status === "done" ? (
-        <span className={styles.syncNote}>{summary(state.result)}</span>
+        <span className={styles.syncNote}>
+          {`${syncedLabel}: +${state.result.created} · ${state.result.updated} · ${state.result.fetched}`}
+        </span>
       ) : null}
       <button
         disabled={pending}
